@@ -125,6 +125,11 @@
   .tab-lojas tr.minha td{background:#fff6d6;font-weight:800}
   .tab-lojas tr.zero td{color:#b3a79c}
   .tab-lojas tr.neg td{color:var(--vermelho);font-weight:600}
+  .tab-lojas.compacta{font-size:12.5px}
+  .tab-lojas.compacta th,.tab-lojas.compacta td{padding:6px 3px}
+  .tab-lojas tr.total td{background:#f3ead9;font-weight:800;color:var(--marrom,#5c2f2e)}
+  .tab-lojas tr.total + tr:not(.total) td{border-top:2px solid var(--ouro)}
+  .tab-lojas tr.total.neg td{color:var(--vermelho)}
   b.neg{color:var(--vermelho)}
   .fora-lista{font-size:13px;color:#7a6d62;padding:6px 0}
   .ficha-paineis{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -1952,34 +1957,35 @@ window.PedidoPDF = (function () {
     $("fichaTitulo").textContent = it.d;
     var fic = [["PLU", it.p], ["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"], ["Embalagem", emb]];
     $("fichaCorpo").innerHTML = '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
-      '<div class="ficha-paineis"><div class="ficha-painel"><div class="grupo">Estoque e preço por loja <small>arraste para o lado: vendas ›</small></div>' +
+      '<div class="ficha-paineis"><div class="ficha-painel"><div class="grupo">Estoque e vendas por loja</div>' +
       '<div id="fichaLojas"><div class="carregando"><div class="giro"></div>Carregando…</div></div></div>' +
-      '<div class="ficha-painel"><div class="grupo">‹ Vendas da última semana por loja</div><div id="fichaVendas"></div></div></div>';
+      '</div>';
     $("telaFicha").classList.add("aberta");
     chamar("fichaProduto", [plu], function (r) { if ($("fichaTitulo").textContent === it.d) desenharFichaLojas(it, r); },
       function (e) { var b = $("fichaLojas"); if (b) b.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
+  /** Estoque e vendas por loja numa tabela só. No topo: total Matriz + lojas e total só da Matriz (CD 001). */
   function desenharFichaLojas(it, r) {
     var box = $("fichaLojas"); if (!box) return;
-    var cx = it.t && it.q > 1, preco = r.lojas.some(function (l) { return l.venda != null; }), custo = !!r.manager;
-    var cab = "<tr><th>Loja</th>" + (cx ? "<th>" + esc(it.t) + "</th>" : "") + "<th>UN</th>" + (preco ? "<th>Preço</th>" : "") + (custo ? "<th>Custo</th>" : "") + "</tr>";
+    var cx = it.t && it.q > 1, preco = r.lojas.some(function (l) { return l.venda != null; }), custo = !!r.manager, vend = !!r.vendasPeriodo;
+    var cab = "<tr><th>Loja</th>" + (cx ? "<th>" + esc(it.t) + "</th>" : "") + "<th>UN</th>" + (vend ? "<th>Vend.</th>" : "") +
+      (preco ? "<th>Preço</th>" : "") + (custo ? "<th>Custo</th>" : "") + "</tr>";
+    function linha(classe, nome, e, v, l) {
+      return '<tr class="' + classe + '"><td>' + esc(nome) + "</td>" + (cx ? "<td>" + num(cxDe(e, it.q)) + "</td>" : "") + "<td>" + num(e) + "</td>" +
+        (vend ? "<td>" + num(v || 0) + "</td>" : "") +
+        (preco ? "<td>" + (l && l.venda ? reais(l.venda) : l ? "—" : "") + "</td>" : "") +
+        (custo ? "<td>" + (l && l.custo ? reais(l.custo) : l ? "—" : "") + "</td>" : "") + "</tr>";
+    }
+    var soma = function (f) { return r.lojas.reduce(function (s, l) { return s + (Number(f(l)) || 0); }, 0); };
+    var cd = r.lojas.filter(function (l) { return l.cod === "001"; })[0] || { e: 0, vendas: 0 };
+    var tot = linha("total" + (soma(function (l) { return l.e; }) < 0 ? " neg" : ""), "Total Matriz + lojas", soma(function (l) { return l.e; }), soma(function (l) { return l.vendas; }), null) +
+      linha("total" + (cd.e < 0 ? " neg" : ""), "Total só Matriz", cd.e, cd.vendas, null);
     var lin = r.lojas.map(function (l) {
-      return '<tr class="' + (l.cod === r.minha ? "minha " : "") + (l.e < 0 ? "neg" : l.e ? "" : "zero") + '"><td>' + esc(l.cod + " " + l.nome) + "</td>" +
-        (cx ? "<td>" + num(cxDe(l.e, it.q)) + "</td>" : "") + "<td>" + num(l.e) + "</td>" +
-        (preco ? "<td>" + (l.venda != null && l.venda ? reais(l.venda) : "—") + "</td>" : "") +
-        (custo ? "<td>" + (l.custo ? reais(l.custo) : "—") + "</td>" : "") + "</tr>";
+      return linha((l.cod === r.minha ? "minha " : "") + (l.e < 0 ? "neg" : l.e || l.vendas ? "" : "zero"), l.cod + " " + l.nome, l.e, l.vendas, l);
     }).join("");
-    var tot = r.lojas.reduce(function (s, l) { return s + l.e; }, 0);
-    box.innerHTML = '<table class="tab-lojas"><thead>' + cab + "</thead><tbody>" + lin + "</tbody></table>" +
-      '<div class="cmp-dica">Total em todas as lojas: <b>' + num(tot) + " un</b>" + (cx ? " (" + num(cxDe(tot, it.q)) + " " + esc(it.t) + ")" : "") + "</div>";
-    var bv = $("fichaVendas"); if (!bv) return;
-    if (!r.vendasPeriodo) { bv.innerHTML = '<div class="vazio" style="padding:18px">As vendas por loja aparecem aqui assim que o robô começar a mandar o relatório de vendas.</div>'; return; }
-    var totv = r.lojas.reduce(function (s, l) { return s + (l.vendas || 0); }, 0);
-    bv.innerHTML = '<div class="cmp-dica">Período: <b>' + esc(r.vendasPeriodo) + "</b></div>" +
-      '<table class="tab-lojas"><thead><tr><th>Loja</th><th>Vendas (UN)</th>' + (cx ? "<th>" + esc(it.t) + "</th>" : "") + "</tr></thead><tbody>" +
-      r.lojas.map(function (l) { return '<tr class="' + (l.cod === r.minha ? "minha " : "") + (l.vendas ? "" : "zero") + '"><td>' + esc(l.cod + " " + l.nome) + "</td><td>" +
-        num(l.vendas || 0) + "</td>" + (cx ? "<td>" + num(Math.round((l.vendas || 0) / it.q * 10) / 10) + "</td>" : "") + "</tr>"; }).join("") +
-      "</tbody></table>" + '<div class="cmp-dica">Total vendido: <b>' + num(totv) + " un</b></div>";
+    box.innerHTML = (vend ? '<div class="cmp-dica">Vendas (Vend., em UN) no período <b>' + esc(r.vendasPeriodo) + "</b></div>" :
+        '<div class="cmp-dica">As vendas por loja aparecem quando o robô mandar o relatório de vendas.</div>') +
+      '<table class="tab-lojas compacta"><thead>' + cab + "</thead><tbody>" + tot + lin + "</tbody></table>";
   }
 
   // ---------------- PEDIDO DE COMPRA (managers) ----------------
