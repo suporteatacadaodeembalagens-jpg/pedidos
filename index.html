@@ -1,0 +1,2671 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="app-api" content="https://script.google.com/macros/s/AKfycbyuOPfZPzxQZBuaV_p60HTOUGzF_SX6kqZ_1BYNM1kph4-GwTQnx0LELk1Vj5FPjDwE/exec">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#5c2f2e">
+<title>Pedidos Atacadão</title>
+<script>
+/* Fora do Google (GitHub Pages): imita o google.script.run chamando o servidor do Apps Script por POST {api, args}.
+   Só liga quando a página tem <meta name="app-api" content="URL /exec">. */
+(function () {
+  var m = document.querySelector('meta[name="app-api"]');
+  if (!m || (window.google && google.script && google.script.run)) return;
+  var url = m.content;
+  function runner(ok, falha) {
+    return new Proxy({}, { get: function (_, fn) {
+      if (fn === "withSuccessHandler") return function (f) { return runner(f, falha); };
+      if (fn === "withFailureHandler") return function (f) { return runner(ok, f); };
+      return function () {
+        var args = Array.prototype.slice.call(arguments);
+        fetch(url, { method: "POST", body: JSON.stringify({ api: fn, args: args }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { if (j && j.ok) { if (ok) ok(j.r); } else if (falha) falha(new Error((j && j.erro) || "Erro no servidor.")); },
+                function () { if (falha) falha(new Error("Sem conexão com o servidor. Confira a internet e tente de novo.")); });
+      };
+    } });
+  }
+  window.google = window.google || {};
+  window.google.script = { run: runner(null, null) };
+})();
+</script>
+<style>
+  /* Paleta do logo Atacadão de Embalagens: marrom da moldura, vermelho do letreiro, azul e amarelo da caixa, creme do fundo */
+  :root{
+    --marrom:#5c2f2e; --marrom-esc:#3f1f1e; --principal:#d92b30; --principal-esc:#b42226;
+    --azul:#1f5a97; --azul-claro:#e4edf8; --ouro:#f5c400; --creme:#f4ecdb; --bege:#cfba8f;
+    --fundo:#f7f2e8; --card:#fff; --texto:#2a1a19; --sub:#7a6a62; --linha:#e8dcc6;
+    --amarelo:#fff6d1; --amarelo-borda:#f5c400; --vermelho:#b42226; --zap:#1a7f45;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--fundo);color:var(--texto);
+    font-family:Roboto,"Segoe UI",Arial,sans-serif;font-size:15px}
+  button{font-family:inherit}
+  /* ---------- topo ---------- */
+  header{position:sticky;top:env(safe-area-inset-top, 0px);z-index:20;background:var(--marrom);color:#fff;
+    border-bottom:3px solid var(--ouro)}
+  .topo{display:flex;align-items:center;gap:10px;padding:8px 14px}
+  .logo-mini{height:42px;width:auto;border-radius:6px;flex:0 0 auto}
+  .marca-app{flex:1;min-width:0}
+  .marca-app b{display:block;font-size:17px;letter-spacing:.2px}
+  .marca-app span{display:block;font-size:12px;color:#f0dfc0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .icone-btn{background:rgba(255,255,255,.14);border:0;color:#fff;width:40px;height:40px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center}
+  .busca{padding:0 14px 10px}
+  .busca input{width:100%;border:0;border-radius:10px;padding:11px 12px 11px 38px;font-size:15px;outline:none;
+    background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%237a6a62' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center}
+  .btn-ler{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;border:0;border-radius:10px;padding:9px 12px;
+    background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:14px}
+  .btn-ler.escuro{background:var(--marrom);margin-top:8px}
+  .leitor{position:fixed;inset:0;z-index:80;background:rgba(20,10,10,.86);display:none;align-items:center;justify-content:center;
+    padding:14px 14px calc(14px + var(--corte, 0px))}
+  .leitor.aberta{display:flex}
+  .leitor-caixa{background:#fff;border-radius:16px;width:100%;max-width:520px;padding:14px;border-top:5px solid var(--ouro);display:flex;flex-direction:column;gap:10px}
+  .leitor-topo{display:flex;align-items:center;justify-content:space-between;color:var(--marrom);font-size:17px}
+  .x-leitor{width:40px;height:40px;border:0;border-radius:10px;background:var(--creme);color:var(--marrom);font-size:20px}
+  .leitor-video{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:4/3}
+  .leitor-video video{width:100%;height:100%;object-fit:cover;display:block}
+  .mira{position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3030;box-shadow:0 0 8px #ff3030}
+  .leitor-msg{font-size:14px;color:var(--sub);text-align:center;min-height:20px}
+  /* ---------- Início / Consulta / Compra ---------- */
+  body.tela-extra header .modos, body.tela-extra header .barra-pedido, body.tela-extra header .busca,
+  body.tela-extra header .abas, body.tela-extra .barra-como, body.tela-extra footer, body.tela-extra #barraMgr{display:none !important}
+  .inicio-ola{font-size:16px;color:var(--marrom);font-weight:700;margin:8px 2px 14px}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tile{border:0;border-radius:16px;background:#fff;box-shadow:0 2px 8px rgba(60,30,20,.10);padding:16px 14px;text-align:left;min-height:118px;
+    display:flex;flex-direction:column;gap:6px;border-left:6px solid var(--ouro);color:var(--texto)}
+  .tile svg{color:var(--principal)}
+  .tile b{font-size:16.5px;color:var(--marrom);line-height:1.2}
+  .tile span{font-size:13px;color:var(--sub);line-height:1.3}
+  .tile.destaque{background:var(--marrom);border-left-color:var(--ouro)}
+  .tile.destaque b{color:#fff} .tile.destaque span{color:#f0dfc0} .tile.destaque svg{color:var(--ouro)}
+  .titulo-tela{font-size:18px;font-weight:800;color:var(--marrom);margin:6px 2px 12px}
+  .ficha{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:8px 0 0;font-size:13.5px}
+  .ficha dt{color:var(--sub)} .ficha dd{margin:0;font-weight:700;color:var(--texto);word-break:break-word}
+  .acao-cons{margin-top:10px;display:flex;justify-content:flex-end}
+  .acao-cons .btn{padding:11px 14px}
+  .btn.largo{width:100%;margin:-4px 0 12px}
+  .dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cmp-abas{display:flex;gap:8px;margin:0 0 12px}
+  .cmp-abas .modo{background:var(--creme);color:var(--marrom)}
+  .cmp-abas .modo.ativo{background:var(--ouro);color:var(--marrom-esc)}
+  .forn-wrap{position:relative}
+  .forn-lista{position:absolute;left:0;right:0;top:100%;z-index:30;max-height:55vh;overflow-y:auto;background:#fff;border:1px solid #d8cfc4;border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.18)}
+  .forn-lista button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #f0e8dc;background:#fff;padding:11px 12px;font-size:14px;color:var(--texto)}
+  .forn-lista button small{display:block;color:var(--sub);font-size:12px}
+  .cmp-rec .excluir{background:#fdeceb;color:var(--vermelho)}
+  /* pedido de compra: dados do fornecedor, preços por item e envio pelo WhatsApp */
+  .cmp-forn{background:#fff;border-radius:12px;padding:10px 12px;margin:-2px 0 12px;font-size:13.5px;line-height:1.45;border-left:5px solid var(--ouro)}
+  .cmp-forn.falta{border-left-color:var(--principal);background:#fdeceb}
+  .cmp-forn b{color:var(--marrom)}
+  .cmp-forn .btn{margin-top:8px;padding:10px 14px;font-size:14px}
+  .campo select{width:100%;border:1px solid #d8c9ae;border-radius:10px;padding:12px;font-size:16px;background:#fff;color:var(--texto)}
+  .campo select:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
+  .cmp-precos{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;margin-top:10px}
+  .cmp-precos label{display:block;font-size:11.5px;color:var(--sub);margin-bottom:2px}
+  .cmp-precos input{width:100%;border:1px solid #d8c9ae;border-radius:8px;padding:9px 8px;font-size:16px;text-align:right;background:#fff}
+  .cmp-precos input:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
+  .cmp-tot{margin-top:6px;font-size:13px;text-align:right;color:var(--sub)}
+  .cmp-tot b{color:var(--texto);font-size:15px}
+  .btn-zap{background:var(--zap);color:#fff}
+  .btn-zap:disabled{background:#9db8a7}
+  .item .desc{cursor:pointer}
+  .item .desc::after{content:" \203A";color:var(--sub);font-weight:400}
+  #fichaTitulo{padding-right:44px;font-size:17px;line-height:1.25}
+  .tab-lojas{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+  .tab-lojas th{text-align:right;color:var(--sub);font-weight:700;padding:6px 4px;border-bottom:2px solid var(--ouro);font-size:12px}
+  .tab-lojas th:first-child, .tab-lojas td:first-child{text-align:left}
+  .tab-lojas td{text-align:right;padding:7px 4px;border-bottom:1px solid #eee4d6}
+  .tab-lojas tr.minha td{background:#fff6d6;font-weight:800}
+  .tab-lojas tr.zero td{color:#b3a79c}
+  .tab-lojas tr.neg td{color:var(--vermelho);font-weight:600}
+  b.neg{color:var(--vermelho)}
+  .fora-lista{font-size:13px;color:#7a6d62;padding:6px 0}
+  .ficha-paineis{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .ficha-paineis::-webkit-scrollbar{display:none}
+  .ficha-painel{flex:0 0 100%;scroll-snap-align:start;min-width:0}
+  .ficha-painel .grupo small{font-weight:600;color:var(--sub);text-transform:none;letter-spacing:0;margin-left:6px}
+  .cmp-dica{font-size:13px;color:var(--sub);margin:4px 2px 10px}
+  .cmp-rec{display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:13.5px}
+  .cmp-rec div{flex:1} .cmp-rec small{display:block;color:var(--sub)}
+  .cmp-rec .ok{color:#1d7a35;font-weight:700}
+  body.tela-compra main{padding-bottom:calc(150px + var(--corte, 0px))}
+  .msg-envio{color:var(--vermelho);font-size:14px;min-height:18px}
+  /* ---------- abas ---------- */
+  .abas{display:flex;overflow-x:auto;background:var(--marrom-esc);scrollbar-width:none}
+  .abas::-webkit-scrollbar{display:none}
+  .aba{flex:0 0 auto;border:0;background:none;color:#e3cfc9;padding:12px 14px 10px;font-size:13px;font-weight:600;
+    letter-spacing:.3px;border-bottom:3px solid transparent;white-space:nowrap}
+  .aba.ativa{color:#fff;border-bottom-color:var(--ouro)}
+  /* linha de cima: Fazer pedido | Pedidos anteriores (separada das abas de departamento) */
+  .modos{display:flex;gap:8px;padding:0 14px 10px}
+  .modo{flex:1;border:0;border-radius:10px;padding:9px 6px;font-weight:700;font-size:13.5px;background:rgba(255,255,255,.14);color:#f0dfc0}
+  .modo.ativo{background:var(--ouro);color:var(--marrom-esc)}
+  header.modo-hist .busca, header.modo-hist .abas{display:none}
+  header.modo-atual .abas{display:none}
+  /* página curta (Pedido atual, Pedidos anteriores) dentro do Google Sites: a rolagem passava para o site e o rodapé
+     "descia" junto. A página do app agora é sempre um pouco maior que a tela e não repassa a rolagem. */
+  html{overscroll-behavior-y:none}
+  main{min-height:calc(100vh + 2px);box-sizing:border-box}
+  .modos .modo{line-height:1.15}
+  .modo small{display:inline-block;margin-left:3px;background:var(--principal);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;font-weight:800}
+  header.sem-pedido .busca, header.sem-pedido .abas{display:none}
+  body.sem-rodape footer{display:none}
+  .barra-como{display:flex;align-items:center;gap:8px;margin:0 14px 10px;padding:7px 8px 7px 12px;border-radius:10px;background:var(--ouro);color:var(--marrom-esc);font-size:13.5px}
+  .barra-como span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .barra-como b{font-size:14.5px}
+  .barra-como button{border:0;border-radius:8px;padding:8px 10px;background:var(--marrom);color:#fff;font-weight:800;font-size:12.5px;white-space:nowrap}
+  .barra-pedido{display:flex;align-items:center;gap:8px;padding:0 14px 10px;color:#f0dfc0;font-size:13.5px}
+  .barra-pedido span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .barra-pedido b{color:#fff;font-size:15px}
+  .barra-pedido button{border:0;border-radius:9px;padding:7px 10px;background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:12.5px}
+  .novo-ped{background:var(--card);border-radius:12px;padding:14px;margin:6px 0 10px;box-shadow:0 1px 2px rgba(63,31,30,.08);border-top:4px solid var(--ouro)}
+  .novo-ped h3{margin:0 0 2px;color:var(--marrom);font-size:17px}
+  .novo-ped .btn{width:100%}
+  .rasc .acoes-rasc{display:flex;gap:8px;margin-top:10px}
+  .rasc .acoes-rasc button{flex:1}
+  [hidden]{display:none !important}
+  /* ===== painel do manager (v2.0) ===== */
+  header.manager .modos:not(.modos-mgr), header.manager .busca, header.manager .abas, header.manager .barra-pedido{display:none !important}
+  header:not(.manager) .modos-mgr{display:none}
+  body.manager footer{display:none}
+  /* botões do manager: rodapé FIXO, igual ao da loja (sempre à vista, acima da barra do Chrome) */
+  .barra-mgr{position:fixed;left:0;right:0;bottom:var(--corte, 0px);z-index:20;background:#fff;border-top:3px solid var(--ouro);
+    padding:10px 14px calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
+  .barra-mgr .botoes-mgr{display:flex;gap:10px}
+  .barra-mgr .btn{flex:1;padding:13px 10px}
+  .resumo-mgr{font-size:13px;color:var(--sub);min-height:20px;display:flex;align-items:center}
+  .resumo-mgr b{color:var(--texto);font-size:15px;margin-right:6px;white-space:nowrap}
+  #resumoCompra{flex-wrap:wrap}
+  html.embutido .resumo-mgr{padding-left:50px;min-height:44px}
+  html body.manager main{padding-bottom:calc(150px + var(--corte, 0px))}
+  .ped .q1 span.chip{display:inline-block;width:auto}
+  .chip{display:inline-block;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800;margin-top:3px}
+  .chip.pend{background:#fff6d1;color:#7a5c00;border:1px solid var(--ouro)}
+  .chip.ok{background:#e3f4e8;color:#1d6b35}
+  .chip.ed{background:var(--azul-claro);color:var(--azul);margin-left:4px}
+  .mgr-item{background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;box-shadow:0 1px 2px rgba(63,31,30,.08)}
+  .mgr-item .d{flex:1;min-width:0;font-weight:600;font-size:14.5px;line-height:1.25}
+  .mgr-item .d small{display:block;color:var(--sub);font-weight:400;font-size:12px;margin-top:3px}
+  .mgr-item.zero{opacity:.45}
+  .mgr-item .orig{color:var(--vermelho);font-weight:700}
+  .mgr-add{border:0;border-radius:10px;padding:10px 12px;background:var(--azul);color:#fff;font-weight:800;font-size:13px}
+  .voltar{border:0;background:none;color:var(--azul);font-weight:800;font-size:15px;padding:4px 0 10px}
+  .setor-mgr{display:flex;align-items:center;justify-content:space-between;margin:16px 0 4px;padding:10px 14px;border-radius:10px;
+    background:var(--marrom);color:#fff;font-weight:800;font-size:15px;letter-spacing:.3px;border-left:6px solid var(--ouro)}
+  .setor-mgr{cursor:pointer;user-select:none}
+  .setor-mgr b i{font-style:normal;display:inline-block;width:20px;color:var(--ouro)}
+  .setor-mgr.fechado{opacity:.85}
+  .setor-mgr span{font-size:12px;font-weight:700;background:var(--ouro);color:var(--marrom-esc);border-radius:9px;padding:1px 8px}
+  .item.zerado{opacity:.45}
+  .transito{margin-top:6px;padding:6px 9px;border-radius:8px;background:#f6efe2;font-size:13px;line-height:1.5;color:var(--texto)}
+  .transito b{color:var(--marrom)}
+  .transito .st{display:inline-block;border-radius:6px;padding:0 6px;font-size:11.5px;font-weight:800;margin-left:2px}
+  .transito .st-ok{background:#dcf3e1;color:#1d7a35}
+  .transito .st-pend{background:#fff1b8;color:#7a5a00}
+  .tag-mgr{display:inline-block;margin-top:4px;background:#fdeceb;color:var(--vermelho);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:800}
+  .aviso.aviso-total{font-size:15px}
+  /* produtos novos */
+  .aba.aba-novos{color:var(--ouro);font-weight:800}
+  .aba.aba-novos.ativa{color:#fff}
+  .aba-novos i{font-style:normal;display:inline-block;margin-left:5px;background:var(--principal);color:#fff;border-radius:9px;padding:0 6px;font-size:11px}
+  .tag-novo{display:inline-block;background:var(--principal);color:#fff;border-radius:5px;padding:0 5px;font-size:10.5px;font-weight:800;vertical-align:2px;margin-right:4px}
+  .aviso.aviso-novos{background:#fff6d1;color:var(--marrom);border:2px solid var(--ouro)}
+  .fim-novos{text-align:center;padding:18px 10px;color:var(--azul);font-weight:800;font-size:15px}
+  /* fluidez: o celular só desenha os produtos que estão na tela; toque sem atraso */
+  .item,.ped{content-visibility:auto;contain-intrinsic-size:auto 120px}
+  button,.qtd,.aba,.modo{touch-action:manipulation}
+  .ped .q1 span.tag-lista{display:inline-block;width:auto}
+  .tag-lista{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px}
+  .tag-lista.atual{background:var(--azul-claro);color:var(--azul)}
+  .tag-lista.antiga{background:#fdeceb;color:var(--vermelho)}
+  /* rodapé em 2 linhas: botões em cima (largura toda) e o resumo embaixo */
+  html footer{flex-direction:column;align-items:stretch;gap:6px}
+  .botoes-rodape{display:flex;gap:10px}
+  .botoes-rodape .btn{flex:1;padding:13px 10px;white-space:nowrap}
+  .botoes-rodape #btnSalvarPed{flex:0 0 36%}
+  html footer .resumo{flex:none;display:flex;align-items:center;gap:6px;min-height:22px}
+  html footer .resumo b{display:inline;font-size:15px}
+  /* excluir pedido salvo: 1 toque, com DESFAZER por 5 segundos */
+  .rasc .acoes-rasc .excluir{flex:0 0 auto;background:none;border:2px solid #f0c9c7;color:var(--vermelho);padding:11px 14px}
+  .snack{position:fixed;left:12px;right:12px;bottom:calc(16px + var(--corte, 0px));z-index:65;display:none;align-items:center;gap:10px;
+    background:var(--marrom-esc);color:#fff;border-radius:12px;padding:10px 10px 10px 16px;box-shadow:0 8px 20px rgba(0,0,0,.3);font-size:14px}
+  .snack.vis{display:flex}
+  .snack span{flex:1;min-width:0}
+  .snack button{border:0;border-radius:9px;background:var(--ouro);color:var(--marrom-esc);font-weight:800;padding:10px 14px;font-size:14px}
+  html.embutido .snack{left:62px}
+  .ped{background:var(--card);border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(63,31,30,.08)}
+  .ped .topo-ped{display:flex;align-items:center;gap:10px}
+  .ped .q1{flex:1;min-width:0}
+  .ped .q1 b{display:block;font-size:15px}
+  .ped .q1 span{display:block;font-size:12.5px;color:var(--sub)}
+  .ped .ver{border:0;border-radius:10px;padding:10px 12px;background:var(--creme);color:var(--marrom);font-weight:700;font-size:13px}
+  .ped .itens-ped{margin-top:8px;border-top:1px solid var(--linha)}
+  .filtro-loja{width:100%;padding:11px;border:1px solid #d8c9ae;border-radius:10px;font-size:15px;background:#fff;margin:4px 0 10px}
+  .aba small{display:inline-block;margin-left:5px;background:var(--ouro);color:var(--marrom-esc);border-radius:9px;padding:0 6px;font-size:11px;font-weight:700}
+  /* ---------- lista ---------- */
+  main{padding:8px max(12px, env(safe-area-inset-right, 0px)) calc(150px + var(--corte, 0px)) max(12px, env(safe-area-inset-left, 0px))}
+  .grupo{font-size:12px;font-weight:700;color:var(--azul);text-transform:uppercase;letter-spacing:.5px;
+    padding:12px 4px 6px}
+  .item{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;
+    box-shadow:0 1px 2px rgba(63,31,30,.08);border:2px solid transparent}
+  .item.com-pedido{background:var(--amarelo);border-color:var(--amarelo-borda)}
+  .desc{font-weight:600;font-size:15px;line-height:1.25}
+  .linha2{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .info{flex:1;min-width:0;font-size:12.5px;color:var(--sub);line-height:1.45}
+  .info .est{color:var(--texto);font-size:14px;font-weight:700}
+  .info .est-cd{display:inline-block;margin:1px 0;font-size:15px;color:var(--marrom);font-weight:500}
+  .info .est-cd b{font-size:16px;font-weight:800;color:var(--texto)}
+  .info .tag-un{display:inline-block;background:var(--azul);color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;vertical-align:1px}
+  .info .dep{display:inline-block;background:var(--azul-claro);color:var(--azul);border-radius:6px;padding:0 6px;font-size:11px;margin-left:4px}
+  .stepper{display:flex;align-items:center;gap:6px}
+  .seta{width:46px;height:46px;border-radius:12px;border:0;font-size:20px;display:flex;align-items:center;justify-content:center;
+    background:var(--creme);color:var(--marrom)}
+  .seta.mais{background:var(--principal);color:#fff}
+  .seta:active{transform:scale(.94)}
+  .qtd{width:54px;text-align:center}
+  .qtd b{display:block;font-size:20px;line-height:1}
+  .qtd small{display:block;font-size:10.5px;color:var(--sub);margin-top:2px}
+  .vazio{text-align:center;color:var(--sub);padding:40px 20px}
+  /* ---------- rodapé ---------- */
+  footer{position:fixed;left:0;right:0;bottom:var(--corte, 0px);z-index:20;background:#fff;border-top:3px solid var(--ouro);
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px}
+  footer .resumo{flex:1;font-size:13px;color:var(--sub)}
+  footer .resumo b{display:block;color:var(--texto);font-size:16px}
+  .btn{border:0;border-radius:12px;padding:13px 18px;font-size:15px;font-weight:700}
+  .btn-verde{background:var(--principal);color:#fff}
+  .btn-verde:active{background:var(--principal-esc)}
+  .btn-verde:disabled{background:#c9bcb0}
+  .btn-cinza{background:var(--creme);color:var(--marrom)}
+  .btn-texto{background:none;color:var(--vermelho);padding:13px 6px}
+  /* ---------- telas sobrepostas ---------- */
+  .tela{position:fixed;inset:0;z-index:50;background:rgba(40,20,19,.55);display:none;align-items:center;justify-content:center;
+    padding:14px 12px calc(14px + var(--corte, 0px))}
+  /* dentro do Google Sites: o rodapé desvia do botão (i) do Google no canto de baixo */
+  html.embutido footer .resumo{padding-left:50px;min-height:44px}
+  .tela.aberta{display:flex}
+  .painel{background:#fff;width:100%;max-width:640px;max-height:100%;border-radius:18px;display:flex;flex-direction:column;
+    border-top:4px solid var(--ouro);box-shadow:0 12px 30px rgba(0,0,0,.3)}
+  .painel .fechar{position:absolute;right:8px;top:8px;width:40px;height:40px;border:0;border-radius:10px;background:var(--creme);color:var(--marrom);font-size:20px}
+  .painel{position:relative}
+  .painel h2{margin:0;padding:16px 16px 6px;font-size:18px;color:var(--marrom)}
+  .painel .corpo{padding:6px 16px;overflow:auto}
+  .painel .acoes{display:flex;gap:10px;padding:12px 16px 14px;border-top:1px solid var(--linha)}
+  .painel .acoes .btn{flex:1}
+  .painel .acoes.sem-linha{border-top:0;padding-top:0}
+  .campo{margin:10px 0}
+  .campo label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
+  .campo input{width:100%;border:1px solid #d8c9ae;border-radius:10px;padding:12px;font-size:16px;background:#fff}
+  .campo input:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
+  .rev{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--linha);font-size:14px}
+  .rev .q{min-width:64px;text-align:right;font-weight:700}
+  .rev .d{flex:1}
+  .rev .d small{display:block;color:var(--sub)}
+  .aviso{background:var(--azul-claro);color:var(--azul);border-radius:10px;padding:12px;margin:8px 0;font-size:14px}
+  .erro{background:#fdeceb;color:var(--vermelho)}
+  .carregando{display:flex;flex-direction:column;align-items:center;gap:12px;padding:60px 20px;color:var(--sub)}
+  .giro{width:34px;height:34px;border:4px solid var(--linha);border-top-color:var(--principal);border-radius:50%;animation:g 1s linear infinite}
+  @keyframes g{to{transform:rotate(360deg)}}
+  .toast{position:fixed;left:50%;bottom:calc(140px + var(--corte, 0px));transform:translateX(-50%);background:var(--marrom-esc);color:#fff;padding:10px 16px;
+    border-radius:10px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.vis{opacity:.95}
+  .login{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;padding:20px;
+    background:radial-gradient(circle at 50% 30%, #7a3f3d 0%, var(--marrom) 45%, var(--marrom-esc) 100%)}
+  .login.aberta{display:flex}
+  .login{padding-bottom:calc(20px + var(--corte, 0px))}
+  .login .caixa{background:var(--fundo);border-radius:18px;width:100%;max-width:400px;padding:22px 20px;
+    border-top:5px solid var(--ouro);box-shadow:0 12px 30px rgba(0,0,0,.3)}
+  .login .logo{display:block;width:190px;max-width:70%;height:auto;margin:0 auto 12px}
+  .login h1{margin:0 0 4px;font-size:21px;color:var(--marrom);text-align:center}
+  .login p{margin:0 0 10px;color:var(--sub);font-size:14px;text-align:center}
+  .login .btn{width:100%;margin-top:6px}
+  .login .link{display:block;width:100%;background:none;border:0;color:var(--azul);font-weight:600;padding:14px 0 2px;font-size:14px}
+  .login .msg{font-size:14px;margin-top:10px;min-height:20px;text-align:center}
+  .login .msg.erro{color:var(--vermelho);background:none}
+  .login .msg.ok{color:var(--azul)}
+  .login .caixa.cadastro .so-login, .login .caixa:not(.cadastro) .so-cad{display:none}
+  .login .caixa.cadastro{max-height:calc(100vh - 40px - var(--corte, 0px));overflow-y:auto}
+  .cad-titulo{background:#fff6d6;border-radius:10px;padding:10px 12px;margin:4px 0 10px;font-size:13.5px;color:var(--texto)}
+  .cad-titulo b{display:block;color:var(--marrom);font-size:15px;margin-bottom:2px}
+  input.edita{width:54px;height:46px;text-align:center;font-size:20px;font-weight:700;border:2px solid var(--principal);border-radius:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="topo">
+    <img class="logo-mini" id="logoMini" alt="Atacadão de Embalagens">
+    <div class="marca-app">
+      <b>App de Pedidos</b>
+      <span id="subtitulo">Carregando lista…</span>
+    </div>
+    <button class="icone-btn" id="btnInicio" aria-label="Início" hidden>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+    </button>
+    <button class="icone-btn" id="btnAtualizar" aria-label="Atualizar lista">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>
+    </button>
+    <button class="icone-btn" id="btnConfig" aria-label="Loja e sair">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+    </button>
+  </div>
+  <div class="barra-como" id="barraComo" hidden>
+    <span>Pedido pela loja <b id="nomeComo"></b></span>
+    <button id="btnSairComo">Voltar ao painel</button>
+  </div>
+  <div class="modos" id="modos">
+    <button class="modo ativo" data-modo="lista">Fazer pedido</button>
+    <button class="modo" data-modo="atual" id="btnModoAtual">Pedido atual</button>
+    <button class="modo" data-modo="hist">Pedidos anteriores</button>
+  </div>
+  <div class="barra-pedido" id="barraPedido" hidden>
+    <span>Pedido: <b id="nomePedido"></b></span>
+    <button id="btnTrocarPedido">Trocar pedido</button>
+  </div>
+  <div class="modos modos-mgr" id="modosMgr">
+    <button class="modo ativo" data-mg="pendente">Aguardando aprovação</button>
+    <button class="modo" data-mg="aprovado">Aprovados</button>
+    <button class="modo" data-mg="lojas">Pedidos lojas</button>
+  </div>
+  <div class="busca"><input id="busca" type="search" placeholder="Buscar produto, PLU, marca ou EAN" autocomplete="off">
+    <button class="btn-ler" id="btnLer" type="button"><svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><rect width="2" height="16"/><rect x="3" width="1" height="16"/><rect x="5" width="2" height="16"/><rect x="8" width="1" height="16"/><rect x="10" width="3" height="16"/><rect x="14" width="1" height="16"/><rect x="16" width="2" height="16"/><rect x="19" width="1" height="16"/><rect x="21" width="1" height="16"/></svg>Ler código de barras</button></div>
+  <nav class="abas" id="abas"></nav>
+</header>
+
+<main id="lista"><div class="carregando"><div class="giro"></div>Carregando a lista de estoque…</div></main>
+
+<footer>
+  <div class="botoes-rodape">
+    <button class="btn btn-cinza" id="btnSalvarPed">Salvar</button>
+    <button class="btn btn-verde" id="btnRevisar" disabled>Revisar e enviar</button>
+  </div>
+  <div class="resumo"><b id="qtdItens">0 itens</b><span id="txtRodape">no pedido</span></div>
+</footer>
+<div class="barra-mgr" id="barraMgr" hidden>
+  <div class="botoes-mgr">
+    <button class="btn btn-cinza" id="btnMgrSalvar">Salvar</button>
+    <button class="btn btn-verde" id="btnMgrAprovar">Aprovar e enviar</button>
+  </div>
+  <div class="resumo-mgr" id="resumoMgr"></div>
+</div>
+<div class="snack" id="snack"><span id="snackTxt"></span><button id="snackDesfazer">DESFAZER</button></div>
+
+<!-- loja / gerente -->
+<div class="tela" id="telaConfig">
+  <div class="painel">
+    <button class="fechar" id="btnFecharCfg" aria-label="Fechar">&#10005;</button>
+    <h2>Minha conta</h2>
+    <div class="corpo">
+      <div class="campo"><label>Loja</label><input id="cfgLoja" placeholder="Ex.: 002 - Carapicuíba"></div>
+      <div class="campo" id="cfgEmailBox" hidden><label>E-mail</label><input id="cfgEmail" readonly></div>
+    </div>
+    <div class="acoes"><button class="btn btn-texto" id="btnSair">Sair da conta</button><button class="btn btn-verde" id="btnSalvarCfg">OK</button></div>
+  </div>
+</div>
+
+<!-- pedido de compra: rodapé + envio do PDF pelo WhatsApp -->
+<div class="barra-mgr" id="barraCompra" hidden>
+  <div class="botoes-mgr">
+    <button class="btn btn-cinza" id="btnSalvarCompra">Salvar</button>
+    <button class="btn btn-verde" id="btnFinalizarCompra">Gerar pedido (PDF)</button>
+  </div>
+  <div class="resumo-mgr" id="resumoCompra"></div>
+</div>
+<div class="tela" id="telaFicha">
+  <div class="painel">
+    <button class="fechar" id="btnFecharFicha" aria-label="Fechar">&#10005;</button>
+    <h2 id="fichaTitulo">Produto</h2>
+    <div class="corpo" id="fichaCorpo"></div>
+  </div>
+</div>
+<div class="tela" id="telaEnvio">
+  <div class="painel">
+    <button class="fechar" id="btnFecharEnvio" aria-label="Fechar">&#10005;</button>
+    <h2>Pedido de compra</h2>
+    <div class="corpo">
+      <div class="aviso" id="envInfo"></div>
+      <div class="cmp-dica" id="envDica">Toque em <b>Enviar pelo WhatsApp</b>, escolha o <b>WhatsApp</b> e depois o contato do fornecedor. Só o PDF é enviado.</div>
+      <div class="msg-envio" id="envMsgErro" role="alert"></div>
+    </div>
+    <div class="acoes">
+      <button class="btn btn-cinza" id="btnBaixarPdf" disabled>Baixar PDF</button>
+      <button class="btn btn-zap" id="btnZap" disabled>Montando o PDF…</button>
+    </div>
+    <div class="acoes sem-linha"><button class="btn btn-texto" id="btnEnvioDepois">Agora não</button></div>
+  </div>
+</div>
+<div class="tela" id="telaForn">
+  <div class="painel">
+    <button class="fechar" id="btnFecharForn" aria-label="Fechar">&#10005;</button>
+    <h2>Dados do fornecedor</h2>
+    <div class="corpo">
+      <div class="aviso" id="fornNome"></div>
+      <div class="dupla">
+        <div class="campo"><label for="fornCod">Código no ERP</label><input id="fornCod" inputmode="numeric" maxlength="8" placeholder="000021"></div>
+        <div class="campo"><label for="fornCnpj">CNPJ/CPF</label><input id="fornCnpj" inputmode="numeric" maxlength="20" placeholder="00.000.000/0000-00"></div>
+      </div>
+      <div class="campo"><label for="fornIe">Inscrição estadual</label><input id="fornIe" maxlength="20"></div>
+      <div class="campo"><label for="fornEnd">Endereço</label><input id="fornEnd" maxlength="90" placeholder="Rua, número"></div>
+      <div class="dupla">
+        <div class="campo"><label for="fornBairro">Bairro</label><input id="fornBairro" maxlength="60"></div>
+        <div class="campo"><label for="fornCep">CEP</label><input id="fornCep" inputmode="numeric" maxlength="9" placeholder="00000-000"></div>
+      </div>
+      <div class="dupla">
+        <div class="campo"><label for="fornCidade">Cidade</label><input id="fornCidade" maxlength="60"></div>
+        <div class="campo"><label for="fornUf">Estado (UF)</label><input id="fornUf" maxlength="2" placeholder="SP"></div>
+      </div>
+      <div class="msg-envio" id="fornErro" role="alert"></div>
+    </div>
+    <div class="acoes"><button class="btn btn-cinza" id="btnFornCancelar">Cancelar</button><button class="btn btn-verde" id="btnFornSalvar">Salvar</button></div>
+  </div>
+</div>
+
+<div class="tela" id="telaRevisao">
+  <div class="painel">
+    <h2>Revisar pedido</h2>
+    <div class="corpo" id="revCorpo"></div>
+    <div class="acoes">
+      <button class="btn btn-texto" id="btnLimpar">Limpar</button>
+      <button class="btn btn-cinza" id="btnVoltar">Voltar</button>
+      <button class="btn btn-verde" id="btnEnviar">Enviar pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- leitor de código de barras -->
+<div class="leitor" id="telaLeitor">
+  <div class="leitor-caixa">
+    <div class="leitor-topo"><b>Ler código de barras</b><button class="x-leitor" id="btnFecharLeitor" type="button" aria-label="Fechar">&#10005;</button></div>
+    <div class="leitor-video" id="leitorVideoBox"><video id="leitorVideo" playsinline muted autoplay></video><div class="mira"></div></div>
+    <div class="leitor-msg" id="leitorMsg"></div>
+    <button class="btn btn-cinza" id="btnLeitorFoto" type="button">Tirar foto do código</button>
+    <input type="file" id="leitorFoto" accept="image/*" capture="environment" hidden>
+  </div>
+</div>
+
+<!-- login -->
+<div class="login" id="telaLogin">
+  <div class="caixa">
+    <img class="logo" src="data:image/webp;base64,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" alt="Atacadão de Embalagens">
+    <h1>App de Pedidos</h1>
+    <p>Acesso só para as lojas cadastradas.</p>
+    <div class="so-cad cad-titulo"><b>Primeiro acesso: faça o seu cadastro</b>Depois você entra com o seu e-mail e a senha que criar aqui.</div>
+    <div class="campo so-cad"><label for="cadNome">Nome</label><input id="cadNome" autocomplete="name" maxlength="60" placeholder="Seu nome"></div>
+    <div class="campo so-cad"><label for="cadEmail">E-mail</label><input id="cadEmail" type="email" readonly></div>
+    <div class="campo so-cad"><label for="cadZap">WhatsApp</label><input id="cadZap" type="tel" inputmode="tel" autocomplete="tel" placeholder="(13) 99999-9999"></div>
+    <div class="campo so-cad"><label for="cadSenha">Senha</label><input id="cadSenha" type="password" autocomplete="new-password" placeholder="Pelo menos 6 caracteres"></div>
+    <div class="campo so-cad"><label for="cadConf">Confirmação de senha</label><input id="cadConf" type="password" autocomplete="new-password" placeholder="Digite a senha de novo"></div>
+    <button class="btn btn-verde so-cad" id="btnCadastrar">Salvar cadastro</button>
+    <button class="link so-cad" id="btnCadVoltar">Voltar</button>
+    <div class="campo so-login"><label for="logEmail">E-mail</label><input id="logEmail" type="email" autocomplete="username" inputmode="email" placeholder="seu.email@atacadaodeembalagens.com.br"></div>
+    <div class="campo so-login"><label for="logSenha">Senha</label><input id="logSenha" type="password" autocomplete="current-password" placeholder="Senha da loja"></div>
+    <button class="btn btn-verde so-login" id="btnEntrar">Entrar</button>
+    <button class="link so-login" id="btnEsqueci">Esqueci minha senha</button>
+    <div class="msg" id="logMsg"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>document.getElementById("logoMini").src = document.querySelector(".login .logo").src;</script>
+<script>
+/* Aberto dentro do Google Sites: a barra do Chrome esconde a parte de baixo do app.
+   Mede quanto do app fica fora da tela e sobe o rodapé e os painéis (--corte). */
+(function () {
+  try { if (window.top === window.self) return; } catch (e) {}
+  try { var anc = location.ancestorOrigins || [];
+    for (var k = 0; k < anc.length; k++) if (String(anc[k]).indexOf("sites.google.com") >= 0) document.documentElement.classList.add("embutido");
+  } catch (e) {}
+  if (!("IntersectionObserver" in window)) return;
+  var s = document.createElement("div");
+  s.style.cssText = "position:fixed;left:0;top:0;bottom:0;width:2px;opacity:0;pointer-events:none;z-index:-1";
+  document.body.appendChild(s);
+  var th = []; for (var i = 0; i <= 200; i++) th.push(i / 200);
+  new IntersectionObserver(function (es) {
+    var e = es[es.length - 1], r = e.intersectionRect, b = e.boundingClientRect;
+    if (!r || !b || r.height <= 0 || b.height <= 0) return;
+    var corte = Math.max(0, Math.round(b.bottom - r.bottom));
+    if (corte > b.height * 0.6) corte = 0;
+    document.documentElement.style.setProperty("--corte", corte + "px");
+    try { window.top.postMessage({ appPedidos: 1, corte: corte, visivel: Math.round(r.height), altura: Math.round(b.height) }, "*"); } catch (x) {}
+  }, { threshold: th }).observe(s);
+})();
+</script>
+
+<script>
+/* =====================================================================================
+   PEDIDO DE COMPRA EM PDF — no layout do pedido de compra do HR-ERP (A4 deitado).
+   O PDF é montado no próprio celular (biblioteca jsPDF, baixada uma vez com verificação de integridade)
+   e enviado pelo menu "Compartilhar" do celular (WhatsApp -> contato). Só o PDF vai.
+   As medidas abaixo estão em "px do modelo" (o PDF do ERP renderizado com 1155 px de largura).
+   ===================================================================================== */
+window.PedidoPDF = (function () {
+  "use strict";
+  var URL_JSPDF = "https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js";
+  var SRI_JSPDF = "sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3";
+  var EMPRESA = "ATACADÃO DE EMBALAGENS", FILIAL = "ATACADÃO DE EMBALAGENS SANTOS";
+  // Condições impressas no fim do pedido (iguais às do pedido do ERP). Linhas com \n quebram em duas.
+  var CONDICOES = [
+    "1 - HORÁRIO DE ENTREGA: SEGUNDA A QUINTA DAS 08:00 Às 17:00 e SEXTA DAS 08:00 ÀS 16:00.",
+    "2 - INCLUIR O PRAZO DE PEGAMENTO JUNTO AO XML.",
+    "3 - E-MAIL PARA ENVIO DE NF E XML: WILLIANN@ATACADAODEEMBALAGENS.COM",
+    "4 - PRAZO DE PAGAMENTO ACORDADO: TOLERÂNCIA DE 5 DIAS CORRIDOS PARA ENTREGA, ULTRAPASSANDO ESSE LIMITE O BOLETO\nDEVERÁ SER ATUALIZADO RESPEITANDO O PRAZO ACORDADO NA ORDEM DE COMPRA.",
+    "5 - SE AS CONDIÇÕES E/OU MERCADORIAS DA NOTA FISCAS NÃO CONDIZEREM COM AS DO PEDIDO O ATACADAO DE EMBALAGENS\n RESERVA-SE NO DIREITO DE RECEBER AS MERCADORIAS E PEDIR O RESSARCIMENTO DA DIFERENÇA",
+    "6 - SERÁ DADO PRIORIDADE PARA A DESCARGA DE PERECÍVEIS",
+    "7 - PARA CARGA PALETIZADAS SERÁ COBRADO O VALOR DE R$30,00 POR PALETE."
+  ];
+  var S = 841.89 / 1169;                 // px do modelo (PDF do ERP a 100 dpi = 1169 px) -> pontos do PDF (A4 deitado)
+  var AZUL = [24, 24, 120], PRETO = [0, 0, 0], CINZA = [110, 110, 110];
+  var COLS = [5, 108, 193, 741, 808, 889, 935, 989, 1041, 1125];   // divisões das colunas da tabela
+  var ALT_LINHA = 24, LIMITE_Y = 770, ALT_TOTAIS = 292;
+
+  // ---------- números (iguais ao ERP: total da linha arredondado em centavos; pedido = soma das linhas) ----------
+  function r2(v) { return Math.round((Number(v) || 0) * 100 + 1e-9) / 100; }
+  function fmt(v, casas) {
+    var n = Number(v) || 0, s = Math.abs(n).toFixed(casas), p = s.split(".");
+    p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return (n < 0 ? "-" : "") + p[0] + (casas ? "," + p[1] : "");
+  }
+  function fmtQtd(v) { var n = Number(v) || 0; return n % 1 ? fmt(n, 3).replace(/0+$/, "") : fmt(n, 0); }
+  /** Uma linha do pedido: preço por embalagem, % desconto, % IPI -> custo líquido e total. */
+  function calcItem(i) {
+    var preco = Number(i.preco) || 0, qtd = Number(i.qtd) || 0, d = (Number(i.desc) || 0) / 100, ipi = (Number(i.ipi) || 0) / 100;
+    var liq = preco * (1 - d) * (1 + ipi);
+    return { liq: liq, total: r2(liq * qtd), merc: r2(preco * (1 - d) * qtd), desconto: r2(preco * d * qtd) };
+  }
+  function totais(itens) {
+    var t = { merc: 0, desconto: 0, ipi: 0, pedido: 0 };
+    (itens || []).forEach(function (i) { var c = calcItem(i); t.merc += c.merc; t.desconto += c.desconto; t.pedido += c.total; });
+    t.merc = r2(t.merc); t.desconto = r2(t.desconto); t.pedido = r2(t.pedido); t.ipi = r2(t.pedido - t.merc);
+    return t;
+  }
+  /** EAN no formato do ERP: 14 dígitos com o dígito verificador separado. 7896336001971 -> 0789633600197-1 */
+  function eanErp(b) { var d = String(b || "").replace(/\D/g, ""); if (!d) return ""; d = ("00000000000000" + d).slice(-14); return d.slice(0, 13) + "-" + d.slice(13); }
+  function dataBR(iso) { var m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + "/" + m[2] + "/" + m[1] : ""; }
+  function agoraBR() {
+    var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
+
+  // ---------- biblioteca e logo ----------
+  var promLib = null;
+  function carregarLib() {
+    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+    if (promLib) return promLib;
+    promLib = new Promise(function (ok, falha) {
+      var s = document.createElement("script");
+      s.src = URL_JSPDF; s.integrity = SRI_JSPDF; s.crossOrigin = "anonymous"; s.async = true;
+      s.onload = function () { if (window.jspdf && window.jspdf.jsPDF) ok(window.jspdf.jsPDF); else { promLib = null; falha(new Error("Biblioteca de PDF não carregou.")); } };
+      s.onerror = function () { promLib = null; s.remove(); falha(new Error("Não consegui baixar o gerador de PDF. Verifique a internet e tente de novo.")); };
+      document.head.appendChild(s);
+    });
+    return promLib;
+  }
+  /** A logo do app é WEBP; o PDF precisa de PNG/JPEG: redesenha num canvas (fundo branco). */
+  function logoJpeg(src) {
+    return new Promise(function (ok) {
+      if (!src) { ok(null); return; }
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+          var g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0);
+          ok(c.toDataURL("image/jpeg", 0.92));
+        } catch (e) { ok(null); }
+      };
+      img.onerror = function () { ok(null); };
+      img.src = src;
+    });
+  }
+
+  // ---------- desenho ----------
+  function Desenho(doc) {
+    var self = {
+      txt: function (t, x, y, o) {
+        o = o || {};
+        doc.setFont(o.f || "helvetica", o.st || "normal"); doc.setFontSize(o.s || 8);
+        var c = o.c || PRETO; doc.setTextColor(c[0], c[1], c[2]);
+        t = String(t == null ? "" : t);
+        if (o.w) t = self.caber(t, o.w);
+        doc.text(t, x * S, y * S, { align: o.a || "left" });
+      },
+      /** corta o texto com "…" para caber na largura (px do modelo) */
+      caber: function (t, w) {
+        var max = w * S;
+        if (doc.getTextWidth(t) <= max) return t;
+        while (t.length > 1 && doc.getTextWidth(t + "...") > max) t = t.slice(0, -1);
+        return t.replace(/\s+$/, "") + "...";
+      },
+      caixa: function (x, y, w, h, r, cinza) {
+        doc.setLineWidth(0.7); doc.setDrawColor(0, 0, 0);
+        if (cinza) doc.setFillColor(230, 230, 230);
+        doc.roundedRect(x * S, y * S, w * S, h * S, (r || 0) * S, (r || 0) * S, cinza ? "FD" : "S");
+      },
+      ret: function (x, y, w, h, cinza) {
+        doc.setLineWidth(0.6); doc.setDrawColor(0, 0, 0);
+        if (cinza) doc.setFillColor(230, 230, 230);
+        doc.rect(x * S, y * S, w * S, h * S, cinza ? "FD" : "S");
+      },
+      linha: function (x1, y1, x2, y2, larg) { doc.setLineWidth(larg || 0.6); doc.setDrawColor(0, 0, 0); doc.line(x1 * S, y1 * S, x2 * S, y2 * S); }
+    };
+    return self;
+  }
+
+  /** Topo da 1ª página: logo, condições básicas, pagamento, fornecedor, entrega. */
+  function topo(D, doc, reg, logo) {
+    var f = reg.forn || {}, ent = reg.entrega || {};
+    if (logo) doc.addImage(logo, "JPEG", 30 * S, 3 * S, 80 * S, 59 * S);
+    D.txt(EMPRESA, 150, 39, { s: 20 });
+    D.caixa(562, 11, 131, 49, 9);
+    D.txt("Condições Básicas", 566, 24, { f: "courier", st: "bold", s: 7.6 });
+    D.txt("[" + (reg.frete === "FOB" ? " " : "X") + "] CIF [" + (reg.frete === "FOB" ? "X" : " ") + "] FOB", 569, 46, { f: "times", s: 8 });
+    D.caixa(696, 11, 132, 49, 9);
+    D.txt("Cond.Pagto", 762, 21, { f: "courier", s: 9, a: "center", c: CINZA });
+    D.txt(reg.pagamento ? reg.pagamento + "DD" : "", 762, 45, { s: 7.5, a: "center" });
+    D.caixa(831, 11, 102, 49, 9);
+    D.txt("Desc. no Pedido:", 838, 25, { f: "times", s: 8 });
+    D.caixa(936, 11, 192, 49, 9);
+    D.txt("Forma de Pagamento", 1024, 19, { f: "courier", s: 7.6, a: "center", c: CINZA });
+    D.txt(reg.formaPagto || "CARTEIRA", 1024, 38, { f: "courier", s: 9, a: "center" });
+    D.txt("Não pagamos c/ cheq. Pré-Datado", 1024, 53, { f: "times", s: 7, a: "center" });
+
+    D.caixa(5, 64, 928, 54, 9);
+    var rot = { f: "courier", s: 7.6, c: CINZA };
+    D.txt("Fornecedor", 17, 74, rot); D.txt("Endereço", 17, 90, rot); D.txt("Cidade", 17, 106, rot);
+    var cod = f.cod ? ("000000" + f.cod).slice(-6) + " - " : "";
+    D.txt(cod + reg.fornecedor, 97, 77, { s: 8, w: 410 });
+    D.txt(f.end || "", 94, 93, { s: 7.6, w: 410 });
+    D.txt(f.cidade || "", 65, 109, { s: 7.6, w: 260 });
+    D.txt("Estado", 331, 106, rot); D.txt(f.uf || "", 378, 109, { s: 7.6 });
+    D.txt("CNPJ/CPF", 514, 74, rot); D.txt(f.cnpj || "", 578, 78, { s: 9.5 });
+    D.txt("Insc.Est.", 754, 74, rot); D.txt(f.ie || "", 820, 78, { s: 9 });
+    D.txt("Bairro", 514, 90, rot); D.txt(f.bairro || "", 563, 93, { s: 7.6, w: 330 });
+    D.txt("CEP", 514, 106, rot); D.txt(f.cep || "", 543, 112, { s: 7.6 });
+
+    D.caixa(936, 64, 192, 54, 9);
+    D.txt("Pgto. NF. Devolução Abat.", 956, 78, { s: 7 });
+    D.txt("Dupl: (  )   NF. (  )  Cheq. (  )", 956, 94, { s: 7 });
+    D.txt("Obs.:", 956, 108, { s: 7 });
+
+    D.caixa(5, 120, 1120, 107, 9);
+    D.txt(ent.endereco || "", 14, 131, { f: "times", s: 6.6, w: 1100 });
+  }
+
+  /** Faixa "Pedido de Compra" + cabeçalho da tabela. y = topo da faixa. */
+  function cabTabela(D, reg, y, pag, totPag) {
+    D.caixa(5, y, 1120, 61, 8);
+    D.ret(5, y + 19, 1120, 42, true);
+    D.txt("Pedido de Compra:  " + (reg.numero || ""), 16, y + 13, { f: "times", st: "bold", s: 9 });
+    D.txt("Conferencia", 277, y + 12, { f: "times", s: 8.5 });
+    D.txt("Data de Emissão: " + String(reg.quando || "").slice(0, 10), 494, y + 13, { f: "times", st: "bold", s: 9 });
+    D.txt("Data de Entrega:  " + dataBR(reg.dataEntrega), 709, y + 13, { f: "times", st: "bold", s: 9 });
+    D.txt("Página:", 958, y + 12, { f: "courier", st: "bold", s: 8.5 });
+    D.txt(pag + " / " + totPag, 1022, y + 12, { f: "courier", s: 8.5, c: CINZA });
+    for (var k = 1; k < COLS.length - 1; k++) D.linha(COLS[k], y + 19, COLS[k], y + 61);
+    var yc = y + 42, h2 = { f: "times", s: 7.4, a: "center" };
+    D.txt("Loja:  " + ((reg.entrega && reg.entrega.sigla) || "Cd -"), 13, yc, { f: "courier", s: 8.5, c: [70, 70, 70] });
+    D.txt("Referência", 150, yc, { s: 7, a: "center" });
+    D.txt("DESCRIÇÃO DO PRODUTO", 467, yc, { f: "courier", s: 8.5, a: "center", c: [70, 70, 70] });
+    D.txt("Custo Liq.", 775, yc - 6, h2); D.txt("Final", 752, yc + 5, { f: "times", s: 7.4 });
+    D.txt("Preço", 840, yc - 6, h2); D.txt("Unit. Emb.", 848, yc + 5, h2);
+    D.txt("%", 912, yc - 6, h2); D.txt("Desc.", 908, yc + 5, h2);
+    D.txt("%", 957, yc - 6, { f: "courier", s: 6, a: "center", c: CINZA }); D.txt("IPI", 957, yc + 5, { f: "courier", s: 6.5, a: "center", c: CINZA });
+    D.txt("Valor", 1014, yc - 6, h2); D.txt("Guia", 1013, yc + 5, h2);
+    D.txt("Preço Total", 1083, yc, { f: "times", s: 7, a: "center" });
+  }
+
+  function linhaItem(D, i, y) {
+    var c = calcItem(i);
+    D.ret(5, y, 1120, ALT_LINHA - 3);
+    for (var k = 1; k < COLS.length - 1; k++) D.linha(COLS[k], y, COLS[k], y + ALT_LINHA - 3);
+    var b = y + 13, a = { c: AZUL };
+    D.txt(fmtQtd(i.qtd), 56, b, { s: 8, a: "center", c: AZUL });
+    D.txt(i.ref || "", 188, b, { f: "times", s: 7.8, a: "right", c: AZUL });
+    D.txt(eanErp(i.b), 199, b, { f: "times", s: 7.8, c: AZUL });
+    D.txt(i.d || "", 298, b, { f: "times", s: 7.8, c: AZUL, w: 392 });
+    if (i.t) { D.txt(i.t + " /", 698, b, { s: 7.8, c: AZUL }); D.txt(i.q ? fmtQtd(i.q) : "", 738, b, { s: 7.8, a: "right", c: AZUL }); }
+    D.txt(fmt(c.liq, 3), 801, b, { s: 7.3, a: "right", c: AZUL });
+    D.txt(fmt(i.preco, 4), 882, b, { s: 7.3, a: "right", c: AZUL });
+    D.txt(fmt(i.desc, 4), 929, b, { s: 6.8, a: "right", c: AZUL });
+    D.txt(fmt(i.ipi, 4), 982, b, { s: 8, a: "right" });
+    D.txt(fmt(0, 4), 1033, b, { s: 6.8, a: "right", c: AZUL });
+    D.txt(fmt(c.total, 2), 1109, b, { s: 8, a: "right", c: AZUL });
+    return a;
+  }
+
+  /** Totais, condições, assinaturas e observações. T = topo do bloco. */
+  function blocoFinal(D, reg, T) {
+    var t = totais(reg.itens), sig = (reg.entrega && reg.entrega.sigla) || "Cd -";
+    D.caixa(5, T, 221, 47, 8);
+    D.txt("Loja " + sig, 22, T + 24, { f: "courier", s: 8.5, c: [70, 70, 70] });
+    D.txt(fmt(t.pedido, 2), 216, T + 24, { s: 7.6, a: "right" });
+    D.caixa(229, T, 896, 47, 8);
+    var v = { s: 7.8 };
+    D.txt("Vlr Mercadorias", 259, T + 24, v); D.txt(fmt(t.merc, 2), 411, T + 24, { s: 7.8, a: "right" });
+    D.txt("Vlr do Desconto", 426, T + 24, v); D.txt(fmt(t.desconto, 2), 571, T + 24, { s: 7.8, a: "right" });
+    D.txt("Vlr do IPI", 596, T + 24, v); D.txt(fmt(t.ipi, 2), 708, T + 24, { s: 7.8, a: "right" });
+    D.txt("Vlr de Inden.", 731, T + 24, v); D.txt(fmt(0, 2), 860, T + 24, { s: 7.8, a: "right" });
+    D.linha(908, T, 908, T + 47); D.linha(1010, T, 1010, T + 47);
+    D.txt("Vlr da Guia", 959, T + 15, { st: "bold", s: 7.8, a: "center" }); D.txt(fmt(0, 2), 1000, T + 40, { st: "bold", s: 7.8, a: "right" });
+    D.txt("Vlr do Pedido", 1067, T + 15, { st: "bold", s: 7.8, a: "center" }); D.txt(fmt(t.pedido, 2), 1115, T + 40, { st: "bold", s: 7.8, a: "right" });
+
+    D.caixa(5, T + 50, 795, 199, 8);
+    D.txt("CONDIÇÕES DO PEDIDO", 310, T + 67, { f: "times", st: "bold", s: 12 });
+    D.txt(FILIAL, 562, T + 67, { f: "times", s: 8 });
+    var y = T + 86;
+    CONDICOES.forEach(function (c) {
+      c.split("\n").forEach(function (l, k) { D.txt(l, 12, y + k * 14.5, { f: "times", s: 7.4 }); y += k ? 14.5 : 0; });
+      y += 21;
+    });
+    D.caixa(803, T + 50, 325, 199, 8);
+    D.txt("Comprador - Setor", 820, T + 113, { s: 8 });
+    D.linha(933, T + 118, 1113, T + 118);
+    D.txt(sig + " " + (reg.comprador || ""), 1023, T + 128, { f: "times", st: "bold", s: 7, a: "center", w: 300 });
+    D.txt("Vendedor", 826, T + 182, { f: "courier", s: 8.5, c: [70, 70, 70] });
+    D.linha(915, T + 185, 1117, T + 185);
+    D.txt("Nome Legível", 1015, T + 199, { f: "courier", s: 8.5, a: "center", c: [70, 70, 70] });
+
+    D.caixa(5, T + 251, 1120, 38, 8);
+    D.txt("OBSERVAÇÕES DO PEDIDO", 13, T + 263, { f: "times", st: "bold", s: 8.3 });
+    D.txt(reg.obs || "", 13, T + 279, { s: 7.3, w: 1100 });
+  }
+
+  function rodape(D, pag, totPag, carimbo) {
+    if (pag < totPag) {
+      D.txt("A T E N Ç Ã O... CONTINUA NA PROXIMA PAGINA....  " + pag + " / " + totPag, 60, 800, { f: "courier", st: "bolditalic", s: 9.5 });
+      D.txt("- - - - - - -   - - - - - - - -  - -  - - - - - - -  - - - - - -", 60, 812, { f: "courier", st: "bold", s: 9.5 });
+    }
+    D.txt(carimbo, 1100, 798, { f: "courier", s: 8.5, a: "right", c: [70, 70, 70] });
+  }
+
+  /** Distribui as linhas nas páginas (igual ao ERP: os totais só vão onde cabem inteiros). */
+  function paginar(n) {
+    var pags = [], i = 0, y0 = 291;
+    for (;;) {
+      var cabem = Math.max(0, Math.floor((LIMITE_Y - y0) / ALT_LINHA)), q = Math.min(cabem, n - i);
+      var fimY = y0 + q * ALT_LINHA;
+      pags.push({ de: i, ate: i + q, y0: y0, cab: pags.length ? 1 : 291 - 62 });
+      i += q;
+      if (i >= n && fimY + ALT_TOTAIS <= LIMITE_Y + 30) { pags[pags.length - 1].totais = fimY + 2; return pags; }
+      if (i >= n) { pags.push({ de: n, ate: n, y0: 63, cab: 1, totais: 64 }); return pags; }
+      y0 = 63;
+    }
+  }
+
+  /** Monta o PDF. reg = registro do pedido (servidor). Devolve uma Promise com o Blob do PDF. */
+  function gerar(reg, logoSrc) {
+    return Promise.all([carregarLib(), logoJpeg(logoSrc)]).then(function (r) {
+      var JsPDF = r[0], logo = r[1];
+      var doc = new JsPDF({ orientation: "landscape", unit: "pt", format: "a4", compress: true });
+      doc.setProperties({ title: "Pedido de Compra " + (reg.numero || ""), subject: reg.fornecedor || "", creator: "App de Pedidos - " + EMPRESA });
+      var D = Desenho(doc), itens = reg.itens || [], pags = paginar(itens.length), carimbo = agoraBR();
+      pags.forEach(function (p, k) {
+        if (k) doc.addPage();
+        if (!k) topo(D, doc, reg, logo);
+        cabTabela(D, reg, k ? 1 : 229, k + 1, pags.length);
+        for (var j = p.de; j < p.ate; j++) linhaItem(D, itens[j], p.y0 + (j - p.de) * ALT_LINHA);
+        if (p.totais) blocoFinal(D, reg, p.totais);
+        rodape(D, k + 1, pags.length, carimbo);
+      });
+      return doc.output("blob");
+    });
+  }
+
+  function nomeArquivo(reg) {
+    var f = String(reg.fornecedor || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w ]+/g, " ").trim().replace(/\s+/g, "_").slice(0, 40);
+    return "Pedido_Compra_" + (reg.numero || "") + (f ? "_" + f : "") + ".pdf";
+  }
+  function baixar(blob, nome) {
+    var url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = nome; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+  /** Menu "Compartilhar" do celular só com o PDF. Sem suporte: baixa o arquivo. Cancelado pelo usuário: rejeita com AbortError. */
+  function compartilhar(blob, nome) {
+    var arq = null;
+    try { arq = new File([blob], nome, { type: "application/pdf" }); } catch (e) {}
+    var pode = false;
+    try { pode = !!(arq && navigator.share && navigator.canShare && navigator.canShare({ files: [arq] })); } catch (e) {}
+    if (!pode) { baixar(blob, nome); return Promise.resolve("download"); }
+    return navigator.share({ files: [arq] }).then(function () { return "share"; }, function (e) {
+      if (e && e.name === "AbortError") throw e;          // a pessoa fechou o menu: não faz nada
+      baixar(blob, nome); return "download";               // bloqueado (ex.: dentro do Google Sites): baixa
+    });
+  }
+
+  return { gerar: gerar, compartilhar: compartilhar, baixar: baixar, nomeArquivo: nomeArquivo,
+    calcItem: calcItem, totais: totais, fmt: fmt, eanErp: eanErp, paginar: paginar, carregarLib: carregarLib };
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+  var EM_APPS_SCRIPT = (typeof google !== "undefined" && google.script && google.script.run);
+  var ENVIO_TICKET = "<?= envio ?>";   // aba aberta só para enviar um pedido de compra (link de uso único)
+  if (!/^[a-f0-9-]{36}$/.test(ENVIO_TICKET)) ENVIO_TICKET = "";
+  /** Dentro do Google Sites o celular não deixa compartilhar arquivo (falta a permissão "web-share"). */
+  function podeCompartilharAqui() { try { return !document.featurePolicy || document.featurePolicy.allowsFeature("web-share"); } catch (e) { return true; } }
+  var LS = {
+    get: function (k, padrao) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; } catch (e) { return padrao; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  var dados = null;                       // {data, gerado, departamentos:[{nome, itens:[{p,m,d,e,t,q,c}]}]}
+  var pedido = LS.get("pedido", {});      // {plu: qtd}
+  var cfg = LS.get("cfg", { loja: "", gerente: "" });
+  var abaAtual = LS.get("aba", null);
+  var sessao = LS.get("sessao", null);     // {token, email, nome, loja}
+  var atual = LS.get("pedidoAtual", null); // pedido aberto: {id (do servidor, se já salvo), nome}
+  if (!atual && Object.keys(pedido).length) atual = { id: null, nome: "Pedido em andamento" };
+  var rasc = null;                         // pedidos salvos (não enviados) deste login
+  var comoLoja = LS.get("comoLoja", null); // manager fazendo pedido POR uma loja (nome da loja) — null = painel do manager
+  if (!(sessao && sessao.perfil === "MANAGER")) comoLoja = null;
+  var tela = comoLoja ? "app" : "inicio";   // "inicio" | "app" (pedidos/painel) | "consulta" | "compra"
+  var pendenteConsulta = null;             // produto escolhido na consulta, entra no próximo pedido aberto
+  var cons = { termo: "", precos: null, extra: null };   // extra = {termo, lista}: produtos fora da lista de pedido (estoque 0 ou negativo no CD)
+  function compraVazia(base) {   // novo pedido de compra: mantém entrega/frete/pagamento do anterior (costumam se repetir)
+    base = base || {};
+    return { fornecedor: base.fornecedor || "", obs: "", itens: {}, cobertura: base.cobertura || "", pagamento: base.pagamento || "",
+      formaPagto: base.formaPagto || "CARTEIRA", frete: base.frete || "CIF", dataEntrega: "", entrega: base.entrega || null };
+  }
+  var compra = LS.get("compra", null) || compraVazia();
+  if (!compra.frete) compra.frete = "CIF";
+  if (!compra.formaPagto) compra.formaPagto = "CARTEIRA";
+  var cmp = { aba: "novo", forns: null, forn: null, fornNome: "", busca: null, termo: "", limite: 150, recentes: null, envio: null,
+    entregas: null, fornDados: {}, confSemCnpj: false };
+  var porPlu = {};
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------------- utilidades ----------------
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function num(n) { return (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }); }
+  /** Embalagens inteiras de um estoque (negativo arredonda para perto do zero: -5 un em CX c/12 = 0 CX). */
+  function cxDe(e, q) { e = Number(e) || 0; var v = e < 0 ? -Math.floor(-e / q) : Math.floor(e / q); return v || 0; }
+  function bNum(v) { return "<b" + (Number(v) < 0 ? ' class="neg"' : "") + ">" + num(v) + "</b>"; }
+  function semAcento(s) { return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.classList.add("vis"); clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove("vis"); }, 2200); }
+  var NOMES = { "EMBALAGENS": "Embalagens", "DESCARTAVEIS": "Descartáveis", "CHOCOLATES": "Chocolates",
+    "CONFEITARIA": "Confeitaria", "DOCES": "Doces", "BEBIDAS": "Bebidas", "ARTIGOS P FESTAS": "Artigos p/ Festas",
+    "HIGIENE E LIMPEZA": "Higiene e Limpeza", "CONSUMO": "Consumo" };
+  function nomeAba(n) { return NOMES[n] || (n.charAt(0) + n.slice(1).toLowerCase()); }
+  function salvarPedido() { LS.set("pedido", pedido); atualizarRodape(); }
+  function lojaAtual() { return comoLoja || cfg.loja; }
+  // manager pela loja: o servidor recebe "token~Loja" e age como a loja (guardando quem é o manager)
+  function tk() { return sessao.token + (comoLoja ? "~" + encodeURIComponent(comoLoja) : ""); }
+  var MGR_FN = { pedidosManager: 1, pedidoManager: 1, salvarEdicao: 1, aprovarPedido: 1, precosManager: 1, fornecedoresCompra: 1,
+    produtosFornecedor: 1, buscarCadastro: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
+    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1 };
+  function ehMgrLogin() { return !!(sessao && sessao.perfil === "MANAGER"); }
+  function nomeMgr() { return (sessao && sessao.nome) || "Manager"; }
+
+  // ---------------- carregar dados ----------------
+  function aplicarDados(json, deServidor) {
+    if (!json) return false;
+    var novo = typeof json === "string" ? JSON.parse(json) : json;
+    if (!novo || !novo.departamentos) return false;
+    var mudou = !dados || dados.gerado !== novo.gerado;
+    dados = novo;
+    porPlu = {};
+    dados.departamentos.forEach(function (dep) { dep.itens.forEach(function (it) { it.dep = dep.nome; porPlu[it.p] = it; }); });
+    // pedido continua valendo para os produtos que ainda existem na lista
+    Object.keys(pedido).forEach(function (plu) { if (!porPlu[plu]) delete pedido[plu]; });
+    salvarPedido();
+    if (deServidor) setTimeout(function () { LS.set("dados", dados); }, 600);   // gravar 200 KB depois de desenhar a tela
+    calcularNovos();
+    if (!abaAtual || (abaAtual !== HIST && !abaValida(abaAtual))) abaAtual = novosVistos() ? dados.departamentos[0].nome : NOVOS;
+    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + "Lista de " + dados.data + (lojaAtual() ? " · " + lojaAtual() + (comoLoja ? " (manager)" : "") : "");
+    desenharAbas(); desenharLista();
+    if (deServidor && mudou) toast("Lista de " + dados.data + " carregada");
+    return true;
+  }
+
+  function erroLogin(e) {
+    var m = String(e && e.message || e);
+    if (m.indexOf("LOGIN:") >= 0) { sair(m.replace(/^.*LOGIN:\s*/, "")); return true; }
+    return false;
+  }
+
+  function carregar() {
+    if (EM_APPS_SCRIPT && !(sessao && sessao.token)) { abrirLogin(); return; }
+    var cache = LS.get("dados", null);
+    if (cache) aplicarDados(cache, false);
+    if (EM_APPS_SCRIPT) {
+      google.script.run
+        .withSuccessHandler(function (txt) {
+          if (txt === "IGUAL") return;   // a lista do celular já é a mais nova: não baixa de novo
+          if (!aplicarDados(txt, true) && !cache) $("lista").innerHTML = '<div class="vazio">Ainda não chegou nenhuma lista do robô.</div>';
+        })
+        .withFailureHandler(function (e) { if (erroLogin(e)) return; if (!cache) $("lista").innerHTML = '<div class="vazio">Sem conexão. Tente de novo.</div>'; else toast("Sem conexão: mostrando a última lista"); })
+        .getDados(sessao.token, cache && cache.gerado ? String(cache.gerado) : "");
+    } else if (window.DEMO_DADOS) {
+      aplicarDados(window.DEMO_DADOS, true);
+    }
+  }
+
+  // ---------------- abas ----------------
+  // ---- produtos novos (o robô marca com n:1; aba "Produtos novos" antes de Embalagens) ----
+  var NOVOS = "__novos__";
+  var ATUAL = "__atual__";   // aba "Pedido atual": tudo o que a loja está pedindo, separado por setor
+  var abertosAtual = {};      // aba "Pedido atual": setores começam FECHADOS; só abre o que a loja tocar
+  var novosLista = [];
+  function calcularNovos() {
+    novosLista = [];
+    dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) { if (it.n) novosLista.push(it); }); });
+    novosLista.sort(function (a, b) { return a.m === b.m ? (a.d < b.d ? -1 : 1) : (a.m < b.m ? -1 : 1); });
+  }
+  // "já viu os produtos novos" vale POR LOGIN (cada e-mail tem a sua marca; o servidor também guarda)
+  function chaveVistos() { return "novosVistos_" + ((sessao && sessao.email) || ""); }
+  // "já viu" vale para a SEMANA da lista e para o MESMO conjunto de produtos novos:
+  // o robô pode mandar a lista de novo na semana (estoque mais novo) sem obrigar a loja a ver tudo outra vez;
+  // se entrar produto novo a mais, aí pede de novo.
+  function marcaNovos() {
+    var ps = novosLista.map(function (i) { return i.p; }).sort().join(","), h = 0;
+    for (var k = 0; k < ps.length; k++) h = (h * 31 + ps.charCodeAt(k)) % 1000000007;
+    return (dados.semana || dados.gerado) + ":" + h;
+  }
+  function novosVistos() { return !novosLista.length || LS.get(chaveVistos(), "") === marcaNovos(); }
+  function abaValida(nome) { return nome === NOVOS || nome === ATUAL ? true : dados.departamentos.some(function (d) { return d.nome === nome; }); }   // a aba "Produtos novos" existe sempre
+  var obsFim = null;
+  function vigiarFimNovos() {
+    var fim = $("fimNovos"); if (!fim || novosVistos()) return;
+    var marcar = function () {
+      if (novosVistos()) return;
+      LS.set(chaveVistos(), marcaNovos());
+      if (EM_APPS_SCRIPT && sessao) google.script.run.withFailureHandler(function () {}).marcarNovosVistos(sessao.token, marcaNovos());
+      toast("Pronto! Você viu todos os produtos novos");
+      desenharAbas();
+      var av = $("avisoNovos"); if (av) av.innerHTML = "Você já viu todos os produtos novos desta lista. ✓";
+    };
+    if (obsFim) obsFim.disconnect();
+    if ("IntersectionObserver" in window) {
+      obsFim = new IntersectionObserver(function (es) { if (es.some(function (e) { return e.isIntersecting; })) { obsFim.disconnect(); marcar(); } });
+      obsFim.observe(fim);
+    } else {
+      var ver = function () { if (fim.getBoundingClientRect().top < window.innerHeight) { window.removeEventListener("scroll", ver); marcar(); } };
+      window.addEventListener("scroll", ver); ver();
+    }
+  }
+  function contarPedidoDep(nome) {
+    var n = 0;
+    if (nome === ATUAL) { Object.keys(pedido).forEach(function (plu) { if (pedido[plu] > 0 && porPlu[plu]) n++; }); return n; }
+    if (nome === NOVOS) { Object.keys(pedido).forEach(function (plu) { if (pedido[plu] > 0 && porPlu[plu] && porPlu[plu].n) n++; }); return n; }
+    Object.keys(pedido).forEach(function (plu) { if (pedido[plu] > 0 && porPlu[plu] && porPlu[plu].dep === nome) n++; });
+    return n;
+  }
+  var HIST = "__hist__";   // aba "Pedidos anteriores"
+  var hist = null;          // {mestre, dias, pedidos:[{id, quando, loja, email, dataLista, n}]}
+  var filtroLoja = "";
+  var ultimaDep = null;     // departamento para voltar ao sair de "Pedidos anteriores"
+  function atualizarModo() {
+    document.body.classList.toggle("tela-extra", tela !== "app");
+    document.body.classList.toggle("tela-compra", tela === "compra");
+    $("btnInicio").hidden = tela === "inicio";
+    $("barraCompra").hidden = tela !== "compra" || cmp.aba !== "novo";
+    var m = ehManager();
+    $("barraComo").hidden = !comoLoja;
+    if (comoLoja) $("nomeComo").textContent = comoLoja;
+    document.querySelector("header").classList.toggle("manager", m);
+    document.body.classList.toggle("manager", m);
+    if (m) {
+      $("barraPedido").hidden = true;
+      Array.prototype.forEach.call($("modosMgr").children, function (b) { b.classList.toggle("ativo", b.getAttribute("data-mg") === mgr.filtro); });
+      $("barraMgr").hidden = !(mgr.aberto && mgr.aberto.status === "pendente" && sessao && sessao.aprova);
+      return;
+    }
+    $("barraMgr").hidden = true;
+    var h = abaAtual === HIST;
+    document.querySelector("header").classList.toggle("modo-hist", h);
+    document.querySelector("header").classList.toggle("sem-pedido", !h && !atual);
+    document.body.classList.toggle("sem-rodape", h || !atual);
+    $("barraPedido").hidden = h || !atual;
+    if (atual) $("nomePedido").textContent = atual.nome;
+    var modo = h ? "hist" : (abaAtual === ATUAL ? "atual" : "lista");
+    document.querySelector("header").classList.toggle("modo-atual", modo === "atual");
+    Array.prototype.forEach.call($("modos").children, function (b) { b.classList.toggle("ativo", b.getAttribute("data-modo") === modo); });
+    contarBotaoAtual();
+  }
+  function desenharAbas() {
+    atualizarModo();
+    if (abaAtual !== HIST && abaAtual !== ATUAL) ultimaDep = abaAtual;
+    $("abas").innerHTML = '<button class="aba aba-novos' + (abaAtual === NOVOS ? " ativa" : "") + '" data-dep="' + NOVOS + '">Produtos novos' +
+        (novosLista.length ? '<i>' + (novosVistos() ? "✓" : novosLista.length) + '</i>' : "") + '</button>' +
+      dados.departamentos.map(function (d) {
+      var n = contarPedidoDep(d.nome);
+      return '<button class="aba' + (d.nome === abaAtual ? " ativa" : "") + '" data-dep="' + esc(d.nome) + '">' +
+        esc(nomeAba(d.nome)) + (n ? "<small>" + n + "</small>" : "") + "</button>";
+    }).join("");
+    var ativa = $("abas").querySelector(".ativa");
+    if (ativa) ativa.scrollIntoView({ inline: "center", block: "nearest" });
+  }
+
+  // ---------------- lista ----------------
+  // Estoque do CD abaixo de 1 embalagem (ex.: 66 un e a CX tem 72) -> o pedido passa a ser em UNIDADE.
+  function emUnidade(it) { return !!(it && it.t && it.q > 1 && it.e > 0 && it.e < it.q); }
+  function unPedido(it) { return emUnidade(it) ? "UN" : ((it && it.t) || "UN"); }
+  function htmlItem(it, mostrarDep) {
+    var q = pedido[it.p] || 0;
+    var emb = it.t ? esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "";
+    return '<div class="item' + (q > 0 ? " com-pedido" : "") + '" data-plu="' + esc(it.p) + '">' +
+      '<div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
+      '<div class="linha2"><div class="info">' +
+        // dois estoques: na embalagem de compra (CX/FD/DP...) e, abaixo, em unidade
+        (it.t && it.q > 1
+          ? '<span class="est-cd">Estoque CD ' + esc(it.t) + ': <b>' + (emUnidade(it) ? "menos de 1" : num(it.c != null ? it.c : Math.floor(it.e / it.q))) + "</b></span>" +
+            (emUnidade(it) ? ' <span class="tag-un">pedido em UN</span>' : "") + "<br>"
+          : "") +
+        '<span class="est-cd">Estoque CD ' + esc(it.q > 1 || !it.t ? "UN" : it.t) + ': <b>' + num(it.e) + "</b></span><br>" +
+        "PLU " + esc(it.p) + (emb ? " · " + emb : "") + (mostrarDep ? '<span class="dep">' + esc(nomeAba(it.dep)) + "</span>" : "") +
+      "</div>" +
+      '<div class="stepper">' +
+        '<button class="seta menos" data-acao="-" aria-label="Diminuir">&#9660;</button>' +
+        '<div class="qtd" data-acao="editar"><b>' + q + "</b><small>" + esc(unPedido(it)) + "</small></div>" +
+        '<button class="seta mais" data-acao="+" aria-label="Aumentar">&#9650;</button>' +
+      "</div></div></div>";
+  }
+
+  // Desenha a lista em partes: os primeiros produtos na hora (tela já responde ao toque) e o resto aos poucos.
+  var renderId = 0;
+  function renderizar(topo, partes, rodape, depois) {
+    var meu = ++renderId, L = $("lista"), PRIMEIRO = 25, LOTE = 120;
+    L.innerHTML = topo + partes.slice(0, PRIMEIRO).join("") + (partes.length <= PRIMEIRO ? rodape : "");
+    if (partes.length <= PRIMEIRO) { if (depois) depois(); return; }
+    var i = PRIMEIRO;
+    var lote = function () {
+      if (meu !== renderId) return;   // a tela mudou: para de desenhar a antiga
+      var fim = Math.min(i + LOTE, partes.length);
+      L.insertAdjacentHTML("beforeend", partes.slice(i, fim).join("") + (fim >= partes.length ? rodape : ""));
+      i = fim;
+      if (i < partes.length) setTimeout(lote, 30); else if (depois) depois();
+    };
+    setTimeout(lote, 60);
+  }
+  function partesPorMarca(itens, mostrarDep) {
+    var partes = [], marca = null;
+    itens.forEach(function (it) {
+      if (it.m !== marca) { marca = it.m; partes.push('<div class="grupo">' + esc(marca) + "</div>"); }
+      partes.push(htmlItem(it, mostrarDep));
+    });
+    return partes;
+  }
+  function desenharLista() {
+    if (tela === "inicio") { desenharInicio(); return; }
+    if (tela === "consulta") { desenharConsulta(); return; }
+    if (tela === "compra") { desenharCompra(); return; }
+    if (!dados) return;
+    if (ehManager()) { desenharManager(); return; }
+    if (abaAtual !== HIST && !atual) { desenharTelaPedidos(); return; }
+    var termo = semAcento($("busca").value.trim()), termoNum = numBusca(termo);
+    if (termo) {
+      var achados = [];
+      dados.departamentos.forEach(function (d) {
+        d.itens.forEach(function (it) {
+          if (casaBusca(it, termo, termoNum)) achados.push(it);
+        });
+      });
+      if (!achados.length) { renderId++; $("lista").innerHTML = '<div class="vazio">' + (termoNum.length >= 8
+          ? "Nenhum produto com o código de barras “" + esc($("busca").value.trim()) + "” na lista de estoque atual."
+          : "Nada encontrado para “" + esc($("busca").value) + "”.") + "</div>"; return; }
+      renderizar('<div class="grupo">' + achados.length + " encontrado(s)</div>",
+        achados.slice(0, 300).map(function (it) { return htmlItem(it, true); }), "");
+    } else if (abaAtual === HIST) {
+      renderId++; desenharHistorico();
+    } else if (abaAtual === ATUAL) {
+      renderId++; desenharPedidoAtual();
+    } else if (abaAtual === NOVOS && !novosLista.length) {
+      renderId++;
+      $("lista").innerHTML = '<div class="aviso aviso-novos">Não há produtos novos na lista atual (' + esc(dados.data) + ').</div>';
+    } else if (abaAtual === NOVOS) {
+      renderizar('<div class="aviso aviso-novos" id="avisoNovos">' + (novosVistos()
+          ? "Você já viu todos os produtos novos desta lista. ✓"
+          : '<b>' + novosLista.length + ' produto(s) novo(s)</b> chegaram no CD. <b>Role até o final</b> desta página para liberar o envio do pedido.') + '</div>',
+        partesPorMarca(novosLista, true),
+        '<div class="fim-novos" id="fimNovos">✓ Fim dos produtos novos</div>', vigiarFimNovos);
+    } else {
+      var dep = dados.departamentos.filter(function (d) { return d.nome === abaAtual; })[0];
+      renderizar("", partesPorMarca(dep.itens, false), "");
+    }
+  }
+
+  /** Aba "Pedido atual": itens do pedido separados por setor (mesma ordem das abas), setor recolhível. */
+  function desenharPedidoAtual() {
+    var porDep = {}, total = 0;
+    Object.keys(pedido).forEach(function (p) {
+      var it = porPlu[p]; if (!(pedido[p] > 0) || !it) return;
+      total++; (porDep[it.dep] = porDep[it.dep] || []).push(it);
+    });
+    if (!total) { $("lista").innerHTML = '<div class="vazio">Seu pedido ainda está vazio.<br>Escolha os produtos nas abas dos setores.</div>'; return; }
+    var html = '<div class="aviso aviso-total"><b>' + total + (total === 1 ? " produto" : " produtos") + "</b> no pedido" +
+      (atual ? " <b>" + esc(atual.nome) + "</b>" : "") + "</div>";
+    dados.departamentos.forEach(function (d) {
+      var l = porDep[d.nome]; if (!l) return;
+      l.sort(function (a, b) { return (a.m || "") === (b.m || "") ? (a.d < b.d ? -1 : 1) : ((a.m || "") < (b.m || "") ? -1 : 1); });
+      var fechado = !abertosAtual[d.nome];
+      html += '<div class="setor-mgr' + (fechado ? " fechado" : "") + '" data-setor="' + esc(d.nome) + '"><b><i>' + (fechado ? "▸" : "▾") + "</i>" +
+        esc(nomeAba(d.nome)) + "</b><span>" + l.length + (l.length === 1 ? " item" : " itens") + "</span></div>" +
+        '<div class="setor-corpo"' + (fechado ? " hidden" : "") + ">" + partesPorMarca(l, false).join("") + "</div>";
+    });
+    $("lista").innerHTML = html;
+  }
+  function contarBotaoAtual() {   // botão "Pedido atual (N)" lá em cima
+    var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
+    $("btnModoAtual").innerHTML = "Pedido atual" + (n ? " <small>" + n + "</small>" : "");
+  }
+  function contarSetoresAtual() {   // atualiza "N itens" de cada setor sem redesenhar
+    Array.prototype.forEach.call($("lista").querySelectorAll("[data-setor]"), function (st) {
+      var n = contarPedidoDep(st.getAttribute("data-setor")), s = st.querySelector("span");
+      if (s) s.textContent = n + (n === 1 ? " item" : " itens");
+    });
+    var av = $("lista").querySelector(".aviso-total b"), t = contarPedidoDep(ATUAL);
+    if (av) av.textContent = t + (t === 1 ? " produto" : " produtos");
+  }
+
+  function atualizarItem(plu) {
+    var el = $("lista").querySelector('.item[data-plu="' + plu + '"]');
+    if (!el) return;
+    var q = pedido[plu] || 0;
+    el.classList.toggle("com-pedido", q > 0);
+    el.querySelector(".qtd b").textContent = q;
+  }
+
+  function mudar(plu, delta) {
+    var q = Math.max(0, (pedido[plu] || 0) + delta);
+    if (q > 0) pedido[plu] = q; else delete pedido[plu];
+    salvarPedido(); atualizarItem(plu); desenharAbasLeve();
+  }
+  function desenharAbasLeve() {
+    Array.prototype.forEach.call($("abas").children, function (b) {
+      var n = contarPedidoDep(b.getAttribute("data-dep"));
+      var s = b.querySelector("small");
+      if (n && !s) { s = document.createElement("small"); b.appendChild(s); }
+      if (s) { if (n) s.textContent = n; else s.remove(); }
+    });
+    contarBotaoAtual();
+    if (abaAtual === ATUAL && !$("busca").value.trim()) contarSetoresAtual();
+  }
+
+  function editar(plu, caixa) {
+    var atual = pedido[plu] || 0;
+    var inp = document.createElement("input");
+    inp.type = "number"; inp.inputMode = "numeric"; inp.min = "0"; inp.className = "edita"; inp.value = atual || "";
+    caixa.replaceWith(inp); inp.focus(); inp.select();
+    var feito = false;
+    function fim() {
+      if (feito) return; feito = true;
+      var v = Math.max(0, parseInt(inp.value, 10) || 0);
+      if (v > 0) pedido[plu] = v; else delete pedido[plu];
+      salvarPedido();
+      var div = document.createElement("div");
+      div.className = "qtd"; div.setAttribute("data-acao", "editar");
+      div.innerHTML = "<b>" + v + "</b><small>" + esc(unPedido(porPlu[plu])) + "</small>";
+      inp.replaceWith(div); atualizarItem(plu); desenharAbasLeve();
+    }
+    inp.addEventListener("blur", fim);
+    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") inp.blur(); });
+  }
+
+  // ---------------- novo pedido / pedidos salvos ----------------
+  function chamar(fn, args, ok, falha) {   // servidor (ou modo demonstração)
+    if (!EM_APPS_SCRIPT) { var res; try { res = demo[fn].apply(null, args); } catch (e) { (falha || function (x) { toast(String(x && x.message || x)); })(e); return; } ok(res); return; }
+    var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { if (erroLogin(e)) return; (falha || function (x) { toast(String(x && x.message || x)); })(e); });
+    r[fn].apply(r, [MGR_FN[fn] ? sessao.token : tk()].concat(args));
+  }
+  var demo = {
+    listarRascunhos: function () { return LS.get("demoRasc", []); },
+    salvarRascunho: function (r) {
+      var l = LS.get("demoRasc", []), x = r.id && l.filter(function (y) { return y.id === r.id; })[0];
+      if (!x) { x = { id: "d" + Date.now() }; l.unshift(x); }
+      x.nome = r.nome; x.dataLista = r.dataLista; x.semana = r.semana; x.itens = r.itens; x.quando = new Date().toLocaleString("pt-BR");
+      LS.set("demoRasc", l); return { id: x.id, quando: x.quando };
+    },
+    excluirRascunho: function (id) { LS.set("demoRasc", LS.get("demoRasc", []).filter(function (y) { return y.id !== id; })); return true; },
+    pedidosManager: function () { var l = LS.get("demoFila", null) || demo._fila(); return { aprova: true, dias: 30, lojas: ["Filial 02_Carapicuíba", "Filial 10_Itu", "Filial 03_Pirituba"], pedidos: l.map(function (x) { return { id: x.id, quando: x.quando, loja: x.loja, email: x.email, nome: x.nome, dataLista: x.dataLista, n: x.itens.length, status: x.status, aprovadoEm: x.aprovadoEm || "", editado: !!x.editadoPor }; }) }; },
+    pedidoManager: function (id) { var l = LS.get("demoFila", null) || demo._fila(), x = l.filter(function (p) { return p.id === id; })[0], tr = {};
+      l.forEach(function (p) { if (p.id !== id) p.itens.forEach(function (i) { (tr[i.p] = tr[i.p] || []).push({ loja: p.loja, nome: p.nome, qtd: i.qtd, t: i.t, status: p.status }); }); });
+      x.transito = tr; return x; },
+    salvarEdicao: function (id, itens) { var l = LS.get("demoFila", null) || demo._fila(); l.forEach(function (x) { if (x.id === id) { x.itens = itens.filter(function (i) { return i.qtd > 0; }); x.editadoPor = "demo"; } }); LS.set("demoFila", l); return { ok: true }; },
+    aprovarPedido: function (id, itens) { var l = LS.get("demoFila", null) || demo._fila(), a = ""; l.forEach(function (x) { if (x.id === id) { x.itens = itens.filter(function (i) { return i.qtd > 0; }); x.status = "aprovado"; x.aprovadoEm = new Date().toLocaleString("pt-BR"); a = x.loja + "_" + x.nome + ".xlsx"; } }); LS.set("demoFila", l); return { ok: true, arquivo: a }; },
+    _fila: function () { var it = [{ p: "050289", d: "Fita Durex Qualiclear 12mmx50m", m: "ADELBRAS", dep: "EMBALAGENS", t: "CX", qtd: 3 }, { p: "154413", d: "Fita Dupla Face Ppl 410 12x30", m: "ADELBRAS", dep: "EMBALAGENS", t: "UN", qtd: 20 }];
+      var l = [{ id: "f1", quando: "20/10/2026 11:40", loja: "Filial 02_Carapicuíba", email: "carapicuiba@x", nome: "Reposição", dataLista: "20/10/2026", status: "pendente", itensLoja: it, itens: JSON.parse(JSON.stringify(it)) },
+               { id: "f2", quando: "19/10/2026 17:40", loja: "Filial 06_Tatuí", email: "tatui@x", nome: "Festa", dataLista: "19/10/2026", status: "aprovado", aprovadoEm: "19/10/2026 18:00", itensLoja: it, itens: it }];
+      LS.set("demoFila", l); return l; },
+    _cad: function () { var c = [], L = window.DEMO_LOJAS || {}; dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) {
+      var cd = L[it.p] && L[it.p]["001"];
+      c.push({ p: it.p, d: it.d, m: it.m, f: it.f || "FORNECEDOR DEMO", b: it.b || "", t: it.t, q: it.q, v: 0, a: 0, c: cd ? cd[2] : 0, e: cd ? cd[0] : it.e }); }); });
+      (window.DEMO_FORA || []).forEach(function (x) { c.push(x); }); return c; },
+    precosManager: function () { return window.DEMO_PRECOS || {}; },
+    fichaProduto: function (plu) {   // igual ao servidor: preço só da própria loja; custo só manager
+      var NOM = { "001": "CD - Matriz", "002": "Carapicuíba", "003": "Itapetininga", "004": "Pirituba", "005": "Praia Grande",
+        "006": "Tatuí", "007": "Itu", "008": "Paraty", "009": "Cajamar", "010": "Cotia" };
+      var mg = ehMgrLogin(), m = String((sessao && sessao.loja) || "").match(/(\d{1,3})/), minha = mg ? "" : (m ? ("000" + m[1]).slice(-3) : "");
+      var p = (window.DEMO_LOJAS || {})[plu] || {}, V = window.DEMO_VENDAS, pv = V ? (V.plu[plu] || {}) : {};
+      return { plu: plu, minha: minha, manager: mg, lojas: Object.keys(NOM).map(function (c) { var v = p[c] || [0, 0, 0], x = { cod: c, nome: NOM[c], e: v[0] };
+        if (mg) { x.venda = v[1]; x.custo = v[2]; } else if (c === minha) x.venda = v[1]; if (V) x.vendas = pv[c] || 0; return x; }), vendasPeriodo: V ? V.periodo : "" };
+    },
+    fornecedoresCompra: function () { var n = {}; demo._cad().forEach(function (x) { n[x.f] = (n[x.f] || 0) + 1; });
+      return Object.keys(n).sort().map(function (f) { return { nome: f, n: n[f] }; }); },
+    produtosFornecedor: function (f) { return demo._cad().filter(function (x) { return x.f === f; }); },
+    buscarProdutos: function (t) { var termo = semAcento(t), num = numBusca(termo), mg = ehMgrLogin();
+      return demo._cad().filter(function (x) { return casaBusca(x, termo, num); }).slice(0, 80).map(function (x) {
+        x = JSON.parse(JSON.stringify(x)); if (!mg) { delete x.v; delete x.a; delete x.c; } return x; }); },
+    buscarCadastro: function (t) { var termo = semAcento(t), num = numBusca(termo);
+      return demo._cad().filter(function (x) { return casaBusca(x, termo, num); }).slice(0, 60); },
+    fornecedorCompra: function (nome) { var d = (LS.get("demoForn", {}) || {})[nome] || (window.DEMO_FORN || {})[nome] || {};
+      return { cod: d.cod || "", cnpj: d.cnpj || "", ie: d.ie || "", end: d.end || "", bairro: d.bairro || "", cidade: d.cidade || "", uf: d.uf || "", cep: d.cep || "", origem: d.cnpj ? "manual" : "" }; },
+    salvarDadosFornecedor: function (nome, d) { var l = LS.get("demoForn", {}) || {}; l[nome] = d; LS.set("demoForn", l); return demo.fornecedorCompra(nome); },
+    entregasCompra: function () { return window.DEMO_ENTREGAS || [{ sigla: "Cd -", endereco: "LOJA 01 - EST. FAZENDINHA, 1001 - JD A ESTRELA - CARAPICUIBA - SP - 06364-000" }]; },
+    _reg: function (x) { return { id: x.id, numero: x.numero, quando: x.quando, fornecedor: x.fornecedor, forn: demo.fornecedorCompra(x.fornecedor), comprador: nomeMgr(),
+      obs: x.obs || "", pagamento: x.pagamento || "", formaPagto: x.formaPagto || "CARTEIRA", frete: x.frete || "CIF", dataEntrega: x.dataEntrega || "",
+      entrega: x.entrega, itens: x.itens, enviadoPara: x.enviadoPara || "", enviadoEm: x.enviadoEm || "" }; },
+    finalizarCompra: function (c) {
+      if (!c.dataEntrega) throw new Error("Informe a data de entrega.");
+      var n = (LS.get("demoNum", 0) || 0) + 1; LS.set("demoNum", n);
+      var l = LS.get("demoCompras", []).filter(function (y) { return !(c.id && y.id === c.id && y.status === "salvo"); });
+      var x = { status: "gerado", id: "c" + Date.now(), numero: ("000000000000" + n).slice(-12), quando: new Date().toLocaleString("pt-BR"),
+        fornecedor: c.fornecedor, obs: c.obs, pagamento: c.pagamento, formaPagto: c.formaPagto, frete: c.frete, dataEntrega: c.dataEntrega, entrega: c.entrega,
+        itens: c.itens.filter(function (i) { return i.qtd > 0; }), enviadoPara: "" };
+      l.unshift(x); LS.set("demoCompras", l); return demo._reg(x); },
+    marcarCompraEnviada: function (id, canal) { var l = LS.get("demoCompras", []); l.forEach(function (x) { if (x.id === id) { x.enviadoPara = canal; x.enviadoEm = new Date().toLocaleString("pt-BR"); x.status = "enviado"; } }); LS.set("demoCompras", l); return { ok: true }; },
+    listarCompras: function () { return LS.get("demoCompras", []).map(function (x) { return { id: x.id, numero: x.numero || "", quando: x.quando, fornecedor: x.fornecedor, n: x.itens.length, enviadoPara: x.enviadoPara || "", enviadoEm: x.enviadoEm || "", status: x.status || (x.enviadoPara ? "enviado" : "gerado") }; }); },
+    salvarRascunhoCompra: function (c) { var l = LS.get("demoCompras", []), x = c.id && l.filter(function (y) { return y.id === c.id && y.status === "salvo"; })[0];
+      if (!x) { x = { id: "s" + Date.now(), status: "salvo" }; l.unshift(x); }
+      ["fornecedor", "obs", "cobertura", "pagamento", "formaPagto", "frete", "dataEntrega", "entrega", "itens"].forEach(function (k) { x[k] = c[k]; });
+      x.quando = new Date().toLocaleString("pt-BR");
+      LS.set("demoCompras", l); return { id: x.id }; },
+    abrirCompraSalva: function (id) { return LS.get("demoCompras", []).filter(function (y) { return y.id === id; })[0]; },
+    excluirCompra: function (id) { LS.set("demoCompras", LS.get("demoCompras", []).filter(function (y) { return y.id !== id; })); return true; },
+    prepararEnvioCompra: function (id) { var x = LS.get("demoCompras", []).filter(function (c) { return c.id === id; })[0]; return demo._reg(x); }
+  };
+  function buscarRasc() {
+    if (buscarRasc.indo) return; buscarRasc.indo = true;
+    chamar("listarRascunhos", [], function (l) {
+      buscarRasc.indo = false; rasc = l || []; LS.set("rascCache", rasc);
+      if (abaAtual !== HIST && !atual) desenharTelaPedidos();
+    }, function (e) { buscarRasc.indo = false; if (!rasc) rasc = []; toast("Não foi possível carregar os pedidos salvos"); if (abaAtual !== HIST && !atual) desenharTelaPedidos(); });
+  }
+  function desenharTelaPedidos() {
+    if (tela !== "app") return;
+    renderId++;
+    var html = '<div class="novo-ped"><h3>Novo pedido</h3>' +
+      '<div class="campo"><label for="nomeNovo">Nome do pedido</label><input id="nomeNovo" maxlength="40" placeholder="Ex.: Reposição da semana"></div>' +
+      '<button class="btn btn-verde" id="btnNovoPed">Começar pedido</button></div>' +
+      '<div class="grupo">Pedidos salvos (ainda não enviados)</div>';
+    if (!rasc) {
+      var guardado = LS.get("rascCache", null);   // mostra na hora o que já tinha; atualiza em seguida
+      buscarRasc();
+      if (rasc) return;   // já chegou (modo demonstração responde na hora) e a tela já foi desenhada
+      if (!guardado) { $("lista").innerHTML = html + '<div class="carregando"><div class="giro"></div>Carregando…</div>'; return; }
+      rasc = guardado;
+    }
+    if (!rasc.length) html += '<div class="vazio" style="padding:18px">Nenhum pedido salvo. Comece um novo acima.</div>';
+    rasc.forEach(function (r) {
+      var n = Object.keys(r.itens || {}).length, mesma = r.dataLista === dados.data || (!!r.semana && r.semana === dados.semana);   // mesma semana = mesma lista
+      html += '<div class="ped rasc"><div class="q1"><b>' + esc(r.nome) + '</b><span>' + n + (n === 1 ? ' produto' : ' produtos') +
+        ' · salvo em ' + esc(r.quando) + '<br>lista de ' + esc(r.dataLista) +
+        (mesma ? '<span class="tag-lista atual">lista atual</span>' : '<span class="tag-lista antiga">lista antiga</span>') + '</span></div>' +
+        '<div class="acoes-rasc"><button class="btn excluir" data-exc="' + esc(r.id) + '">Excluir</button>' +
+        '<button class="btn btn-verde" data-cont="' + esc(r.id) + '">Continuar</button></div></div>';
+    });
+    $("lista").innerHTML = html;
+  }
+  function abrirPedido(meta, itens) {
+    atual = meta; LS.set("pedidoAtual", atual);
+    pedido = {}; var fora = 0;
+    Object.keys(itens || {}).forEach(function (plu) { if (porPlu[plu]) pedido[plu] = itens[plu]; else fora++; });
+    if (pendenteConsulta && porPlu[pendenteConsulta]) {   // veio da Consulta de produtos
+      pedido[pendenteConsulta] = (pedido[pendenteConsulta] || 0) + 1;
+      setTimeout(function () { toast("Produto da consulta incluído no pedido"); }, 300);
+    }
+    pendenteConsulta = null;
+    salvarPedido();
+    if (abaAtual === HIST || !abaValida(abaAtual)) abaAtual = ultimaDep || dados.departamentos[0].nome;
+    if (!novosVistos()) abaAtual = NOVOS;   // pedido começa pelos produtos novos
+    $("busca").value = ""; desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+    if (fora) toast(fora + " produto(s) não estão mais na lista e saíram do pedido");
+  }
+  function novoPedido() {
+    var nome = ($("nomeNovo").value || "").trim();
+    if (!nome) { toast("Dê um nome ao pedido"); $("nomeNovo").focus(); return; }
+    abrirPedido({ id: null, nome: nome }, {});
+  }
+  function continuarPedido(id) {
+    var r = (rasc || []).filter(function (x) { return x.id === id; })[0];
+    if (r) abrirPedido({ id: r.id, nome: r.nome }, r.itens);
+  }
+  // Excluir: 1 toque. Some na hora e aparece "DESFAZER" por 5 segundos; depois apaga de verdade no servidor.
+  var exclusao = null;   // {r, pos, t}
+  function excluirPedido(btn) {
+    var id = btn.getAttribute("data-exc");
+    var pos = -1; (rasc || []).forEach(function (x, i) { if (x.id === id) pos = i; });
+    if (pos < 0) return;
+    confirmarExclusao();                       // se tinha outra pendente, apaga ela agora
+    var r = rasc.splice(pos, 1)[0];
+    exclusao = { r: r, pos: pos, t: setTimeout(confirmarExclusao, 5000) };
+    desenharTelaPedidos();
+    $("snackTxt").textContent = "Pedido “" + r.nome + "” excluído";
+    $("snack").classList.add("vis");
+  }
+  function desfazerExclusao() {
+    if (!exclusao) return;
+    clearTimeout(exclusao.t);
+    if (rasc) rasc.splice(Math.min(exclusao.pos, rasc.length), 0, exclusao.r);
+    exclusao = null; $("snack").classList.remove("vis");
+    if (abaAtual !== HIST && !atual) desenharTelaPedidos();
+  }
+  function confirmarExclusao() {
+    if (!exclusao) return;
+    var x = exclusao; exclusao = null; clearTimeout(x.t);
+    $("snack").classList.remove("vis");
+    chamar("excluirRascunho", [x.r.id], function () {}, function () {
+      if (rasc) rasc.splice(Math.min(x.pos, rasc.length), 0, x.r);
+      toast("Não foi possível excluir"); if (abaAtual !== HIST && !atual) desenharTelaPedidos();
+    });
+  }
+  /** Salva o pedido aberto no servidor; depois = função chamada quando terminar (ok). */
+  function salvarAtual(depois) {
+    if (!atual) return;
+    var b = $("btnSalvarPed"); b.disabled = true; b.textContent = "Salvando…";
+    chamar("salvarRascunho", [{ id: atual.id, nome: atual.nome, dataLista: dados.data, semana: dados.semana || "", itens: pedido }], function (r) {
+      b.disabled = false; b.textContent = "Salvar";
+      atual.id = r.id; LS.set("pedidoAtual", atual); rasc = null;
+      if (depois) depois(); else toast("Pedido salvo. Você pode continuar depois.");
+    }, function (e) {
+      b.disabled = false; b.textContent = "Salvar";
+      toast("Não foi possível salvar: " + String(e && e.message || e));
+    });
+  }
+  function fecharPedido() {
+    atual = null; LS.set("pedidoAtual", null); pedido = {}; salvarPedido(); rasc = null;
+    desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+  }
+  function trocarPedido() {
+    if (Object.keys(pedido).length || (atual && atual.id)) salvarAtual(function () { toast("Pedido salvo"); fecharPedido(); });
+    else fecharPedido();
+  }
+
+  // ---------------- PAINEL DO MANAGER (v2.0) ----------------
+  // Managers veem os pedidos de todas as lojas e todos editam e aprovam.
+  // Aprovado -> o servidor manda o Excel (.xlsx) para o e-mail de pedidos.
+  function ehManager() { return !!(sessao && sessao.perfil === "MANAGER") && !comoLoja; }   // fazendo pedido pela loja = tela da loja
+  var mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
+  function chipStatus(x) {
+    return x.status === "pendente" ? '<span class="chip pend">Aguardando aprovação</span>'
+      : '<span class="chip ok">Aprovado' + (x.aprovadoEm ? " em " + esc(x.aprovadoEm) : "") + "</span>" + (x.editado ? '<span class="chip ed">com alterações</span>' : "");
+  }
+  function desenharManager() {
+    if (tela !== "app") { desenharLista(); return; }
+    renderId++;
+    $("subtitulo").textContent = nomeMgr() + " · Painel do manager" + (dados ? " · Lista de " + dados.data : "");
+    atualizarModo();
+    if (mgr.aberto) { desenharPedidoMgr(); return; }
+    if (!mgr.lista) {
+      $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando pedidos das lojas…</div>';
+      chamar("pedidosManager", [], function (r) { mgr.lista = r; if (ehManager() && !mgr.aberto) desenharManager(); },
+        function (e) { $("lista").innerHTML = '<div class="vazio">Não foi possível carregar: ' + esc(e && e.message || e) + "</div>"; });
+      return;
+    }
+    var todos = mgr.lista.pedidos;
+    var nPend = todos.filter(function (x) { return x.status === "pendente"; }).length;
+    $("modosMgr").children[0].textContent = "Aguardando aprovação" + (nPend ? " (" + nPend + ")" : "");
+    if (mgr.filtro === "lojas") { desenharEscolhaLoja(); return; }
+    var lista = todos.filter(function (x) { return (mgr.filtro === "pendente") === (x.status === "pendente") && (!mgr.loja || x.loja === mgr.loja); });
+    var html = "";
+    // filtro com TODAS as lojas cadastradas (mesmo sem pedido) + as que aparecem nos pedidos
+    var lojas = (mgr.lista.lojas || []).slice(), nPorLoja = {};
+    todos.forEach(function (x) {   // loja fora da lista (ex.: Matriz) só aparece se tiver pedido nesta aba
+      if ((mgr.filtro === "pendente") !== (x.status === "pendente")) return;
+      nPorLoja[x.loja] = (nPorLoja[x.loja] || 0) + 1;
+      if (lojas.indexOf(x.loja) < 0) lojas.push(x.loja);
+    });
+    if (mgr.loja && lojas.indexOf(mgr.loja) < 0) lojas.push(mgr.loja);
+    lojas.sort(function (a, b) { return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" }); });
+    html += '<select class="filtro-loja" id="mgrLoja"><option value="">Todas as lojas</option>' +
+      lojas.map(function (l) { var n = nPorLoja[l] || 0;
+        return "<option" + (l === mgr.loja ? " selected" : "") + ' value="' + esc(l) + '">' + esc(l) + (n ? " (" + n + ")" : " · sem pedidos") + "</option>"; }).join("") + "</select>";
+    if (!lista.length) html += '<div class="vazio">' + (mgr.loja ? "<b>" + esc(mgr.loja) + "</b><br>Sem pedidos " + (mgr.filtro === "pendente" ? "aguardando aprovação." : "aprovados nos últimos " + mgr.lista.dias + " dias.")
+      : (mgr.filtro === "pendente" ? "Nenhum pedido aguardando aprovação." : "Nenhum pedido aprovado nos últimos " + mgr.lista.dias + " dias.")) + "</div>";
+    lista.forEach(function (x) {
+      html += '<div class="ped"><div class="topo-ped"><div class="q1"><b>' + esc(x.loja) + "</b><span>" + esc(x.nome) + " · " + esc(x.quando) +
+        "<br>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · " + (x.feitoPor ? "feito pelo manager " + esc(x.feitoPor) : esc(x.email)) + "<br>" + chipStatus(x) + "</span></div>" +
+        '<button class="ver" data-abrir="' + esc(x.id) + '">Abrir</button></div></div>';
+    });
+    $("lista").innerHTML = html;
+  }
+  // ---- "Pedidos lojas": o manager escolhe a loja e usa o app como a loja ----
+  function desenharEscolhaLoja() {
+    var lojas = (mgr.lista.lojas || []).slice().sort(function (a, b) { return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" }); });
+    var html = '<div class="aviso">Escolha a loja para fazer o pedido por ela.<br>Ao <b>enviar</b>, o pedido já sai <b>aprovado</b> e o Excel vai para o CD. ' +
+      "Se só <b>salvar</b>, ele fica guardado para continuar depois.</div>";
+    if (!lojas.length) html += '<div class="vazio">Nenhuma loja cadastrada.</div>';
+    lojas.forEach(function (l) {
+      html += '<div class="ped"><div class="topo-ped"><div class="q1"><b>' + esc(l) + '</b></div>' +
+        '<button class="ver" data-comoloja="' + esc(l) + '">Fazer pedido</button></div></div>';
+    });
+    $("lista").innerHTML = html;
+  }
+  function entrarComoLoja(loja) {
+    if (!dados) { toast("Aguarde a lista de estoque carregar"); return; }
+    comoLoja = loja; LS.set("comoLoja", loja);
+    hist = null; rasc = null; filtroLoja = ""; atual = null; LS.set("pedidoAtual", null); pedido = {}; salvarPedido();
+    try { localStorage.removeItem("rascCache"); } catch (e) {}
+    abaAtual = novosVistos() ? dados.departamentos[0].nome : NOVOS; ultimaDep = null;
+    $("busca").value = "";
+    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + "Lista de " + dados.data + " · " + loja + " (manager)";
+    desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+  }
+  function sairComoLoja() {
+    var fim = function () {
+      comoLoja = null; LS.set("comoLoja", null);
+      hist = null; rasc = null; atual = null; LS.set("pedidoAtual", null); pedido = {}; salvarPedido();
+      try { localStorage.removeItem("rascCache"); } catch (e) {}
+      mgr.filtro = "lojas"; mgr.aberto = null; $("busca").value = "";
+      desenharManager(); window.scrollTo(0, 0);
+    };
+    if (atual && Object.keys(pedido).length) salvarAtual(function () { toast("Pedido salvo"); fim(); }); else fim();
+  }
+  function abrirPedidoMgr(id) {
+    $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Abrindo o pedido…</div>';
+    chamar("pedidoManager", [id], function (x) {
+      mgr.aberto = x; mgr.itens = (x.itens || []).map(function (i) { return { p: i.p, d: i.d, m: i.m, dep: i.dep, t: i.t, qtd: i.qtd }; });
+      mgr.sujo = false; mgr.busca = ""; mgr.abertos = {};   // setores começam FECHADOS; abre ao tocar
+      desenharManager(); window.scrollTo(0, 0);
+    }, function (e) { toast(String(e && e.message || e)); mgr.aberto = null; desenharManager(); });
+  }
+  function podeEditarMgr() { return !!(mgr.aberto && mgr.aberto.status === "pendente" && sessao && sessao.aprova); }
+  function desenharPedidoMgr() {
+    var x = mgr.aberto, pode = podeEditarMgr(), origem = {};
+    (x.itensLoja || []).forEach(function (i) { origem[i.p] = i.qtd; });
+    var html = '<button class="voltar" id="mgrVoltar">← Voltar para a lista</button>' +
+      '<div class="aviso">Loja: <b>' + esc(x.loja) + "</b><br>Pedido: <b>" + esc(x.nome) + "</b><br>Feito por " + (x.feitoPor ? "manager " + esc(x.feitoPor) : esc(x.email)) + " em " + esc(x.quando) +
+      "<br>Lista de estoque de " + esc(x.dataLista) + "<br>" + chipStatus({ status: x.status, aprovadoEm: x.aprovadoEm, editado: !!x.editadoPor }) +
+      (x.aprovadoPor ? "<br><small>Aprovado por " + esc(x.aprovadoPor) + "</small>" : "") + "</div>";
+    if (pode) {
+      html += '<div class="campo"><label for="mgrBusca">Adicionar produto ao pedido</label>' +
+        '<input id="mgrBusca" autocomplete="off" placeholder="Buscar produto, PLU, marca ou EAN" value="' + esc(mgr.busca) + '">' +
+        '<button class="btn-ler escuro" id="btnLerMgr" type="button"><svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><rect width="2" height="16"/><rect x="3" width="1" height="16"/><rect x="5" width="2" height="16"/><rect x="8" width="1" height="16"/><rect x="10" width="3" height="16"/><rect x="14" width="1" height="16"/><rect x="16" width="2" height="16"/><rect x="19" width="1" height="16"/><rect x="21" width="1" height="16"/></svg>Ler código de barras</button></div><div id="mgrRes"></div>';
+    }
+    var ativos = mgr.itens.filter(function (i) { return i.qtd > 0; }).length;
+    html += '<div class="aviso aviso-total"><b>' + ativos + (ativos === 1 ? " produto" : " produtos") + "</b> no pedido</div>";
+    // conferência separada por SETOR (mesma ordem das abas da lista) e, dentro do setor, por marca
+    var ordem = dados ? dados.departamentos.map(function (d) { return d.nome; }) : [];
+    var porDep = {};
+    mgr.itens.forEach(function (i) {
+      var dep = i.dep || (porPlu[i.p] && porPlu[i.p].dep) || "OUTROS";
+      if (ordem.indexOf(dep) < 0) ordem.push(dep);
+      (porDep[dep] = porDep[dep] || []).push(i);
+    });
+    ordem.forEach(function (dep) {
+      var l = porDep[dep]; if (!l) return;
+      l.sort(function (a, b) { return (a.m || "") === (b.m || "") ? (a.d < b.d ? -1 : 1) : ((a.m || "") < (b.m || "") ? -1 : 1); });
+      var nAt = l.filter(function (i) { return i.qtd > 0; }).length;
+      var fechado = !(mgr.abertos && mgr.abertos[dep]);   // começa fechado; tocar no setor mostra/esconde os itens
+      html += '<div class="setor-mgr' + (fechado ? " fechado" : "") + '" data-setor="' + esc(dep) + '"><b><i>' + (fechado ? "▸" : "▾") + "</i>" + esc(nomeAba(dep)) +
+        "</b><span>" + nAt + (nAt === 1 ? " item" : " itens") + "</span></div>" +
+        '<div class="setor-corpo"' + (fechado ? " hidden" : "") + ">";
+      var marca = null;
+      l.forEach(function (i) {
+        if ((i.m || "") !== marca) { marca = i.m || ""; html += '<div class="grupo">' + esc(marca || "Sem marca") + "</div>"; }
+        html += htmlItemMgr(i, pode, origem[i.p]);
+      });
+      html += "</div>";
+    });
+    $("lista").innerHTML = html;
+    if (pode && mgr.busca) buscarMgr(mgr.busca);
+    atualizarModo();
+    atualizarResumoMgr();
+  }
+  function atualizarResumoMgr() {   // linha de baixo do rodapé do manager: quantos produtos + aviso de alteração
+    var el = $("resumoMgr"); if (!el || !mgr.itens) return;
+    var n = mgr.itens.filter(function (i) { return i.qtd > 0; }).length;
+    el.innerHTML = "<b>" + n + (n === 1 ? " produto" : " produtos") + "</b>no pedido" + (mgr.sujo ? " · alterações não salvas" : "");
+  }
+  /** Cartão grande do produto na conferência (igual ao da loja: estoque do CD em CX e UN, PLU e embalagem). */
+  function htmlItemMgr(i, pode, o) {
+    var it = porPlu[i.p], mudou = o !== i.qtd;
+    var info = "";
+    if (it) {
+      var emb = it.t ? esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "";
+      info = (it.t && it.q > 1 ? '<span class="est-cd">Estoque CD ' + esc(it.t) + ": <b>" +
+                (emUnidade(it) ? "menos de 1" : num(it.c != null ? it.c : Math.floor(it.e / it.q))) + "</b></span><br>" : "") +
+        '<span class="est-cd">Estoque CD ' + esc(it.q > 1 || !it.t ? "UN" : it.t) + ": <b>" + num(it.e) + "</b></span><br>" +
+        "PLU " + esc(i.p) + (emb ? " · " + emb : "");
+    } else {
+      info = '<span class="est-cd">Fora da lista de estoque atual</span><br>PLU ' + esc(i.p);
+    }
+    var tr = (mgr.aberto && mgr.aberto.transito || {})[i.p];
+    if (tr && tr.length) {   // o que outras listas (aguardando ou aprovadas) já pedem deste produto
+      tr = tr.slice().sort(function (a, b) { return a.status === b.status ? a.loja.localeCompare(b.loja, "pt-BR", { numeric: true }) : (a.status === "aprovado" ? -1 : 1); });
+      info += '<div class="transito"><b>Estoque em trânsito:</b>' + tr.map(function (x) {
+        var ok = x.status === "aprovado";
+        return "<div>" + num(x.qtd) + " " + esc((x.t || "un").toLowerCase()) + " (" + esc(x.loja) + ') <span class="st ' + (ok ? "st-ok" : "st-pend") + '">' +
+          (ok ? "aprovado" : "aguardando aprovação") + "</span></div>";
+      }).join("") + "</div>";
+    }
+    if (mudou) info += '<br><span class="tag-mgr">' + (o == null ? "Incluído pelo manager" : "Loja pediu " + o + " " + esc(i.t || "un")) + "</span>";
+    var qtd = '<div class="qtd"><b>' + i.qtd + "</b><small>" + esc(i.t || "un") + "</small></div>";
+    return '<div class="item' + (i.qtd > 0 ? " com-pedido" : " zerado") + '" data-mp="' + esc(i.p) + '">' +
+      '<div class="desc">' + (it && it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(i.d) + "</div>" +
+      '<div class="linha2"><div class="info">' + info + "</div>" +
+      (pode ? '<div class="stepper"><button class="seta menos" data-mq="-1" aria-label="Diminuir">&#9660;</button>' + qtd +
+              '<button class="seta mais" data-mq="1" aria-label="Aumentar">&#9650;</button></div>' : qtd) +
+      "</div></div>";
+  }
+  function buscarMgr(txt) {
+    mgr.busca = txt; var box = $("mgrRes"); if (!box) return;
+    var termo = semAcento(txt.trim());
+    if (termo.length < 2) { box.innerHTML = ""; return; }
+    if (!dados) { box.innerHTML = '<div class="vazio">Lista de estoque não carregada.</div>'; return; }
+    var ja = {}; mgr.itens.forEach(function (i) { ja[i.p] = 1; });
+    var termoNum = numBusca(termo);
+    var achados = [];
+    dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) {
+      if (!ja[it.p] && achados.length < 20 && casaBusca(it, termo, termoNum)) achados.push(it);
+    }); });
+    box.innerHTML = achados.length ? achados.map(function (it) {
+      return '<div class="mgr-item"><div class="d">' + esc(it.d) + "<small>PLU " + esc(it.p) + " · " + esc(nomeAba(it.dep)) + " · estoque " + num(it.e) + " un</small></div>" +
+        '<button class="mgr-add" data-madd="' + esc(it.p) + '">+ Incluir</button></div>';
+    }).join("") : '<div class="vazio" style="padding:10px">' + (termoNum.length >= 6 && mgr.itens.some(function (i) { return casaBusca(porPlu[i.p] || {}, "\u0000", termoNum); })
+        ? "Esse produto já está no pedido." : termoNum.length >= 8 ? "Nenhum produto com esse código de barras na lista de estoque atual." : "Nada encontrado.") + "</div>";
+  }
+  function mudarMgr(plu, delta) {
+    mgr.itens.forEach(function (i) { if (i.p === plu) i.qtd = Math.max(0, i.qtd + delta); });
+    mgr.sujo = true; desenharPedidoMgr();
+  }
+  function incluirMgr(plu) {
+    var it = porPlu[plu]; if (!it) return;
+    mgr.itens.push({ p: it.p, d: it.d, m: it.m, dep: it.dep, t: unPedido(it), qtd: 1 });
+    mgr.abertos = mgr.abertos || {}; mgr.abertos[it.dep] = true;   // abre o setor do produto incluído
+    mgr.sujo = true; mgr.busca = ""; desenharPedidoMgr(); toast("Produto incluído");
+  }
+  function voltarMgr() {
+    var b = $("mgrVoltar");
+    if (mgr.sujo && b && !b._conf) { b._conf = true; b.textContent = "Há alterações não salvas. Toque de novo para sair"; setTimeout(function () { if (b) { b._conf = false; b.textContent = "← Voltar para a lista"; } }, 3500); return; }
+    mgr.aberto = null; mgr.itens = null; mgr.sujo = false; desenharManager(); window.scrollTo(0, 0);
+  }
+  function salvarMgr() {
+    var b = $("btnMgrSalvar"); b.disabled = true; b.textContent = "Salvando…";
+    chamar("salvarEdicao", [mgr.aberto.id, mgr.itens], function () {
+      b.disabled = false; b.textContent = "Salvar"; mgr.sujo = false; mgr.lista = null; mgr.aberto.editadoPor = sessao.email; toast("Alterações salvas");
+    }, function (e) { b.disabled = false; b.textContent = "Salvar"; toast(String(e && e.message || e)); });
+  }
+  function aprovarMgr() {
+    var b = $("btnMgrAprovar");
+    if (!b._conf) { b._conf = true; b.textContent = "Toque de novo para aprovar"; setTimeout(function () { b._conf = false; b.textContent = "Aprovar e enviar"; }, 3500); return; }
+    b._conf = false; b.disabled = true; b.textContent = "Enviando…";
+    chamar("aprovarPedido", [mgr.aberto.id, mgr.itens], function (r) {
+      b.disabled = false; b.textContent = "Aprovar e enviar";
+      toast("Aprovado e enviado: " + r.arquivo);
+      mgr.aberto = null; mgr.itens = null; mgr.sujo = false; mgr.lista = null; desenharManager(); window.scrollTo(0, 0);
+    }, function (e) { b.disabled = false; b.textContent = "Aprovar e enviar"; toast("Não foi possível aprovar: " + String(e && e.message || e)); });
+  }
+
+  // ---------------- pedidos anteriores ----------------
+  function desenharHistorico() {
+    if (tela !== "app") return;
+    renderId++;
+    if (!hist) {
+      $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando pedidos anteriores…</div>';
+      var ok = function (r) { hist = r; if (abaAtual === HIST && !$("busca").value.trim()) desenharHistorico(); };
+      if (EM_APPS_SCRIPT) google.script.run.withSuccessHandler(ok)
+        .withFailureHandler(function (e) { if (erroLogin(e)) return; $("lista").innerHTML = '<div class="vazio">Não foi possível carregar. ' + esc(e && e.message || e) + '</div>'; })
+        .historico(tk());
+      else ok({ mestre: true, dias: 30, pedidos: [{ id: "demo1", quando: "19/10/2026 17:40", loja: "Filial 02_Carapicuíba", email: "carapicuiba@atacadaodeembalagens.com.br", dataLista: "19/10/2026", n: 2 }] });
+      return;
+    }
+    var lista = hist.pedidos.filter(function (x) { return !filtroLoja || x.loja === filtroLoja; });
+    var html = '<div class="aviso">Os pedidos ficam guardados por ' + hist.dias + ' dias. Depois disso são apagados automaticamente.</div>';
+    if (hist.mestre) {
+      var lojas = []; hist.pedidos.forEach(function (x) { if (lojas.indexOf(x.loja) < 0) lojas.push(x.loja); }); lojas.sort();
+      html += '<select class="filtro-loja" id="filtroLoja"><option value="">Todas as lojas (' + hist.pedidos.length + ')</option>' +
+        lojas.map(function (l) { return '<option' + (l === filtroLoja ? ' selected' : '') + ' value="' + esc(l) + '">' + esc(l) + '</option>'; }).join('') + '</select>';
+    }
+    if (!lista.length) html += '<div class="vazio">Nenhum pedido nos últimos ' + hist.dias + ' dias.</div>';
+    lista.forEach(function (x) {
+      html += '<div class="ped" data-id="' + esc(x.id) + '"><div class="topo-ped"><div class="q1"><b>' + (x.nome ? esc(x.nome) + ' · ' : '') + esc(x.quando) + '</b>' +
+        '<span>' + (hist.mestre ? esc(x.loja) + ' · ' + esc(x.email) + '<br>' : '') + x.n + (x.n === 1 ? ' produto' : ' produtos') + ' · lista de ' + esc(x.dataLista) + '<br>' + chipStatus(x) +
+        (x.feitoPor ? '<br><small class="feito-mgr">Feito e aprovado pelo manager ' + esc(x.feitoPor) + '</small>' : '') + '</span></div>' +
+        '<button class="ver" data-ver="' + esc(x.id) + '">Ver itens</button></div><div class="itens-ped" hidden></div></div>';
+    });
+    $("lista").innerHTML = html;
+  }
+  function verPedido(btn) {
+    var card = btn.closest(".ped"), box = card.querySelector(".itens-ped");
+    if (!box.hidden) { box.hidden = true; btn.textContent = "Ver itens"; return; }
+    box.hidden = false; btn.textContent = "Esconder";
+    if (box._ok) return;
+    box.innerHTML = '<div class="vazio" style="padding:12px">Carregando…</div>';
+    var mostra = function (itens) {
+      box._ok = true;
+      box.innerHTML = itens.map(function (i) {
+        return '<div class="rev"><div class="d">' + esc(i.d) + '<small>PLU ' + esc(i.p) + (i.dep ? ' · ' + esc(nomeAba(i.dep)) : '') + '</small></div>' +
+          '<div class="q">' + i.qtd + ' ' + esc(i.t || 'un') + '</div></div>';
+      }).join('');
+    };
+    if (EM_APPS_SCRIPT) google.script.run.withSuccessHandler(mostra)
+      .withFailureHandler(function (e) { if (erroLogin(e)) return; box.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + '</div>'; })
+      .detalhePedido(tk(), card.getAttribute("data-id"));
+    else mostra([{ p: "050289", d: "Fita Durex Qualiclear 12mmx50m", dep: "EMBALAGENS", t: "CX", qtd: 3 }, { p: "154413", d: "Fita Dupla Face Ppl 410 12x30", dep: "EMBALAGENS", t: "UN", qtd: 20 }]);
+  }
+
+  // ---------------- rodapé / revisão / envio ----------------
+  function itensDoPedido() {
+    return Object.keys(pedido).filter(function (p) { return pedido[p] > 0 && porPlu[p]; })
+      .map(function (p) { var it = porPlu[p]; return { p: it.p, d: it.d, m: it.m, dep: it.dep, t: unPedido(it), q: emUnidade(it) ? 1 : it.q, qtd: pedido[p] }; });
+  }
+  function atualizarRodape() {
+    var n = itensDoPedido().length;
+    $("qtdItens").textContent = n + (n === 1 ? " item" : " itens");
+    $("txtRodape").textContent = n ? "no pedido" : "toque em ▲ para pedir";
+    $("btnRevisar").disabled = !n;
+  }
+
+  function abrirRevisao() {
+    if (!novosVistos()) {   // obrigatório: ver os produtos novos até o final antes de enviar
+      abaAtual = NOVOS; $("busca").value = ""; desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+      toast("Antes de enviar, veja os produtos novos até o final");
+      return;
+    }
+    var itens = itensDoPedido();
+    var porDep = {};
+    itens.forEach(function (i) { (porDep[i.dep] = porDep[i.dep] || []).push(i); });
+    var html = '<div class="aviso">Pedido: <b>' + esc(atual ? atual.nome : "") + "</b><br>Loja: <b>" + esc(lojaAtual()) + "</b>" + (comoLoja ? " (feito pelo manager)" : "") + "<br>" +
+      itens.length + " produto(s) · lista de " + esc(dados.data) + "</div>";
+    dados.departamentos.forEach(function (d) {
+      if (!porDep[d.nome]) return;
+      html += '<div class="grupo">' + esc(nomeAba(d.nome)) + "</div>";
+      porDep[d.nome].forEach(function (i) {
+        html += '<div class="rev"><div class="d">' + esc(i.d) + "<small>PLU " + esc(i.p) + "</small></div>" +
+          '<div class="q">' + i.qtd + " " + esc(i.t || "un") + "</div></div>";
+      });
+    });
+    $("revCorpo").innerHTML = html;
+    $("btnEnviar").disabled = false; $("btnEnviar").textContent = comoLoja ? "Aprovar e enviar" : "Enviar pedido";
+    $("telaRevisao").classList.add("aberta");
+  }
+
+  function enviar() {
+    if (!lojaAtual()) { $("telaRevisao").classList.remove("aberta"); abrirConfig(); return; }
+    var corpo = { loja: lojaAtual(), nome: atual ? atual.nome : "", rascunhoId: atual ? atual.id : null, dataLista: dados.data, itens: itensDoPedido() };
+    var b = $("btnEnviar"); b.disabled = true; b.textContent = "Enviando…";
+    function ok(r) {
+      hist = null; rasc = null; atual = null; LS.set("pedidoAtual", null); pedido = {}; salvarPedido(); desenharAbas(); desenharLista();
+      $("revCorpo").innerHTML = r.aprovado
+        ? '<div class="aviso">Pedido <b>' + esc(r.nome || corpo.nome) + '</b> da loja <b>' + esc(corpo.loja) + '</b> aprovado e enviado para o CD!<br>' + r.itens +
+          " produto(s) · " + esc(r.quando) + "<br><small>Arquivo: " + esc(r.arquivo || "") + ". A loja vê este pedido em Pedidos anteriores.</small></div>"
+        : '<div class="aviso">Pedido <b>' + esc(r.nome || corpo.nome) + '</b> enviado para aprovação!<br>' + r.itens + " produto(s) · " +
+          esc(r.quando) + "<br><small>Depois que o gerente aprovar, ele segue para o CD. Acompanhe em Pedidos anteriores.</small></div>";
+      b.textContent = "Enviado";
+    }
+    function falha(e) {
+      b.disabled = false; b.textContent = "Tentar de novo";
+      $("revCorpo").insertAdjacentHTML("afterbegin", '<div class="aviso erro">Não foi possível enviar: ' + esc(e && e.message || e) +
+        ". O pedido continua salvo no celular.</div>");
+    }
+    if (EM_APPS_SCRIPT) google.script.run.withSuccessHandler(ok)
+      .withFailureHandler(function (e) { if (erroLogin(e)) { $("telaRevisao").classList.remove("aberta"); return; } falha(e); })
+      .enviarPedido(tk(), corpo);
+    else setTimeout(function () { if (corpo.rascunhoId) demo.excluirRascunho(corpo.rascunhoId); ok({ aprovado: !!comoLoja, itens: corpo.itens.length, nome: corpo.nome, quando: new Date().toLocaleString("pt-BR"), arquivo: corpo.loja + "_" + corpo.nome + ".xlsx (modo demonstração)" }); }, 700);
+  }
+
+  function abrirLogin(msg) {
+    $("logEmail").value = (sessao && sessao.email) || LS.get("ultimoEmail", "") || "";
+    $("logSenha").value = "";
+    $("logMsg").className = "msg erro"; $("logMsg").textContent = msg || "";
+    $("telaLogin").classList.add("aberta");
+  }
+  function sair(msg) {
+    sessao = null; LS.set("sessao", null); hist = null; filtroLoja = ""; rasc = null; comoLoja = null; LS.set("comoLoja", null);
+    atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {});
+    try { localStorage.removeItem("rascCache"); } catch (e) {}   // a lista de estoque fica guardada (é igual para todas as lojas)
+    renderId++; dados = null; $("lista").innerHTML = ""; $("abas").innerHTML = "";
+    $("telaConfig").classList.remove("aberta");
+    abrirLogin(msg);
+  }
+  function entrar() {
+    var email = $("logEmail").value.trim(), senha = $("logSenha").value.trim();
+    if (!email || !senha) { $("logMsg").className = "msg erro"; $("logMsg").textContent = "Preencha e-mail e senha."; return; }
+    var b = $("btnEntrar"); b.disabled = true; b.textContent = "Entrando…";
+    google.script.run
+      .withSuccessHandler(function (r) {
+        b.disabled = false; b.textContent = "Entrar";
+        try { document.activeElement.blur(); } catch (x) {}   // fecha o teclado antes de mostrar a lista
+        if (r.precisaCadastro) { abrirCadastro(r); return; }   // 1º acesso do manager
+        sessao = { token: r.token, email: r.email, loja: r.loja, perfil: r.perfil || "LOJA", aprova: !!r.aprova, nome: r.nome || "" };
+        mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
+        comoLoja = null; LS.set("comoLoja", null);
+        tela = "inicio"; cons.precos = null; cmp.forns = null; cmp.recentes = null; cmp.entregas = null; cmp.fornDados = {};
+        LS.set("sessao", sessao); LS.set("ultimoEmail", r.email);
+        if (r.novosVisto) LS.set(chaveVistos(), r.novosVisto);   // o que este login já viu (mesmo em outro celular)
+        cfg = { loja: r.loja || cfg.loja || "" }; LS.set("cfg", cfg);
+        if (r.rascunhos) { rasc = r.rascunhos; LS.set("rascCache", rasc); }
+        $("telaLogin").classList.remove("aberta");
+        window.scrollTo(0, 0);
+        var guardada = LS.get("dados", null);
+        if (r.dados && r.dados !== "IGUAL") aplicarDados(r.dados, true);   // a lista veio junto com o login
+        else if (guardada) aplicarDados(guardada, false);
+        else carregar();
+        if (ehManager() && !dados) desenharManager();
+        if (!cfg.loja) abrirConfig();
+      })
+      .withFailureHandler(function (e) {
+        b.disabled = false; b.textContent = "Entrar";
+        $("logMsg").className = "msg erro"; $("logMsg").textContent = String(e && e.message || e);
+      })
+      .entrar(email, senha, (function () { var c = LS.get("dados", null); return c && c.gerado ? String(c.gerado) : ""; })());
+  }
+  // ---- cadastro obrigatório do manager (1º acesso) ----
+  var cadToken = null;
+  function abrirCadastro(r) {
+    cadToken = r.cadastroToken;
+    $("cadEmail").value = r.email; $("cadNome").value = ""; $("cadZap").value = ""; $("cadSenha").value = ""; $("cadConf").value = "";
+    $("logMsg").className = "msg"; $("logMsg").textContent = "";
+    document.querySelector("#telaLogin .caixa").classList.add("cadastro");
+    $("cadNome").focus();
+  }
+  function fecharCadastro(msg, ok) {
+    cadToken = null; document.querySelector("#telaLogin .caixa").classList.remove("cadastro");
+    $("logSenha").value = ""; $("logMsg").className = "msg" + (ok ? " ok" : ""); $("logMsg").textContent = msg || "";
+  }
+  function cadastrar() {
+    var d = { nome: $("cadNome").value.trim(), email: $("cadEmail").value.trim(), whatsapp: $("cadZap").value.trim(),
+              senha: $("cadSenha").value, confirmacao: $("cadConf").value };
+    var erro = !d.nome ? "Preencha o seu nome." : d.whatsapp.replace(/\D/g, "").length < 10 ? "WhatsApp: use DDD + número." :
+      d.senha.length < 6 ? "A senha precisa ter pelo menos 6 caracteres." : d.senha !== d.confirmacao ? "A confirmação não é igual à senha." : "";
+    if (erro) { $("logMsg").className = "msg erro"; $("logMsg").textContent = erro; return; }
+    var b = $("btnCadastrar"); b.disabled = true; b.textContent = "Salvando…";
+    google.script.run
+      .withSuccessHandler(function (r) {
+        b.disabled = false; b.textContent = "Salvar cadastro";
+        LS.set("ultimoEmail", r.email); $("logEmail").value = r.email;
+        fecharCadastro("Cadastro feito, " + (r.nome || "") + "! Agora entre com o seu e-mail e a nova senha.", true);
+        $("logSenha").focus();
+      })
+      .withFailureHandler(function (e) {
+        b.disabled = false; b.textContent = "Salvar cadastro";
+        var m = String(e && e.message || e);
+        if (m.indexOf("LOGIN:") >= 0) { fecharCadastro(m.replace(/^.*LOGIN:\s*/, "")); return; }
+        $("logMsg").className = "msg erro"; $("logMsg").textContent = m;
+      })
+      .salvarCadastroManager(cadToken, d);
+  }
+  function esqueci() {
+    var email = $("logEmail").value.trim();
+    if (!email) { $("logMsg").className = "msg erro"; $("logMsg").textContent = "Digite o e-mail da loja e toque de novo em \"Esqueci minha senha\"."; return; }
+    $("logMsg").className = "msg"; $("logMsg").textContent = "Enviando…";
+    google.script.run
+      .withSuccessHandler(function (m) { $("logMsg").className = "msg ok"; $("logMsg").textContent = m; })
+      .withFailureHandler(function (e) { $("logMsg").className = "msg erro"; $("logMsg").textContent = String(e && e.message || e); })
+      .esqueciSenha(email);
+  }
+
+  function abrirConfig() {
+    $("cfgLoja").value = cfg.loja;
+    $("cfgLoja").readOnly = !!(sessao && sessao.loja);   // loja vem da planilha: não muda no celular
+    $("cfgEmailBox").hidden = !(sessao && sessao.email); $("cfgEmail").value = (sessao && sessao.email) || "";
+    $("telaConfig").classList.add("aberta");
+  }
+
+  // ---------------- INÍCIO ----------------
+  var ICO = {
+    carrinho: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a1.5 1.5 0 0 0 1.5 1.1h8.8a1.5 1.5 0 0 0 1.5-1.2L21 8H6"/></svg>',
+    lista: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>',
+    relogio: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    ok: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>',
+    loja: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M3 10 5 4h14l2 6z"/><path d="M10 20v-5h4v5"/></svg>',
+    lupa: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+    caminhao: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M2 6h12v10H2zM14 10h4l3 3v3h-7z"/><circle cx="6" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>'
+  };
+  var ICO_EAN = '<svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><rect width="2" height="16"/><rect x="3" width="1" height="16"/><rect x="5" width="2" height="16"/><rect x="8" width="1" height="16"/><rect x="10" width="3" height="16"/><rect x="14" width="1" height="16"/><rect x="16" width="2" height="16"/><rect x="19" width="1" height="16"/><rect x="21" width="1" height="16"/></svg>';
+  function tile(acao, titulo, sub, ico, cls) {
+    return '<button class="tile ' + (cls || "") + '" data-ir="' + acao + '">' + ico + "<b>" + esc(titulo) + "</b><span>" + esc(sub) + "</span></button>";
+  }
+  function desenharInicio() {
+    renderId++; atualizarModo();
+    var m = ehMgrLogin(), t = [];
+    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + (dados ? "Lista de " + dados.data : "Carregando a lista…") +
+      (m ? " · " + nomeMgr() : (cfg.loja ? " · " + cfg.loja : ""));
+    if (m) {
+      var np = mgr.lista ? mgr.lista.pedidos.filter(function (x) { return x.status === "pendente"; }).length : null;
+      var nc = Object.keys(compra.itens).length;
+      t.push(tile("mg:pendente", "Aguardando aprovação", np == null ? "Pedidos das lojas para conferir" : np + (np === 1 ? " pedido para conferir" : " pedidos para conferir"), ICO.relogio, np ? "destaque" : ""));
+      t.push(tile("mg:aprovado", "Aprovados", "Pedidos já enviados ao CD", ICO.ok));
+      t.push(tile("mg:lojas", "Pedidos lojas", "Fazer pedido por uma loja", ICO.loja));
+      t.push(tile("consulta", "Consulta de produtos", "Estoque, preço, fornecedor e EAN", ICO.lupa));
+      t.push(tile("compra", "Pedido de compra", nc ? nc + (nc === 1 ? " item em andamento" : " itens em andamento") : "Montar o PDF e mandar pelo WhatsApp", ICO.caminhao));
+    } else {
+      var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
+      t.push(tile("lj:lista", "Fazer pedido", atual ? "Continuar: " + atual.nome : "Começar ou continuar um pedido", ICO.carrinho, "destaque"));
+      t.push(tile("lj:atual", "Pedido atual", atual ? n + (n === 1 ? " item em " : " itens em ") + atual.nome : "Nenhum pedido aberto", ICO.lista));
+      t.push(tile("lj:hist", "Pedidos anteriores", "Enviados e aprovados", ICO.relogio));
+      t.push(tile("consulta", "Consulta de produtos", "Estoque, fornecedor e EAN", ICO.lupa));
+    }
+    $("lista").innerHTML = '<div class="inicio-ola">O que você quer fazer?</div><div class="tiles">' + t.join("") + "</div>";
+    if (m && !mgr.lista && !desenharInicio.buscando) {   // contagem de "Aguardando aprovação"
+      desenharInicio.buscando = true;
+      chamar("pedidosManager", [], function (r) { desenharInicio.buscando = false; mgr.lista = r; if (tela === "inicio") desenharInicio(); },
+        function () { desenharInicio.buscando = false; });
+    }
+  }
+  function irPara(acao) {
+    if (acao === "consulta" || acao === "compra") { tela = acao; $("busca").value = ""; desenharLista(); window.scrollTo(0, 0); return; }
+    if (!dados) { toast("Aguarde a lista de estoque carregar"); return; }
+    var p = acao.split(":");
+    tela = "app"; $("busca").value = "";
+    if (p[0] === "mg") { mgr.filtro = p[1]; mgr.aberto = null; mgr.itens = null; mgr.sujo = false; }
+    else {
+      abaAtual = p[1] === "hist" ? HIST : p[1] === "atual" ? ATUAL : (ultimaDep || (novosVistos() ? dados.departamentos[0].nome : NOVOS));
+      if (abaAtual === ATUAL) abertosAtual = {};
+      LS.set("aba", abaAtual);
+    }
+    desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+  }
+  function irInicio() {
+    tela = "inicio"; $("busca").value = "";
+    if (comoLoja) { sairComoLoja(); return; }   // salva o pedido da loja e volta para o Início do manager
+    desenharLista(); window.scrollTo(0, 0);
+  }
+
+  // ---------------- CONSULTA DE PRODUTOS ----------------
+  function reais(v) { return "R$ " + Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function desenharConsulta() {
+    renderId++; atualizarModo();
+    var m = ehMgrLogin();
+    $("lista").innerHTML = '<div class="titulo-tela">Consulta de produtos</div>' +
+      '<div class="campo"><input id="consBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" value="' + esc(cons.termo) + '">' +
+      '<button class="btn-ler escuro" id="btnLerCons" type="button">' + ICO_EAN + "Ler código de barras</button></div>" +
+      '<div id="consRes"></div>';
+    if (m && !cons.precos && !desenharConsulta.buscando) {   // preços: só managers (o servidor não manda para loja)
+      desenharConsulta.buscando = true;
+      chamar("precosManager", [], function (p) { desenharConsulta.buscando = false; cons.precos = p || {}; if (tela === "consulta") resultadosConsulta(); },
+        function () { desenharConsulta.buscando = false; cons.precos = {}; });
+    }
+    resultadosConsulta();
+  }
+  function resultadosConsulta() {
+    var box = $("consRes"); if (!box) return;
+    if (!dados) { box.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando a lista de estoque…</div>'; return; }
+    var termo = semAcento(cons.termo.trim()), termoNum = numBusca(termo);
+    if (termo.length < 2) { box.innerHTML = '<div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
+    var achados = [];
+    dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) {
+      if (achados.length < 80 && (casaBusca(it, termo, termoNum) || (it.f && semAcento(it.f).indexOf(termo) >= 0))) achados.push(it);
+    }); });
+    // produtos com estoque 0 ou negativo no CD (não entram no pedido): vêm do servidor
+    var ex = cons.extra && cons.extra.termo === cons.termo.trim() ? cons.extra.lista : null;
+    var fora = (ex || []).filter(function (x) { return !porPlu[x.p]; });
+    if (!ex) buscarForaLista(cons.termo.trim());
+    var n = achados.length + fora.length;
+    box.innerHTML = n ? '<div class="grupo">' + n + (achados.length === 80 || (ex && ex.length === 80) ? "+" : "") + " encontrado(s)</div>" +
+        achados.map(htmlConsulta).join("") + fora.map(htmlConsulta).join("") +
+        (ex ? "" : '<div class="carregando"><div class="giro"></div>Procurando também os produtos com estoque zerado ou negativo…</div>')
+      : (ex ? '<div class="vazio">' + (termoNum.length >= 8 ? "Nenhum produto com esse código de barras." : "Nada encontrado.") + "</div>"
+        : '<div class="carregando"><div class="giro"></div>Procurando…</div>');
+  }
+  /** Busca no servidor os produtos do relatório de estoque (qualquer estoque no CD), para a consulta. */
+  function buscarForaLista(t) {
+    if (buscarForaLista.termo === t) return;
+    buscarForaLista.termo = t;
+    clearTimeout(buscarForaLista.h);
+    buscarForaLista.h = setTimeout(function () {
+      chamar("buscarProdutos", [t], function (l) {
+        if (buscarForaLista.termo === t) buscarForaLista.termo = null;
+        cons.extra = { termo: t, lista: (l || []).map(function (x) {
+          return { p: x.p, d: x.d, m: x.m, f: x.f, b: x.b, t: x.t, q: x.q, e: Number(x.e) || 0, cu: x.c, dep: "", fora: 1 }; }) };
+        if (tela === "consulta" && cons.termo.trim() === t) resultadosConsulta();
+      }, function () { if (buscarForaLista.termo === t) buscarForaLista.termo = null; cons.extra = { termo: t, lista: [] }; if (tela === "consulta") resultadosConsulta(); });
+    }, 250);
+  }
+  function htmlConsulta(it) {
+    var m = ehMgrLogin(), pr = m && cons.precos ? cons.precos[it.p] : null;
+    var emb = it.t ? it.t + (it.q > 1 ? " c/ " + num(it.q) : "") : "—";
+    var fic = [["PLU", it.p], ["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"], ["Embalagem", emb]].concat(it.dep ? [["Setor", nomeAba(it.dep)]] : []);
+    if (m) fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : "—"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : "—"]);
+    var est = (it.t && it.q > 1 ? '<span class="est-cd">Estoque CD ' + esc(it.t) + ": " + (emUnidade(it) ? "<b>menos de 1</b>" : bNum(it.c != null && !it.fora ? it.c : cxDe(it.e, it.q))) + "</span><br>" : "") +
+      '<span class="est-cd">Estoque CD UN: ' + bNum(it.e) + "</span>";
+    var acao;
+    if (m) {
+      var c = compra.itens[it.p];
+      acao = '<button class="btn btn-cinza" data-cpr="' + esc(it.p) + '">' + (c ? "Na compra: " + c.qtd + " " + esc((c.t || "un").toLowerCase()) + " (+1)" : "Pôr no pedido de compra") + "</button>";
+    } else if (atual) {
+      var q = pedido[it.p] || 0;
+      acao = '<div class="stepper"><button class="seta menos" data-acao="-" aria-label="Diminuir">&#9660;</button><div class="qtd" data-acao="editar"><b>' + q +
+        "</b><small>" + esc(unPedido(it)) + '</small></div><button class="seta mais" data-acao="+" aria-label="Aumentar">&#9650;</button></div>';
+    } else acao = '<button class="btn btn-verde" data-cped="' + esc(it.p) + '">Colocar no pedido</button>';
+    if (it.fora && !m) acao = '<div class="fora-lista">' + (it.e < 0 ? "Estoque negativo no CD" : it.e > 0 ? "Fora da lista de pedido" : "Sem estoque no CD") + " — não entra no pedido.</div>";
+    return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
+      '<div class="info">' + est + '</div><dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
+      '<div class="acao-cons">' + acao + "</div></div>";
+  }
+  function consultaParaPedido(plu) {   // loja sem pedido aberto: escolhe/começa um pedido e o produto entra nele
+    pendenteConsulta = plu; tela = "app"; $("busca").value = "";
+    desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+    toast("Comece ou continue um pedido: o produto entra nele");
+  }
+
+  // ---------------- FICHA DO PRODUTO (toque na descrição) ----------------
+  function abrirFicha(plu) {
+    var it = porPlu[plu] || (typeof infoCompra === "function" ? infoCompra(plu) : null) || { p: plu, d: "PLU " + plu };
+    var emb = it.t ? it.t + (it.q > 1 ? " c/ " + num(it.q) : "") : "—";
+    $("fichaTitulo").textContent = it.d;
+    var fic = [["PLU", it.p], ["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"], ["Embalagem", emb]];
+    $("fichaCorpo").innerHTML = '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
+      '<div class="ficha-paineis"><div class="ficha-painel"><div class="grupo">Estoque e preço por loja <small>arraste para o lado: vendas ›</small></div>' +
+      '<div id="fichaLojas"><div class="carregando"><div class="giro"></div>Carregando…</div></div></div>' +
+      '<div class="ficha-painel"><div class="grupo">‹ Vendas da última semana por loja</div><div id="fichaVendas"></div></div></div>';
+    $("telaFicha").classList.add("aberta");
+    chamar("fichaProduto", [plu], function (r) { if ($("fichaTitulo").textContent === it.d) desenharFichaLojas(it, r); },
+      function (e) { var b = $("fichaLojas"); if (b) b.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
+  function desenharFichaLojas(it, r) {
+    var box = $("fichaLojas"); if (!box) return;
+    var cx = it.t && it.q > 1, preco = r.lojas.some(function (l) { return l.venda != null; }), custo = !!r.manager;
+    var cab = "<tr><th>Loja</th>" + (cx ? "<th>" + esc(it.t) + "</th>" : "") + "<th>UN</th>" + (preco ? "<th>Preço</th>" : "") + (custo ? "<th>Custo</th>" : "") + "</tr>";
+    var lin = r.lojas.map(function (l) {
+      return '<tr class="' + (l.cod === r.minha ? "minha " : "") + (l.e < 0 ? "neg" : l.e ? "" : "zero") + '"><td>' + esc(l.cod + " " + l.nome) + "</td>" +
+        (cx ? "<td>" + num(cxDe(l.e, it.q)) + "</td>" : "") + "<td>" + num(l.e) + "</td>" +
+        (preco ? "<td>" + (l.venda != null && l.venda ? reais(l.venda) : "—") + "</td>" : "") +
+        (custo ? "<td>" + (l.custo ? reais(l.custo) : "—") + "</td>" : "") + "</tr>";
+    }).join("");
+    var tot = r.lojas.reduce(function (s, l) { return s + l.e; }, 0);
+    box.innerHTML = '<table class="tab-lojas"><thead>' + cab + "</thead><tbody>" + lin + "</tbody></table>" +
+      '<div class="cmp-dica">Total em todas as lojas: <b>' + num(tot) + " un</b>" + (cx ? " (" + num(cxDe(tot, it.q)) + " " + esc(it.t) + ")" : "") + "</div>";
+    var bv = $("fichaVendas"); if (!bv) return;
+    if (!r.vendasPeriodo) { bv.innerHTML = '<div class="vazio" style="padding:18px">As vendas por loja aparecem aqui assim que o robô começar a mandar o relatório de vendas.</div>'; return; }
+    var totv = r.lojas.reduce(function (s, l) { return s + (l.vendas || 0); }, 0);
+    bv.innerHTML = '<div class="cmp-dica">Período: <b>' + esc(r.vendasPeriodo) + "</b></div>" +
+      '<table class="tab-lojas"><thead><tr><th>Loja</th><th>Vendas (UN)</th>' + (cx ? "<th>" + esc(it.t) + "</th>" : "") + "</tr></thead><tbody>" +
+      r.lojas.map(function (l) { return '<tr class="' + (l.cod === r.minha ? "minha " : "") + (l.vendas ? "" : "zero") + '"><td>' + esc(l.cod + " " + l.nome) + "</td><td>" +
+        num(l.vendas || 0) + "</td>" + (cx ? "<td>" + num(Math.round((l.vendas || 0) / it.q * 10) / 10) + "</td>" : "") + "</tr>"; }).join("") +
+      "</tbody></table>" + '<div class="cmp-dica">Total vendido: <b>' + num(totv) + " un</b></div>";
+  }
+
+  // ---------------- PEDIDO DE COMPRA (managers) ----------------
+  // Monta o pedido (fornecedor, entrega, prazo, preços) -> o servidor numera e guarda -> o celular gera o PDF
+  // no layout do ERP -> "Enviar pelo WhatsApp" abre o menu Compartilhar só com o PDF.
+  function salvarCompra() { LS.set("compra", compra); }
+  /** "1.234,56" / "1234.56" / "12,5" -> número (vazio/inválido = 0). */
+  function lerNum(s) {
+    s = String(s == null ? "" : s).trim().replace(/[^\d.,-]/g, "");
+    if (s.indexOf(",") >= 0) s = s.replace(/\./g, "").replace(",", ".");
+    var n = parseFloat(s); return isFinite(n) && n > 0 ? n : 0;
+  }
+  function numCampo(v, casas) { var n = Number(v) || 0; return n ? n.toFixed(casas).replace(/\.?0+$/, "").replace(".", ",") : ""; }
+  function r4(v) { return Math.round((Number(v) || 0) * 10000) / 10000; }
+  function infoCompra(plu) {   // dados do produto: resultado na tela, item já escolhido ou lista de estoque
+    var achar = function (l) { return Array.isArray(l) ? l.filter(function (x) { return x.p === plu; })[0] : null; };
+    var x = achar(cmp.forn) || achar(cmp.busca) || compra.itens[plu];
+    if (!x && cons.extra) { var y = achar(cons.extra.lista); if (y) x = { p: y.p, d: y.d, m: y.m, f: y.f || "", b: y.b || "", t: y.t, q: y.q, c: y.cu || 0, e: y.e }; }
+    if (!x && porPlu[plu]) { var it = porPlu[plu]; x = { p: it.p, d: it.d, m: it.m, f: it.f || "", b: it.b || "", t: it.t, q: it.q }; }
+    return x;
+  }
+  function mudarCompra(plu, delta, valor) {
+    var x = infoCompra(plu); if (!x) return;
+    var c = compra.itens[plu], q = valor != null ? valor : Math.max(0, (c ? c.qtd : 0) + delta);
+    if (q > 0) {
+      // preço por embalagem: o que o comprador já digitou; senão o custo unitário do CD x quantidade da embalagem
+      var preco = c && c.preco != null ? c.preco : (x.preco != null ? x.preco : r4((Number(x.c) || 0) * (Number(x.q) || 1)));
+      compra.itens[plu] = { p: x.p, d: x.d, m: x.m, f: x.f || "", b: x.b || "", t: x.t || "", q: x.q || "", qtd: q,
+        preco: preco, desc: c ? c.desc || 0 : (x.desc || 0), ipi: c ? c.ipi || 0 : (x.ipi || 0), ref: c ? c.ref || "" : (x.ref || "") };
+    } else delete compra.itens[plu];
+    if (q > 0 && !compra.fornecedor && x.f) { compra.fornecedor = x.f; var i = $("cmpForn"); if (i) i.value = x.f; carregarFornDados(x.f); }
+    salvarCompra();
+    if (tela === "compra") {   // atualiza só as linhas desse produto (sem redesenhar a lista toda) + itens + rodapé
+      Array.prototype.forEach.call(document.querySelectorAll('#cmpRes [data-cp="' + plu + '"]'), function (el) {
+        el.classList.toggle("com-pedido", q > 0); var b = el.querySelector(".qtd b"); if (b) b.textContent = q;
+        if (!b) { var cx = el.querySelector("input.edita"); if (cx) cx.blur(); }
+        if (!!el.querySelector(".cmp-precos") !== q > 0) {   // entrou/saiu da compra: mostra/tira os campos de preço
+          var tmp = document.createElement("div"); tmp.innerHTML = htmlCompra(x, false); el.replaceWith(tmp.firstChild);
+        }
+      });
+      atualizarItensCmp();
+    }
+  }
+  function opcoesEntrega() {
+    if (!Array.isArray(cmp.entregas)) return '<option value="">Carregando…</option>';
+    var atualEnd = compra.entrega && compra.entrega.endereco, achou = false;
+    var html = cmp.entregas.map(function (e, k) {
+      var sel = atualEnd ? e.endereco === atualEnd : k === 0; if (sel) achou = true;
+      return '<option value="' + k + '"' + (sel ? " selected" : "") + ">" + esc(e.endereco) + "</option>";
+    }).join("");
+    if (atualEnd && !achou) html = '<option value="x" selected>' + esc(atualEnd) + "</option>" + html;   // endereço de um pedido salvo antigo
+    return html;
+  }
+  function carregarEntregas() {
+    if (cmp.entregas) return;
+    cmp.entregas = "carregando";
+    chamar("entregasCompra", [], function (l) {
+      cmp.entregas = l && l.length ? l : [];
+      if (!compra.entrega && cmp.entregas[0]) { compra.entrega = cmp.entregas[0]; salvarCompra(); }
+      var s = $("cmpEnt"); if (s) s.innerHTML = opcoesEntrega();
+    }, function () { cmp.entregas = null; toast("Não foi possível carregar os endereços de entrega"); });
+  }
+  function carregarFornDados(nome, forcar) {
+    nome = String(nome || "").trim();
+    if (!nome || (cmp.fornDados[nome] && !forcar)) { desenharFornDados(); return; }
+    cmp.fornDados[nome] = "carregando"; desenharFornDados();
+    chamar("fornecedorCompra", [nome], function (d) { cmp.fornDados[nome] = d || {}; desenharFornDados(); },
+      function () { delete cmp.fornDados[nome]; desenharFornDados(); });
+  }
+  function desenharFornDados() {
+    var box = $("cmpFornDados"); if (!box) return;
+    var nome = String(compra.fornecedor || "").trim(), d = cmp.fornDados[nome];
+    if (!nome || !Array.isArray(cmp.forns) || !cmp.forns.some(function (f) { return f.nome === nome; })) { box.innerHTML = ""; box.className = ""; return; }
+    if (d === "carregando" || !d) { box.className = "cmp-forn"; box.innerHTML = "Carregando os dados do fornecedor…"; return; }
+    if (d.cnpj) {
+      box.className = "cmp-forn";
+      box.innerHTML = "<b>CNPJ</b> " + esc(d.cnpj) + (d.ie ? " · <b>IE</b> " + esc(d.ie) : "") + "<br>" + esc([d.end, d.bairro].filter(Boolean).join(" - ")) +
+        (d.cidade ? "<br>" + esc(d.cidade + (d.uf ? "/" + d.uf : "")) + (d.cep ? " · CEP " + esc(d.cep) : "") : "") +
+        (d.origem === "robo" ? '<br><small>Dados do ERP (robô)</small>' : '<br><button class="btn btn-cinza" type="button" id="btnEditarForn">Corrigir dados</button>');
+    } else {
+      box.className = "cmp-forn falta";
+      box.innerHTML = "<b>Faltam o CNPJ e o endereço deste fornecedor.</b><br>Eles vão no cabeçalho do PDF. Preencha uma vez e o app guarda." +
+        '<br><button class="btn btn-verde" type="button" id="btnEditarForn">Preencher dados do fornecedor</button>';
+    }
+  }
+  var CAMPOS_FORN = { cod: "fornCod", cnpj: "fornCnpj", ie: "fornIe", end: "fornEnd", bairro: "fornBairro", cidade: "fornCidade", uf: "fornUf", cep: "fornCep" };
+  function abrirFornForm() {
+    var nome = String(compra.fornecedor || "").trim(); if (!nome) { toast("Escolha o fornecedor"); return; }
+    var d = cmp.fornDados[nome]; d = d && d !== "carregando" ? d : {};
+    $("fornNome").textContent = nome;
+    Object.keys(CAMPOS_FORN).forEach(function (k) { $(CAMPOS_FORN[k]).value = d[k] || ""; });
+    $("fornErro").textContent = ""; $("btnFornSalvar").disabled = false; $("btnFornSalvar").textContent = "Salvar";
+    $("telaForn").classList.add("aberta");
+    setTimeout(function () { $("fornCnpj").focus(); }, 50);
+  }
+  function salvarFornForm() {
+    var nome = String(compra.fornecedor || "").trim(), d = {};
+    Object.keys(CAMPOS_FORN).forEach(function (k) { d[k] = $(CAMPOS_FORN[k]).value.trim(); });
+    var dig = d.cnpj.replace(/\D/g, ""), cep = d.cep.replace(/\D/g, "");
+    var erro = dig.length !== 14 && dig.length !== 11 ? "Confira o CNPJ (14 números) ou CPF (11 números)." :
+      cep && cep.length !== 8 ? "Confira o CEP (8 números)." : !d.end ? "Preencha o endereço." : !d.cidade ? "Preencha a cidade." : "";
+    if (erro) { $("fornErro").textContent = erro; return; }   // os campos continuam preenchidos para corrigir
+    var b = $("btnFornSalvar"); b.disabled = true; b.textContent = "Salvando…";
+    chamar("salvarDadosFornecedor", [nome, d], function (r) {
+      cmp.fornDados[nome] = r || {}; $("telaForn").classList.remove("aberta"); desenharFornDados(); toast("Dados do fornecedor salvos");
+    }, function (e) { b.disabled = false; b.textContent = "Salvar"; $("fornErro").textContent = String(e && e.message || e); });
+  }
+  function desenharCompra() {
+    renderId++; atualizarModo();
+    if (!cmp.forns) {
+      cmp.forns = "carregando";
+      chamar("fornecedoresCompra", [], function (l) { cmp.forns = l || []; var bx = $("cmpFornLista"); if (bx && !bx.hidden) mostrarForn(); desenharFornDados(); },
+        function (e) { cmp.forns = null; toast("Não foi possível carregar os fornecedores"); });
+    }
+    var abas = '<div class="cmp-abas" id="cmpAbas">' + [["novo", compra.id ? "Pedido (salvo)" : "Novo pedido"], ["salvos", "Salvos"], ["enviados", "Enviados"]].map(function (a) {
+      return '<button class="modo' + (cmp.aba === a[0] ? " ativo" : "") + '" data-cab="' + a[0] + '">' + a[1] + "</button>"; }).join("") + "</div>";
+    if (cmp.aba !== "novo") { $("lista").innerHTML = '<div class="titulo-tela">Pedido de compra</div>' + abas + '<div id="cmpRecentes"></div>'; desenharRecentes(); return; }
+    carregarEntregas();
+    $("lista").innerHTML = '<div class="titulo-tela">Pedido de compra</div>' + abas +
+      '<div class="campo forn-wrap"><label for="cmpForn">Fornecedor</label><input id="cmpForn" autocomplete="off" placeholder="Toque para ver todos os fornecedores" value="' + esc(compra.fornecedor) + '">' +
+      '<div class="forn-lista" id="cmpFornLista" hidden></div></div>' +
+      '<div id="cmpFornDados"></div>' +
+      '<div class="campo"><label for="cmpEnt">Entregar em</label><select id="cmpEnt">' + opcoesEntrega() + "</select></div>" +
+      '<div class="dupla"><div class="campo"><label for="cmpDataEnt">Data de entrega</label><input id="cmpDataEnt" type="date" value="' + esc(compra.dataEntrega || "") + '"></div>' +
+      '<div class="campo"><label for="cmpFrete">Frete</label><select id="cmpFrete"><option value="CIF"' + (compra.frete !== "FOB" ? " selected" : "") + '>CIF (entrega deles)</option>' +
+        '<option value="FOB"' + (compra.frete === "FOB" ? " selected" : "") + ">FOB (nós buscamos)</option></select></div></div>" +
+      '<div class="dupla"><div class="campo"><label for="cmpPag">Cond. pagamento (dias)</label><input id="cmpPag" inputmode="numeric" maxlength="20" placeholder="21/28/35" value="' + esc(compra.pagamento || "") + '"></div>' +
+      '<div class="campo"><label for="cmpForma">Forma de pagamento</label><input id="cmpForma" list="cmpFormas" maxlength="30" value="' + esc(compra.formaPagto || "CARTEIRA") + '">' +
+        '<datalist id="cmpFormas"><option value="CARTEIRA"><option value="BOLETO"><option value="DEPÓSITO"><option value="PIX"></datalist></div></div>' +
+      '<div class="dupla"><div class="campo"><label for="cmpCob">Cobertura (dias)</label><input id="cmpCob" inputmode="numeric" maxlength="2" placeholder="Ex.: 30" value="' + esc(compra.cobertura || "") + '"></div><div></div></div>' +
+      '<button class="btn btn-cinza largo" id="cmpVerForn" type="button">Ver produtos deste fornecedor</button>' +
+      '<div class="campo"><label for="cmpBusca">Buscar produto (cadastro inteiro, até sem estoque)</label><input id="cmpBusca" type="search" autocomplete="off" placeholder="Descrição, marca, PLU ou EAN" value="' + esc(cmp.termo) + '">' +
+      '<button class="btn-ler escuro" id="btnLerCmp" type="button">' + ICO_EAN + "Ler código de barras</button></div>" +
+      '<div class="campo"><label for="cmpObs">Observações do pedido (opcional)</label><input id="cmpObs" maxlength="300" value="' + esc(compra.obs) + '"></div>' +
+      '<div id="cmpRes"></div><div id="cmpItens"></div>';
+    if (compra.fornecedor) carregarFornDados(compra.fornecedor);
+    atualizarCmp();
+  }
+  /** Lista de fornecedores embaixo do campo (abre ao tocar, filtra ao digitar). */
+  function mostrarForn() {
+    var box = $("cmpFornLista"), inp = $("cmpForn"); if (!box || !inp) return;
+    if (!Array.isArray(cmp.forns)) { box.innerHTML = '<div class="cmp-dica" style="padding:10px">Carregando fornecedores…</div>'; box.hidden = false; return; }
+    var t = semAcento(inp.value.trim()), l = cmp.forns.filter(function (f) { return !t || semAcento(f.nome).indexOf(t) >= 0; });
+    box.innerHTML = l.length ? l.slice(0, 80).map(function (f) { return '<button type="button" data-forn="' + esc(f.nome) + '">' + esc(f.nome) + "<small>" + f.n + " produtos</small></button>"; }).join("") +
+      (l.length > 80 ? '<div class="cmp-dica" style="padding:8px 12px">Digite para filtrar (' + l.length + " fornecedores)</div>" : "")
+      : '<div class="cmp-dica" style="padding:10px 12px">Nenhum fornecedor com esse nome.</div>';
+    box.hidden = false;
+  }
+  function escolherForn(nome) {
+    var inp = $("cmpForn"); if (inp) inp.value = nome;
+    compra.fornecedor = nome; salvarCompra(); $("cmpFornLista").hidden = true;
+    if (cmp.forn && cmp.fornNome !== nome) cmp.forn = null;
+    carregarFornDados(nome);
+    atualizarCmp();
+  }
+  /** Dados do pedido de compra para o servidor (salvar ou gerar). */
+  function corpoCompra() {
+    var f = (($("cmpForn") && $("cmpForn").value) || compra.fornecedor || "").trim();
+    var itens = Object.keys(compra.itens).map(function (k) { var x = compra.itens[k], it = porPlu[k];
+      return { p: x.p, d: x.d, m: x.m, b: x.b, f: x.f, t: x.t, q: x.q, qtd: x.qtd, preco: x.preco, desc: x.desc, ipi: x.ipi, ref: x.ref, e: it ? it.e : 0 }; });
+    return { id: compra.id || "", fornecedor: f, obs: compra.obs || "", cobertura: compra.cobertura || "", pagamento: compra.pagamento || "",
+      formaPagto: compra.formaPagto || "CARTEIRA", frete: compra.frete || "CIF", dataEntrega: compra.dataEntrega || "", entrega: compra.entrega || null, itens: itens };
+  }
+  function salvarCompraServidor() {
+    var corpo = corpoCompra();
+    if (!corpo.itens.length) { toast("Coloque produtos no pedido antes de salvar"); return; }
+    var b = $("btnSalvarCompra"); b.disabled = true; b.textContent = "Salvando…";
+    chamar("salvarRascunhoCompra", [corpo], function () {
+      b.disabled = false; b.textContent = "Salvar";
+      compra = compraVazia(compra); compra.fornecedor = ""; salvarCompra();
+      cmp.recentes = null; cmp.forn = null; toast("Pedido de compra salvo (aba Salvos)"); desenharCompra();
+    }, function (e) { b.disabled = false; b.textContent = "Salvar"; toast("Não foi possível salvar: " + String(e && e.message || e)); });
+  }
+  function continuarCompra(id) {
+    chamar("abrirCompraSalva", [id], function (x) {
+      var it = {}; (x.itens || []).forEach(function (i) { it[i.p] = i; });
+      compra = compraVazia(x); compra.id = x.id; compra.obs = x.obs || ""; compra.dataEntrega = x.dataEntrega || ""; compra.itens = it;
+      salvarCompra(); cmp.aba = "novo"; cmp.forn = null; cmp.termo = ""; desenharCompra(); window.scrollTo(0, 0);
+    }, function (e) { toast(String(e && e.message || e)); });
+  }
+  function excluirCompraTela(btn) {
+    if (!btn._conf) { btn._conf = true; btn.textContent = "Toque de novo"; setTimeout(function () { btn._conf = false; btn.textContent = "Excluir"; }, 3000); return; }
+    var id = btn.getAttribute("data-exc-cmp");
+    chamar("excluirCompra", [id], function () {
+      if (Array.isArray(cmp.recentes)) cmp.recentes = cmp.recentes.filter(function (c) { return c.id !== id; });
+      toast("Pedido de compra excluído"); desenharRecentes();
+    }, function (e) { toast(String(e && e.message || e)); });
+  }
+  function listaVisivelCmp() {
+    var termo = semAcento(cmp.termo.trim());
+    if (termo.length >= 2) {
+      if (Array.isArray(cmp.forn)) { var n = numBusca(termo), pal = termo.split(/\s+/);
+        return cmp.forn.filter(function (x) { return n.length >= 6 ? (x.b && x.b.indexOf(n) >= 0) || x.p === ("000000" + n).slice(-6)
+          : pal.every(function (p) { return semAcento(x.d + " " + x.m + " " + x.p).indexOf(p) >= 0; }); }); }
+      return cmp.busca;
+    }
+    return cmp.forn;
+  }
+  /** Cartão do produto na compra. detalhe = mostra preço/desconto/IPI editáveis e o total (só na lista "Itens da compra"). */
+  function htmlCompra(x, detalhe) {
+    var it = porPlu[x.p], c = compra.itens[x.p], q = c ? c.qtd : 0, un = x.t || "UN";
+    var eCD = typeof x.e === "number" ? x.e : (it ? it.e : 0);   // estoque do CD em unidades (pode ser negativo)
+    var emb = x.t ? x.t + (x.q > 1 ? " c/ " + num(x.q) : "") : "";
+    var precos = "";
+    if (c) {   // preço da compra logo abaixo da quantidade (vem com o custo do CD dos relatórios; pode trocar na hora)
+      precos = '<div class="cmp-precos">' +
+        '<div><label>Preço ' + esc(un) + ' (R$)</label><input inputmode="decimal" data-cpf="preco" aria-label="Preço por embalagem" value="' + esc(numCampo(c.preco, 4)) + '" placeholder="0,00"></div>' +
+        '<div><label>% Desc.</label><input inputmode="decimal" data-cpf="desc" aria-label="Porcentagem de desconto" value="' + esc(numCampo(c.desc, 4)) + '" placeholder="0"></div>' +
+        '<div><label>% IPI</label><input inputmode="decimal" data-cpf="ipi" aria-label="Porcentagem de IPI" value="' + esc(numCampo(c.ipi, 4)) + '" placeholder="0"></div></div>' +
+        '<div class="cmp-tot" data-cpt="' + esc(x.p) + '">' + textoTotItem(c) + "</div>";
+    }
+    return '<div class="item' + (q > 0 ? " com-pedido" : "") + '" data-cp="' + esc(x.p) + '"><div class="desc">' + esc(x.d) + "</div>" +
+      '<div class="linha2"><div class="info"><span class="est-cd">Estoque CD: ' + bNum(eCD) + " un</span><br>" +
+      (x.t && x.q > 1 ? '<span class="est-cd">Estoque CD ' + esc(x.t) + ": " + bNum(cxDe(eCD, x.q)) + "</span><br>" : "") +
+      "PLU " + esc(x.p) + (x.b ? " · EAN " + esc(x.b) : "") + "<br>" + esc(x.m || "") + (emb ? " · " + esc(emb) : "") +
+      (x.f && x.f !== compra.fornecedor ? '<br><small>' + esc(x.f) + "</small>" : "") +
+      (!c && x.c ? "<br>Custo CD: " + reais(x.c) + " un" : "") + "</div>" +
+      '<div class="stepper"><button class="seta menos" data-cq="-1" aria-label="Diminuir">&#9660;</button><div class="qtd" data-cq="ed"><b>' + q + "</b><small>" + esc(un) +
+      '</small></div><button class="seta mais" data-cq="1" aria-label="Aumentar">&#9650;</button></div></div>' + precos + "</div>";
+  }
+  function textoTotItem(c) {
+    var k = PedidoPDF.calcItem(c);
+    return (c.preco ? "Custo líq. " + reais(k.liq) + " · " : '<span style="color:var(--vermelho)">Sem preço</span> · ') + "Total <b>" + reais(k.total) + "</b>";
+  }
+  function atualizarCmp() {
+    var res = $("cmpRes"), its = $("cmpItens"); if (!res || !its) return;
+    var l = listaVisivelCmp();
+    if (l === "carregando") res.innerHTML = '<div class="carregando"><div class="giro"></div>Buscando…</div>';
+    else if (!l) res.innerHTML = '<div class="cmp-dica">Escolha o fornecedor e toque em “Ver produtos deste fornecedor”, ou busque/leia o EAN de qualquer produto.</div>';
+    else if (!l.length) res.innerHTML = '<div class="vazio" style="padding:14px">Nada encontrado.</div>';
+    else res.innerHTML = '<div class="grupo">' + l.length + (cmp.forn && !cmp.termo.trim() ? " produtos de " + esc(cmp.fornNome) : " encontrado(s)") + "</div>" +
+      l.slice(0, cmp.limite).map(function (x) { return htmlCompra(x, false); }).join("") +
+      (l.length > cmp.limite ? '<button class="btn btn-cinza largo" id="cmpMais" type="button">Mostrar mais ' + Math.min(150, l.length - cmp.limite) + "</button>" : "");
+    atualizarItensCmp();
+  }
+  function atualizarItensCmp() {
+    var its = $("cmpItens"); if (!its) return;
+    var ks = Object.keys(compra.itens);
+    its.innerHTML = ks.length ? '<div class="setor-mgr"><b>Itens da compra</b><span>' + ks.length + (ks.length === 1 ? " item" : " itens") + "</span></div>" +
+      '<div class="cmp-dica">Confira o preço de cada embalagem (vem do custo do CD) e coloque desconto e IPI se tiver.</div>' +
+      ks.map(function (k) { return htmlCompra(compra.itens[k], true); }).join("") : "";
+    atualizarResumoCompra();
+  }
+  function atualizarResumoCompra() {
+    var ks = Object.keys(compra.itens), t = PedidoPDF.totais(ks.map(function (k) { return compra.itens[k]; }));
+    $("resumoCompra").innerHTML = "<b>" + ks.length + (ks.length === 1 ? " item" : " itens") + " · " + reais(t.pedido) + "</b>" + (compra.fornecedor ? esc(compra.fornecedor) : "escolha o fornecedor");
+  }
+  function desenharRecentes() {   // abas Salvos / Enviados
+    var box = $("cmpRecentes"); if (!box) return;
+    if (!Array.isArray(cmp.recentes)) {
+      box.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando…</div>';
+      if (cmp.recentes !== "carregando") { cmp.recentes = "carregando";
+        chamar("listarCompras", [], function (l) { cmp.recentes = l || []; desenharRecentes(); }, function () { cmp.recentes = []; desenharRecentes(); }); }
+      return;
+    }
+    var salvos = cmp.aba === "salvos", l = cmp.recentes.filter(function (c) { return (c.status === "salvo") === salvos; });
+    box.innerHTML = '<div class="cmp-dica">' + (salvos ? "Pedidos salvos para continuar depois (ficam 60 dias)." : "Pedidos gerados (PDF) e enviados aos fornecedores. Apagam depois de 15 dias.") + "</div>" +
+      (l.length ? l.map(function (c) {
+        return '<div class="cmp-rec"><div><b>' + (c.numero ? "Nº " + esc(String(c.numero).replace(/^0+/, "")) + " · " : "") + esc(c.fornecedor || "Sem fornecedor") + "</b><small>" + esc(c.quando) + " · " + c.n + (c.n === 1 ? " item" : " itens") + "</small>" +
+          (salvos ? "" : c.enviadoPara ? '<small class="ok">Enviado (' + esc(c.enviadoPara) + ") em " + esc(c.enviadoEm) + "</small>" : "<small>Ainda não enviado</small>") + "</div>" +
+          (salvos ? '<button class="ver" data-cont-cmp="' + esc(c.id) + '">Continuar</button>'
+                  : '<button class="ver" data-cenv="' + esc(c.id) + '">' + (c.enviadoPara ? "Reenviar" : "Enviar") + "</button>") +
+          '<button class="ver excluir" data-exc-cmp="' + esc(c.id) + '">Excluir</button></div>';
+      }).join("") : '<div class="vazio" style="padding:20px">' + (salvos ? "Nenhum pedido salvo." : "Nenhum pedido gerado nos últimos 15 dias.") + "</div>");
+  }
+  function verProdutosForn() {
+    var f = ($("cmpForn").value || "").trim();
+    if (!f) { toast("Escolha o fornecedor"); return; }
+    compra.fornecedor = f; salvarCompra();
+    cmp.forn = "carregando"; cmp.fornNome = f; cmp.termo = ""; cmp.limite = 150; $("cmpBusca").value = ""; atualizarCmp();
+    chamar("produtosFornecedor", [f], function (l) {
+      cmp.forn = (l || []).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+      if (tela === "compra") atualizarCmp();
+    }, function (e) { cmp.forn = null; atualizarCmp(); toast("Não foi possível carregar: " + String(e && e.message || e)); });
+  }
+  var tCmp;
+  function buscarCmp(v) {
+    cmp.termo = v; cmp.limite = 150;
+    if (Array.isArray(cmp.forn) || semAcento(v.trim()).length < 2) { atualizarCmp(); return; }
+    clearTimeout(tCmp);
+    tCmp = setTimeout(function () {
+      cmp.busca = "carregando"; atualizarCmp();
+      var pedido = v;
+      chamar("buscarCadastro", [v], function (l) { if (cmp.termo !== pedido) return; cmp.busca = l || []; if (tela === "compra") atualizarCmp(); },
+        function () { cmp.busca = []; atualizarCmp(); });
+    }, EM_APPS_SCRIPT ? 400 : 0);
+  }
+  function editarCompra(plu, caixa) {
+    var c = compra.itens[plu], inp = document.createElement("input");
+    inp.type = "number"; inp.inputMode = "numeric"; inp.min = "0"; inp.className = "edita"; inp.value = c ? c.qtd : "";
+    caixa.replaceWith(inp); inp.focus(); inp.select();
+    var feito = false;
+    var fim = function () { if (feito) return; feito = true; mudarCompra(plu, 0, Math.max(0, parseInt(inp.value, 10) || 0)); };
+    inp.addEventListener("blur", fim);
+    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") inp.blur(); });
+  }
+  function gerarCompra() {
+    var corpo = corpoCompra(), b = $("btnFinalizarCompra");
+    if (!corpo.itens.length) { toast("Coloque produtos na compra"); return; }
+    if (!corpo.fornecedor) { toast("Escolha o fornecedor"); var i = $("cmpForn"); if (i) i.focus(); return; }
+    if (!corpo.entrega || !corpo.entrega.endereco) { toast("Escolha onde entregar"); return; }
+    if (!corpo.dataEntrega) { toast("Informe a data de entrega"); var de = $("cmpDataEnt"); if (de) de.focus(); return; }
+    var semPreco = corpo.itens.filter(function (x) { return !(Number(x.preco) > 0); }).length;
+    var fd = cmp.fornDados[corpo.fornecedor], semCnpj = !(fd && fd !== "carregando" && fd.cnpj);
+    if ((semPreco || semCnpj) && !b._conf) {   // não bloqueia, mas avisa e pede um 2º toque
+      b._conf = true; b.textContent = "Toque de novo para gerar";
+      toast(semCnpj ? "Atenção: o fornecedor está sem CNPJ/endereço" : semPreco + " item(ns) sem preço");
+      setTimeout(function () { b._conf = false; b.textContent = "Gerar pedido (PDF)"; }, 3500);
+      return;
+    }
+    b._conf = false; b.disabled = true; b.textContent = "Gerando…";
+    chamar("finalizarCompra", [corpo], function (r) {
+      b.disabled = false; b.textContent = "Gerar pedido (PDF)";
+      compra = compraVazia(compra); compra.fornecedor = ""; salvarCompra(); cmp.recentes = null; cmp.forn = null;
+      if (tela === "compra") desenharCompra();
+      abrirEnvio(r);
+    }, function (e) { b.disabled = false; b.textContent = "Gerar pedido (PDF)"; toast("Não foi possível gerar: " + String(e && e.message || e)); });
+  }
+  /** Tela do pedido pronto: monta o PDF e deixa os botões WhatsApp / Baixar prontos para o toque. */
+  function abrirEnvio(r) {
+    var t = PedidoPDF.totais(r.itens);
+    cmp.envio = { reg: r, blob: null, nome: PedidoPDF.nomeArquivo(r) };
+    $("envInfo").innerHTML = "Pedido <b>nº " + esc(String(r.numero || "").replace(/^0+/, "")) + "</b> · <b>" + esc(r.fornecedor) + "</b><br>" +
+      r.itens.length + (r.itens.length === 1 ? " item" : " itens") + " · total " + reais(t.pedido) + (r.enviadoEm ? "<br><small>Já enviado em " + esc(r.enviadoEm) + "</small>" : "");
+    $("envMsgErro").textContent = "";
+    var zap = $("btnZap"), bx = $("btnBaixarPdf");
+    zap.disabled = true; zap.textContent = "Montando o PDF…"; bx.disabled = true;
+    $("telaEnvio").classList.add("aberta");
+    var meu = cmp.envio;
+    if (!ENVIO_TICKET && EM_APPS_SCRIPT && !podeCompartilharAqui())   // já deixa pronto o link da aba de envio
+      chamar("ticketEnvioCompra", [r.id], function (u) { meu.link = u; }, function () {});
+    PedidoPDF.gerar(r, document.querySelector(".login .logo").src).then(function (blob) {
+      if (cmp.envio !== meu) return;
+      meu.blob = blob; zap.disabled = false; zap.textContent = "Enviar pelo WhatsApp"; bx.disabled = false;
+    }, function (e) {
+      if (cmp.envio !== meu) return;
+      zap.textContent = "Tentar de novo"; zap.disabled = false;
+      $("envMsgErro").textContent = String(e && e.message || e);
+    });
+  }
+  function enviarZap() {
+    var env = cmp.envio; if (!env) return;
+    if (!env.blob) { abrirEnvio(env.reg); return; }   // o PDF falhou: tenta montar de novo
+    if (!ENVIO_TICKET && env.link && !podeCompartilharAqui()) {   // no Google Sites: envia de uma aba fora dele
+      window.open(env.link, "_blank");
+      $("envMsgErro").textContent = "Abri o pedido numa aba nova (fora do Google Sites). Lá, toque em Enviar pelo WhatsApp.";
+      return;
+    }
+    // compartilhar tem que acontecer direto no toque (o celular exige): o PDF já está pronto
+    PedidoPDF.compartilhar(env.blob, env.nome).then(function (como) {
+      if (como === "share" && ENVIO_TICKET) {
+        google.script.run.withFailureHandler(function () {}).marcarEnviadaTicket(ENVIO_TICKET);
+        $("envMsgErro").textContent = ""; $("envDica").innerHTML = "<b>Pedido enviado.</b> Pode fechar esta aba e voltar ao app.";
+      } else if (como === "share") {
+        chamar("marcarCompraEnviada", [env.reg.id, "WhatsApp"], function () { cmp.recentes = null; }, function () {});
+        fecharEnvio(); toast("Pedido de compra compartilhado");
+      } else {
+        $("envMsgErro").textContent = "Este celular não deixou compartilhar direto daqui, então o PDF foi baixado. No WhatsApp, abra o contato, toque no clipe (anexo), escolha Documento e o arquivo " + env.nome + ".";
+      }
+    }, function (e) { if (!(e && e.name === "AbortError")) $("envMsgErro").textContent = String(e && e.message || e); });
+  }
+  function fecharEnvio() { $("telaEnvio").classList.remove("aberta"); cmp.envio = null; }
+
+  // ---------------- busca por EAN + leitor de código de barras ----------------
+  function soDigitos(s) { return String(s || "").replace(/\D/g, "").replace(/^0+/, ""); }
+  function numBusca(termo) { return /^[\d\s.-]+$/.test(termo) ? soDigitos(termo) : ""; }   // busca só com números = pode ser EAN
+  function casaBusca(it, termo, termoNum) {
+    return semAcento((it.d || "") + " " + (it.p || "") + " " + (it.m || "")).indexOf(termo) >= 0 ||
+      (termoNum.length >= 6 && !!it.b && it.b.indexOf(termoNum) >= 0);
+  }
+  // Câmera ao vivo (BarcodeDetector do Android ou a biblioteca ZXing). Se o celular não deixar abrir a câmera
+  // dentro do site, a pessoa tira uma FOTO do código e ela é lida do mesmo jeito.
+  var ZXING_URL = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
+  var FORMATOS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "itf"];
+  var leitor = { stream: null, timer: 0, destino: null, det: null, zx: null, canvas: null, ativo: false };
+  function carregarZXing(ok) {
+    if (window.ZXing) { ok(); return; }
+    if (carregarZXing.fila) { carregarZXing.fila.push(ok); return; }
+    carregarZXing.fila = [ok];
+    var s = document.createElement("script"); s.src = ZXING_URL; s.async = true;
+    s.onload = function () { var f = carregarZXing.fila || []; carregarZXing.fila = null; f.forEach(function (fn) { fn(); }); };
+    s.onerror = function () { carregarZXing.fila = null; s.remove(); $("leitorMsg").textContent = "Não consegui carregar o leitor. Verifique a internet e tente de novo."; };
+    document.head.appendChild(s);
+  }
+  function usarZX(ok) {
+    carregarZXing(function () {
+      var Z = window.ZXing, hs = new Map();
+      hs.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A,
+        Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.ITF]);
+      hs.set(Z.DecodeHintType.TRY_HARDER, true);
+      leitor.zx = new Z.MultiFormatReader(); leitor.zx.setHints(hs); ok();
+    });
+  }
+  function prepararDetector(ok) {   // usa o leitor do próprio Android quando existe (mais rápido); senão, ZXing
+    if (leitor.det || leitor.zx) { ok(); return; }
+    if ("BarcodeDetector" in window && BarcodeDetector.getSupportedFormats) {
+      BarcodeDetector.getSupportedFormats().then(function (fs) {
+        var f = FORMATOS.filter(function (x) { return fs.indexOf(x) >= 0; });
+        if (!f.length) { usarZX(ok); return; }
+        try { leitor.det = new BarcodeDetector({ formats: f }); ok(); } catch (e) { usarZX(ok); }
+      }, function () { usarZX(ok); });
+      return;
+    }
+    usarZX(ok);
+  }
+  /** Lê o código de um vídeo ou imagem. cb(texto | null) */
+  function decodificar(fonte, w, h, cb) {
+    if (leitor.det) {
+      leitor.det.detect(fonte).then(function (cs) { cb(cs && cs.length ? cs[0].rawValue : null); }, function () { cb(null); });
+      return;
+    }
+    var Z = window.ZXing, c = leitor.canvas || (leitor.canvas = document.createElement("canvas"));
+    var fator = Math.min(1, 1280 / Math.max(w, h));
+    c.width = Math.round(w * fator); c.height = Math.round(h * fator);
+    c.getContext("2d", { willReadFrequently: true }).drawImage(fonte, 0, 0, c.width, c.height);
+    try {
+      var r = leitor.zx.decodeWithState(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c))));
+      cb(r.getText());
+    } catch (e) { cb(null); }
+  }
+  function abrirLeitor(destino) {
+    leitor.destino = destino; leitor.ativo = true;
+    $("leitorVideoBox").hidden = false; $("leitorMsg").textContent = "Abrindo a câmera…";
+    $("telaLeitor").classList.add("aberta");
+    try { document.activeElement.blur(); } catch (e) {}
+    var v = $("leitorVideo");
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { semVideo(); return; }
+    navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } })
+      .then(function (st) {
+        if (!leitor.ativo) { st.getTracks().forEach(function (t) { t.stop(); }); return false; }
+        leitor.stream = st; v.srcObject = st;
+        return v.play().then(function () { return true; });
+      })
+      .then(function (ok) {
+        if (!ok || !leitor.ativo) return;
+        $("leitorMsg").textContent = "Aponte a câmera para o código de barras";
+        prepararDetector(lerQuadro);
+      })
+      .catch(function () { if (leitor.ativo) semVideo(); });
+  }
+  function semVideo() {
+    $("leitorVideoBox").hidden = true;
+    $("leitorMsg").textContent = "A câmera ao vivo não abriu aqui. Toque em “Tirar foto do código” e fotografe o código de barras de perto.";
+  }
+  function lerQuadro() {
+    if (!leitor.ativo || !leitor.stream) return;
+    var v = $("leitorVideo");
+    if (v.readyState < 2 || !v.videoWidth) { leitor.timer = setTimeout(lerQuadro, 200); return; }
+    decodificar(v, v.videoWidth, v.videoHeight, function (cod) {
+      if (!leitor.ativo) return;
+      if (cod) achouCodigo(cod); else leitor.timer = setTimeout(lerQuadro, leitor.det ? 150 : 250);
+    });
+  }
+  function lerFoto(arq) {
+    if (!arq) return;
+    $("leitorMsg").textContent = "Lendo a foto…";
+    var img = new Image(), url = URL.createObjectURL(arq);
+    img.onload = function () {
+      prepararDetector(function () {
+        decodificar(img, img.naturalWidth, img.naturalHeight, function (cod) {
+          URL.revokeObjectURL(url); $("leitorFoto").value = "";
+          if (cod) achouCodigo(cod);
+          else $("leitorMsg").textContent = "Não consegui ler o código nesta foto. Tente de novo: mais perto, com o código reto e com boa luz.";
+        });
+      });
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); $("leitorMsg").textContent = "Não consegui abrir a foto."; };
+    img.src = url;
+  }
+  function fecharLeitor() {
+    leitor.ativo = false; clearTimeout(leitor.timer);
+    if (leitor.stream) { leitor.stream.getTracks().forEach(function (t) { t.stop(); }); leitor.stream = null; }
+    try { $("leitorVideo").srcObject = null; } catch (e) {}
+    $("telaLeitor").classList.remove("aberta");
+  }
+  function achouCodigo(cod) {
+    var d = leitor.destino; fecharLeitor();
+    try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
+    if (d) d(soDigitos(cod) || String(cod));
+  }
+  function lerParaBusca() {   // loja (e manager pela loja): o código vai para a busca do topo
+    abrirLeitor(function (c) { $("busca").value = c; desenharLista(); window.scrollTo(0, 0); });
+  }
+  function lerParaMgr() {     // conferência do manager: procura o produto para incluir
+    abrirLeitor(function (c) { var i = $("mgrBusca"); if (i) i.value = c; buscarMgr(c); });
+  }
+
+  // ---------------- eventos ----------------
+  $("abas").addEventListener("click", function (e) {
+    var b = e.target.closest(".aba"); if (!b) return;
+    abaAtual = b.getAttribute("data-dep"); LS.set("aba", abaAtual);
+    $("busca").value = "";
+    desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+  });
+  $("lista").addEventListener("click", function (e) {
+    var ir = e.target.closest("[data-ir]"); if (ir) { irPara(ir.getAttribute("data-ir")); return; }
+    var dsc = e.target.closest(".item .desc");
+    if (dsc) { var dono = dsc.closest("[data-plu],[data-mp],[data-cp]");
+      if (dono) { abrirFicha(dono.getAttribute("data-plu") || dono.getAttribute("data-mp") || dono.getAttribute("data-cp")); return; } }
+    if (tela === "consulta") {
+      if (e.target.closest("#btnLerCons")) { abrirLeitor(function (c) { cons.termo = c; var i = $("consBusca"); if (i) i.value = c; resultadosConsulta(); }); return; }
+      var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
+      var cr = e.target.closest("[data-cpr]"); if (cr) { var pc = cr.getAttribute("data-cpr"); mudarCompra(pc, 1); resultadosConsulta(); toast("Colocado no pedido de compra"); return; }
+    }
+    if (tela === "compra") {
+      if (e.target.closest("#cmpVerForn")) { verProdutosForn(); return; }
+      if (e.target.closest("#btnEditarForn")) { abrirFornForm(); return; }
+      if (e.target.closest("#cmpMais")) { cmp.limite += 150; atualizarCmp(); return; }
+      if (e.target.closest("#btnLerCmp")) { abrirLeitor(function (c) { var i = $("cmpBusca"); if (i) i.value = c; buscarCmp(c); }); return; }
+      var cab = e.target.closest("[data-cab]"); if (cab) { cmp.aba = cab.getAttribute("data-cab"); if (cmp.aba !== "novo") cmp.recentes = null; desenharCompra(); atualizarModo(); return; }
+      var fo = e.target.closest("[data-forn]"); if (fo) { escolherForn(fo.getAttribute("data-forn")); return; }
+      if (!e.target.closest(".forn-wrap") && $("cmpFornLista")) $("cmpFornLista").hidden = true;
+      var cc = e.target.closest("[data-cont-cmp]"); if (cc) { continuarCompra(cc.getAttribute("data-cont-cmp")); return; }
+      var xc = e.target.closest("[data-exc-cmp]"); if (xc) { excluirCompraTela(xc); return; }
+      var en = e.target.closest("[data-cenv]");
+      if (en) { chamar("prepararEnvioCompra", [en.getAttribute("data-cenv")], abrirEnvio, function (x) { toast(String(x && x.message || x)); }); return; }
+      var cq = e.target.closest("[data-cq]");
+      if (cq) { var pl = cq.closest("[data-cp]").getAttribute("data-cp"), k = cq.getAttribute("data-cq");
+        if (k === "ed") editarCompra(pl, cq); else mudarCompra(pl, Number(k)); return; }
+      return;
+    }
+    if (ehManager()) {
+      var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
+      var cl = e.target.closest("[data-comoloja]"); if (cl) { entrarComoLoja(cl.getAttribute("data-comoloja")); return; }
+      if (e.target.closest("#mgrVoltar")) { voltarMgr(); return; }
+      if (e.target.closest("#btnLerMgr")) { lerParaMgr(); return; }
+      var st = e.target.closest("[data-setor]");
+      if (st) {   // abre/fecha o setor sem redesenhar a tela
+        var dep = st.getAttribute("data-setor"), corpo = st.nextElementSibling;
+        mgr.abertos = mgr.abertos || {}; mgr.abertos[dep] = !mgr.abertos[dep];
+        var fch = !mgr.abertos[dep];
+        if (corpo) corpo.hidden = fch;
+        st.classList.toggle("fechado", fch);
+        st.querySelector("i").textContent = fch ? "▸" : "▾";
+        return;
+      }
+      var mq = e.target.closest("[data-mq]"); if (mq) { mudarMgr(mq.closest("[data-mp]").getAttribute("data-mp"), Number(mq.getAttribute("data-mq"))); return; }
+      var ad = e.target.closest("[data-madd]"); if (ad) { incluirMgr(ad.getAttribute("data-madd")); return; }
+      return;
+    }
+    var ver = e.target.closest("[data-ver]"); if (ver) { verPedido(ver); return; }
+    if (e.target.closest("#btnNovoPed")) { novoPedido(); return; }
+    var cont = e.target.closest("[data-cont]"); if (cont) { continuarPedido(cont.getAttribute("data-cont")); return; }
+    var exc = e.target.closest("[data-exc]"); if (exc) { excluirPedido(exc); return; }
+    var sl = e.target.closest("[data-setor]");
+    if (sl) {   // aba "Pedido atual": abre/fecha o setor
+      var dp = sl.getAttribute("data-setor"), cp2 = sl.nextElementSibling;
+      abertosAtual[dp] = !abertosAtual[dp];
+      var fch2 = !abertosAtual[dp];
+      if (cp2) cp2.hidden = fch2;
+      sl.classList.toggle("fechado", fch2);
+      sl.querySelector("i").textContent = fch2 ? "▸" : "▾";
+      return;
+    }
+    var alvo = e.target.closest("[data-acao]"); if (!alvo) return;
+    var plu = alvo.closest(".item").getAttribute("data-plu");
+    var a = alvo.getAttribute("data-acao");
+    if (a === "+") mudar(plu, 1); else if (a === "-") mudar(plu, -1); else editar(plu, alvo);
+  });
+  $("lista").addEventListener("change", function (e) {
+    if (e.target.id === "filtroLoja") { filtroLoja = e.target.value; desenharHistorico(); }
+    if (e.target.id === "mgrLoja") { mgr.loja = e.target.value; desenharManager(); }
+    if (e.target.id === "cmpForn") { compra.fornecedor = e.target.value.trim(); salvarCompra(); if (cmp.forn && cmp.fornNome !== compra.fornecedor) { cmp.forn = null; } carregarFornDados(compra.fornecedor); atualizarCmp(); }
+    if (e.target.id === "cmpEnt") { var k = e.target.value; if (k !== "x" && Array.isArray(cmp.entregas) && cmp.entregas[+k]) { compra.entrega = cmp.entregas[+k]; salvarCompra(); } }
+    if (e.target.id === "cmpFrete") { compra.frete = e.target.value === "FOB" ? "FOB" : "CIF"; salvarCompra(); }
+    if (e.target.id === "cmpDataEnt") { compra.dataEntrega = e.target.value; salvarCompra(); }
+  });
+  var tMgr;
+  var tCons;
+  $("lista").addEventListener("input", function (e) {
+    if (e.target.id === "consBusca") { var vc = e.target.value; clearTimeout(tCons); tCons = setTimeout(function () { cons.termo = vc; resultadosConsulta(); }, 200); }
+    if (e.target.id === "cmpBusca") buscarCmp(e.target.value);
+    if (e.target.id === "cmpForn") { compra.fornecedor = e.target.value.trim(); salvarCompra(); mostrarForn(); desenharFornDados(); }
+    if (e.target.id === "cmpObs") { compra.obs = e.target.value; salvarCompra(); }
+    if (e.target.id === "cmpCob") { var vcob = e.target.value.replace(/\D/g, "").slice(0, 2); if (e.target.value !== vcob) e.target.value = vcob; compra.cobertura = vcob; salvarCompra(); }
+    if (e.target.id === "cmpPag") { var vpag = e.target.value.replace(/[;,\s]+/g, "/").replace(/[^\d\/]/g, ""); if (e.target.value !== vpag) e.target.value = vpag; compra.pagamento = vpag; salvarCompra(); }
+    if (e.target.id === "cmpForma") { compra.formaPagto = e.target.value.toUpperCase(); salvarCompra(); }
+    if (e.target.id === "cmpDataEnt") { compra.dataEntrega = e.target.value; salvarCompra(); }
+    if (e.target.getAttribute && e.target.getAttribute("data-cpf")) {   // preço / desconto / IPI de um item: recalcula sem redesenhar (não perde o foco)
+      var dono = e.target.closest("[data-cp]"), cpl = dono && dono.getAttribute("data-cp"), ci = cpl && compra.itens[cpl];
+      if (ci) {
+        var campo = e.target.getAttribute("data-cpf"), v = lerNum(e.target.value);
+        ci[campo] = campo === "preco" ? Math.min(v, 1e7) : Math.min(v, 100);
+        salvarCompra();
+        Array.prototype.forEach.call(document.querySelectorAll('[data-cpt="' + cpl + '"]'), function (tt) { tt.innerHTML = textoTotItem(ci); });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-cp="' + cpl + '"] [data-cpf="' + campo + '"]'), function (o) { if (o !== e.target) o.value = e.target.value; });
+        atualizarResumoCompra();
+      }
+    }
+  });
+  $("btnInicio").addEventListener("click", irInicio);
+  $("btnFinalizarCompra").addEventListener("click", gerarCompra);
+  $("btnSalvarCompra").addEventListener("click", salvarCompraServidor);
+  $("lista").addEventListener("focusin", function (e) { if (e.target.id === "cmpForn") mostrarForn(); });
+  $("btnFecharEnvio").addEventListener("click", fecharEnvio);
+  $("btnFecharFicha").addEventListener("click", function () { $("telaFicha").classList.remove("aberta"); });
+  $("telaFicha").addEventListener("click", function (e) { if (e.target === $("telaFicha")) $("telaFicha").classList.remove("aberta"); });
+  $("btnEnvioDepois").addEventListener("click", function () { fecharEnvio(); toast("O pedido ficou guardado em Pedido de compra › Enviados. Dá para enviar depois."); });
+  $("btnZap").addEventListener("click", enviarZap);
+  $("btnBaixarPdf").addEventListener("click", function () { var env = cmp.envio; if (env && env.blob) PedidoPDF.baixar(env.blob, env.nome); });
+  $("btnFecharForn").addEventListener("click", function () { $("telaForn").classList.remove("aberta"); });
+  $("btnFornCancelar").addEventListener("click", function () { $("telaForn").classList.remove("aberta"); });
+  $("btnFornSalvar").addEventListener("click", salvarFornForm);
+  $("lista").addEventListener("input", function (e) { if (e.target.id === "mgrBusca") { var v = e.target.value; clearTimeout(tMgr); tMgr = setTimeout(function () { buscarMgr(v); }, 200); } });
+  $("modosMgr").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-mg]"); if (!b) return;
+    mgr.filtro = b.getAttribute("data-mg"); mgr.aberto = null; mgr.itens = null; mgr.sujo = false; desenharManager(); window.scrollTo(0, 0);
+  });
+  $("btnMgrSalvar").addEventListener("click", salvarMgr);
+  $("btnSairComo").addEventListener("click", sairComoLoja);
+  $("btnLer").addEventListener("click", lerParaBusca);
+  $("btnFecharLeitor").addEventListener("click", fecharLeitor);
+  $("btnLeitorFoto").addEventListener("click", function () { $("leitorFoto").click(); });
+  $("leitorFoto").addEventListener("change", function (e) { lerFoto(e.target.files && e.target.files[0]); });
+  $("telaLeitor").addEventListener("click", function (e) { if (e.target === $("telaLeitor")) fecharLeitor(); });
+  $("btnMgrAprovar").addEventListener("click", aprovarMgr);
+  var tBusca;
+  $("busca").addEventListener("input", function () { clearTimeout(tBusca); tBusca = setTimeout(desenharLista, 200); });
+  $("modos").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-modo]"); if (!b || !dados) return;
+    var md = b.getAttribute("data-modo");
+    var nova = md === "hist" ? HIST : md === "atual" ? ATUAL : (ultimaDep || dados.departamentos[0].nome);
+    if (nova === abaAtual || (md === "lista" && abaAtual !== HIST && abaAtual !== ATUAL)) return;
+    abaAtual = nova;
+    if (nova === ATUAL) abertosAtual = {};   // toda vez que entra no "Pedido atual", os setores vêm fechados
+    LS.set("aba", abaAtual); $("busca").value = "";
+    desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+  });
+  $("btnRevisar").addEventListener("click", abrirRevisao);
+  $("btnSalvarPed").addEventListener("click", function () { salvarAtual(); });
+  $("btnTrocarPedido").addEventListener("click", trocarPedido);
+  $("snackDesfazer").addEventListener("click", desfazerExclusao);
+  $("lista").addEventListener("keydown", function (e) { if (e.target.id === "nomeNovo" && e.key === "Enter") novoPedido(); });
+  $("btnVoltar").addEventListener("click", function () { $("telaRevisao").classList.remove("aberta"); });
+  $("btnEnviar").addEventListener("click", enviar);
+  $("btnLimpar").addEventListener("click", function () {
+    var b = $("btnLimpar");
+    if (!b._confirmar) {   // 1º toque pede confirmação, 2º toque apaga
+      b._confirmar = true; b.textContent = "Toque de novo p/ apagar";
+      setTimeout(function () { b._confirmar = false; b.textContent = "Limpar"; }, 3000);
+      return;
+    }
+    b._confirmar = false; b.textContent = "Limpar";
+    pedido = {}; salvarPedido(); desenharAbas(); desenharLista(); $("telaRevisao").classList.remove("aberta");
+    toast("Pedido apagado");
+  });
+  $("btnConfig").addEventListener("click", abrirConfig);
+  $("btnFecharCfg").addEventListener("click", function () { if (cfg.loja) $("telaConfig").classList.remove("aberta"); else toast("Preencha a loja"); });
+  // tocar fora do painel fecha (revisão e conta)
+  ["telaConfig", "telaRevisao"].forEach(function (id) {
+    $(id).addEventListener("click", function (e) { if (e.target === $(id) && (id !== "telaConfig" || cfg.loja)) $(id).classList.remove("aberta"); });
+  });
+  $("btnEntrar").addEventListener("click", entrar);
+  $("logSenha").addEventListener("keydown", function (e) { if (e.key === "Enter") entrar(); });
+  $("btnEsqueci").addEventListener("click", esqueci);
+  $("btnCadastrar").addEventListener("click", cadastrar);
+  $("btnCadVoltar").addEventListener("click", function () { fecharCadastro(""); });
+  $("cadConf").addEventListener("keydown", function (e) { if (e.key === "Enter") cadastrar(); });
+  $("btnSair").addEventListener("click", function () { sair("Você saiu do app."); });
+  $("btnSalvarCfg").addEventListener("click", function () {
+    var loja = $("cfgLoja").value.trim();
+    if (!loja) { toast("Preencha a loja"); return; }
+    cfg = { loja: loja }; LS.set("cfg", cfg);
+    $("telaConfig").classList.remove("aberta");
+    if (dados) $("subtitulo").textContent = "Lista de " + dados.data + " · " + cfg.loja;
+  });
+  $("btnAtualizar").addEventListener("click", function () { toast("Atualizando…"); hist = null; if (ehManager() && !mgr.aberto) mgr.lista = null; carregar(); if (ehManager() && !dados) desenharManager(); });
+
+  if (ENVIO_TICKET && EM_APPS_SCRIPT) {   // aba só de envio: não precisa de login, só mostra o pedido e o botão
+    $("btnEnvioDepois").hidden = true; $("btnFecharEnvio").hidden = true;
+    $("envInfo").textContent = "Carregando o pedido…"; $("telaEnvio").classList.add("aberta");
+    google.script.run.withSuccessHandler(abrirEnvio).withFailureHandler(function (e) {
+      $("envInfo").textContent = ""; $("envMsgErro").textContent = String(e && e.message || e); }).compraPorTicket(ENVIO_TICKET);
+    return;
+  }
+  if (!EM_APPS_SCRIPT) $("btnSair").hidden = true;
+  atualizarRodape();
+  carregar();
+  if (EM_APPS_SCRIPT && sessao && sessao.token) {   // perfil (loja/manager) pode ter mudado na planilha
+    google.script.run.withSuccessHandler(function (q) {
+      var mudou = sessao.perfil !== q.perfil || !!sessao.aprova !== !!q.aprova;
+      sessao.perfil = q.perfil; sessao.aprova = q.aprova; if (q.nome) sessao.nome = q.nome; LS.set("sessao", sessao);
+      if (mudou) { if (dados) { desenharAbas(); desenharLista(); } else if (ehManager()) desenharManager(); }
+    }).withFailureHandler(function (e) { erroLogin(e); }).quemSou(sessao.token);
+  }
+  if ((!EM_APPS_SCRIPT || (sessao && sessao.token)) && !cfg.loja) abrirConfig();
+})();
+</script>
+</body>
+</html>
