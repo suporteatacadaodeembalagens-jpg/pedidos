@@ -107,6 +107,7 @@
   .campo select{width:100%;border:1px solid #d8c9ae;border-radius:10px;padding:12px;font-size:16px;background:#fff;color:var(--texto)}
   .campo select:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
   .cmp-precos{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;margin-top:10px}
+  .cmp-precos.dupla{grid-template-columns:1fr 1fr}
   .cmp-precos label{display:block;font-size:11.5px;color:var(--sub);margin-bottom:2px}
   .cmp-precos input{width:100%;border:1px solid #d8c9ae;border-radius:8px;padding:9px 8px;font-size:16px;text-align:right;background:#fff}
   .cmp-precos input:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
@@ -2184,7 +2185,9 @@ window.PedidoPDF = (function () {
     var emb = x.t ? x.t + (x.q > 1 ? " c/ " + num(x.q) : "") : "";
     var precos = "";
     if (c) {   // preço da compra logo abaixo da quantidade (vem com o custo do CD dos relatórios; pode trocar na hora)
-      precos = '<div class="cmp-precos">' +
+      var qe = Number(c.q || x.q) || 1;   // unidades por embalagem: preço UN x qe = preço da embalagem
+      precos = '<div class="cmp-precos' + (qe > 1 ? " dupla" : "") + '">' +
+        (qe > 1 ? '<div><label>Preço UN (R$)</label><input inputmode="decimal" data-cpf="precoun" aria-label="Preço por unidade" value="' + esc(numCampo((Number(c.preco) || 0) / qe, 4)) + '" placeholder="0,00"></div>' : "") +
         '<div><label>Preço ' + esc(un) + ' (R$)</label><input inputmode="decimal" data-cpf="preco" aria-label="Preço por embalagem" value="' + esc(numCampo(c.preco, 4)) + '" placeholder="0,00"></div>' +
         '<div><label>% Desc.</label><input inputmode="decimal" data-cpf="desc" aria-label="Porcentagem de desconto" value="' + esc(numCampo(c.desc, 4)) + '" placeholder="0"></div>' +
         '<div><label>% IPI</label><input inputmode="decimal" data-cpf="ipi" aria-label="Porcentagem de IPI" value="' + esc(numCampo(c.ipi, 4)) + '" placeholder="0"></div></div>' +
@@ -2560,8 +2563,13 @@ window.PedidoPDF = (function () {
     if (e.target.getAttribute && e.target.getAttribute("data-cpf")) {   // preço / desconto / IPI de um item: recalcula sem redesenhar (não perde o foco)
       var dono = e.target.closest("[data-cp]"), cpl = dono && dono.getAttribute("data-cp"), ci = cpl && compra.itens[cpl];
       if (ci) {
-        var campo = e.target.getAttribute("data-cpf"), v = lerNum(e.target.value);
-        ci[campo] = campo === "preco" ? Math.min(v, 1e7) : Math.min(v, 100);
+        var campo = e.target.getAttribute("data-cpf"), v = lerNum(e.target.value), qe = Number(ci.q) || 1;
+        if (campo === "precoun") ci.preco = Math.min(r4(v * qe), 1e7);   // unidade -> embalagem
+        else ci[campo] = campo === "preco" ? Math.min(v, 1e7) : Math.min(v, 100);
+        if (campo === "preco" || campo === "precoun") {   // o outro campo de preço acompanha
+          var outro = campo === "preco" ? "precoun" : "preco", vo = campo === "preco" ? numCampo(ci.preco / qe, 4) : numCampo(ci.preco, 4);
+          Array.prototype.forEach.call(document.querySelectorAll('[data-cp="' + cpl + '"] [data-cpf="' + outro + '"]'), function (o) { o.value = vo; });
+        }
         salvarCompra();
         Array.prototype.forEach.call(document.querySelectorAll('[data-cpt="' + cpl + '"]'), function (tt) { tt.innerHTML = textoTotItem(ci); });
         Array.prototype.forEach.call(document.querySelectorAll('[data-cp="' + cpl + '"] [data-cpf="' + campo + '"]'), function (o) { if (o !== e.target) o.value = e.target.value; });
