@@ -339,6 +339,7 @@
   .login .msg.erro{color:var(--vermelho);background:none}
   .login .msg.ok{color:var(--azul)}
   .login .caixa.cadastro .so-login, .login .caixa:not(.cadastro) .so-cad{display:none}
+  .login .caixa.troca .so-login, .login .caixa:not(.troca) .so-ger{display:none}
   .login .caixa.cadastro{max-height:calc(100vh - 40px - var(--corte, 0px));overflow-y:auto}
   .cad-titulo{background:#fff6d6;border-radius:10px;padding:10px 12px;margin:4px 0 10px;font-size:13.5px;color:var(--texto)}
   .cad-titulo b{display:block;color:var(--marrom);font-size:15px;margin-bottom:2px}
@@ -511,6 +512,11 @@
     <div class="campo so-cad"><label for="cadConf">Confirmação de senha</label><input id="cadConf" type="password" autocomplete="new-password" placeholder="Digite a senha de novo"></div>
     <button class="btn btn-verde so-cad" id="btnCadastrar">Salvar cadastro</button>
     <button class="link so-cad" id="btnCadVoltar">Voltar</button>
+    <div class="so-ger cad-titulo"><b>Primeiro acesso da Gerência</b>Crie a senha da gerência da loja <span id="gerLoja"></span>. Ela não pode ser a senha inicial nem a senha do operacional.</div>
+    <div class="campo so-ger"><label for="gerSenha">Nova senha da gerência</label><input id="gerSenha" type="password" autocomplete="new-password" placeholder="Pelo menos 6 caracteres"></div>
+    <div class="campo so-ger"><label for="gerConf">Confirmação</label><input id="gerConf" type="password" autocomplete="new-password" placeholder="Digite a senha de novo"></div>
+    <button class="btn btn-verde so-ger" id="btnGerSalvar">Salvar senha</button>
+    <button class="link so-ger" id="btnGerVoltar">Voltar</button>
     <div class="campo so-login"><label for="logEmail">E-mail</label><input id="logEmail" type="email" autocomplete="username" inputmode="email" placeholder="seu.email@atacadaodeembalagens.com.br"></div>
     <div class="campo so-login"><label for="logCargo">Cargo</label><select id="logCargo">
       <option value="">Escolha o cargo…</option><option value="DIRETORIA">Diretoria</option><option value="ADMINISTRACAO">Administração</option>
@@ -942,7 +948,7 @@ window.PedidoPDF = (function () {
 
   function erroLogin(e) {
     var m = String(e && e.message || e);
-    if (m.indexOf("LOGIN:") >= 0) { sair(m.replace(/^.*LOGIN:\s*/, "")); return true; }
+    if (m.indexOf("LOGIN:") >= 0) { sair(m.replace(/^.*LOGIN:\s*/, ""), true); return true; }
     return false;
   }
 
@@ -1353,7 +1359,7 @@ window.PedidoPDF = (function () {
   }
   function continuarPedido(id) {
     var r = (rasc || []).filter(function (x) { return x.id === id; })[0];
-    if (r) abrirPedido({ id: r.id, nome: r.nome }, r.itens);
+    if (r) abrirPedido({ id: r.id, nome: r.nome, ts: r.ts }, r.itens);
   }
   // Excluir: 1 toque. Some na hora e aparece "DESFAZER" por 5 segundos; depois apaga de verdade no servidor.
   var exclusao = null;   // {r, pos, t}
@@ -1388,9 +1394,9 @@ window.PedidoPDF = (function () {
   function salvarAtual(depois) {
     if (!atual) return;
     var b = $("btnSalvarPed"); b.disabled = true; b.textContent = "Salvando…";
-    chamar("salvarRascunho", [{ id: atual.id, nome: atual.nome, dataLista: dados.data, semana: dados.semana || "", itens: pedido }], function (r) {
+    chamar("salvarRascunho", [{ id: atual.id, base: atual.ts || 0, nome: atual.nome, dataLista: dados.data, semana: dados.semana || "", itens: pedido }], function (r) {
       b.disabled = false; b.textContent = "Salvar";
-      atual.id = r.id; LS.set("pedidoAtual", atual); rasc = null;
+      atual.id = r.id; atual.ts = r.ts; LS.set("pedidoAtual", atual); rasc = null;
       if (depois) depois(); else toast("Pedido salvo. Você pode continuar depois.");
     }, function (e) {
       b.disabled = false; b.textContent = "Salvar";
@@ -1591,8 +1597,22 @@ window.PedidoPDF = (function () {
         ? "Esse produto já está no pedido." : termoNum.length >= 8 ? "Nenhum produto com esse código de barras na lista de estoque atual." : "Nada encontrado.") + "</div>";
   }
   function mudarMgr(plu, delta) {
-    mgr.itens.forEach(function (i) { if (i.p === plu) i.qtd = Math.max(0, i.qtd + delta); });
-    mgr.sujo = true; desenharPedidoMgr();
+    var item = null;
+    mgr.itens.forEach(function (i) { if (i.p === plu) { i.qtd = Math.max(0, i.qtd + delta); item = i; } });
+    mgr.sujo = true;
+    var el = document.querySelector('#lista [data-mp="' + plu + '"]');
+    if (!el || !item) { desenharPedidoMgr(); return; }
+    // troca só o cartão deste produto (não redesenha a lista inteira nem fecha o teclado)
+    var origem = {}; (mgr.aberto.itensLoja || []).forEach(function (i) { origem[i.p] = i.qtd; });
+    var tmp = document.createElement("div"); tmp.innerHTML = htmlItemMgr(item, podeEditarMgr(), origem[plu]);
+    el.replaceWith(tmp.firstChild);
+    var ativos = mgr.itens.filter(function (i) { return i.qtd > 0; }).length, tot = document.querySelector("#lista .aviso-total b");
+    if (tot) tot.textContent = ativos + (ativos === 1 ? " produto" : " produtos");
+    Array.prototype.forEach.call(document.querySelectorAll("#lista .setor-mgr[data-setor]"), function (s) {
+      var dep = s.getAttribute("data-setor"), n = mgr.itens.filter(function (i) { return i.qtd > 0 && (i.dep || (porPlu[i.p] && porPlu[i.p].dep) || "OUTROS") === dep; }).length;
+      var sp = s.querySelector("span"); if (sp) sp.textContent = n + (n === 1 ? " item" : " itens");
+    });
+    atualizarResumoMgr();
   }
   function incluirMgr(plu) {
     var it = porPlu[plu]; if (!it) return;
@@ -1713,9 +1733,11 @@ window.PedidoPDF = (function () {
     if (!comoLoja && EM_APPS_SCRIPT && nivelNum() < 2) {
       toast("Operacional monta e salva o pedido. Para enviar, a Gerência entra com o e-mail da loja e envia."); return;
     }
-    var corpo = { loja: lojaAtual(), nome: atual ? atual.nome : "", rascunhoId: atual ? atual.id : null, dataLista: dados.data, itens: itensDoPedido() };
+    if (!enviar.cid) enviar.cid = "c" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);   // mesmo envio = mesmo id
+    var corpo = { loja: lojaAtual(), nome: atual ? atual.nome : "", rascunhoId: atual ? atual.id : null, dataLista: dados.data, itens: itensDoPedido(), cid: enviar.cid };
     var b = $("btnEnviar"); b.disabled = true; b.textContent = "Enviando…";
     function ok(r) {
+      enviar.cid = null;
       hist = null; rasc = null; atual = null; LS.set("pedidoAtual", null); pedido = {}; salvarPedido(); desenharAbas(); desenharLista();
       $("revCorpo").innerHTML = r.aprovado
         ? '<div class="aviso">Pedido <b>' + esc(r.nome || corpo.nome) + '</b> da loja <b>' + esc(corpo.loja) + '</b> aprovado e enviado para o CD!<br>' + r.itens +
@@ -1742,9 +1764,17 @@ window.PedidoPDF = (function () {
     $("logMsg").className = "msg erro"; $("logMsg").textContent = msg || "";
     $("telaLogin").classList.add("aberta");
   }
-  function sair(msg) {
+  /** expirou = sessão venceu: o pedido fica guardado para o MESMO e-mail. Sair de verdade limpa tudo de quem saiu. */
+  function sair(msg, expirou) {
+    try { confirmarExclusao(); } catch (e) {}   // exclusão de rascunho pendente ("Desfazer") vai antes de perder o login
+    if (expirou && sessao) LS.set("pedidoDono", sessao.email);
     sessao = null; LS.set("sessao", null); hist = null; filtroLoja = ""; rasc = null; comoLoja = null; LS.set("comoLoja", null);
-    atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {});
+    if (!expirou) {
+      atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {}); LS.set("pedidoDono", null);
+      compra = compraVazia(); try { localStorage.removeItem("compra"); } catch (e) {}   // custos/preços não ficam no celular
+      cmp.forn = null; cmp.fornNome = ""; cmp.busca = null; cmp.termo = ""; cmp.recentes = null; cmp.fornDados = {};
+      cons.termo = ""; cons.precos = null; cons.extra = null; mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
+    }
     try { localStorage.removeItem("rascCache"); } catch (e) {}   // a lista de estoque fica guardada (é igual para todas as lojas)
     renderId++; dados = null; $("lista").innerHTML = ""; $("abas").innerHTML = "";
     $("telaConfig").classList.remove("aberta");
@@ -1760,14 +1790,18 @@ window.PedidoPDF = (function () {
         b.disabled = false; b.textContent = "Entrar";
         try { document.activeElement.blur(); } catch (x) {}   // fecha o teclado antes de mostrar a lista
         if (r.precisaCadastro) { abrirCadastro(r); return; }   // 1º acesso do manager
+        if (r.precisaSenhaGerencia) { abrirTrocaGer(r); return; }   // 1º acesso da gerência: senha própria obrigatória
         sessao = { token: r.token, email: r.email, loja: r.loja, perfil: r.perfil || "LOJA", aprova: !!r.aprova, nome: r.nome || "",
           nivel: r.nivel || "", nivelNome: r.nivelNome || "" };
+        var dono = LS.get("pedidoDono", null);   // pedido guardado de OUTRO e-mail não passa para este login
+        if (dono && dono !== r.email) { atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {}); }
+        LS.set("pedidoDono", null);
         mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
         comoLoja = null; LS.set("comoLoja", null);
         tela = "inicio"; cons.precos = null; cmp.forns = null; cmp.recentes = null; cmp.entregas = null; cmp.fornDados = {};
         LS.set("sessao", sessao); LS.set("ultimoEmail", r.email);
         if (r.novosVisto) LS.set(chaveVistos(), r.novosVisto);   // o que este login já viu (mesmo em outro celular)
-        cfg = { loja: r.loja || cfg.loja || "" }; LS.set("cfg", cfg);
+        cfg = { loja: r.loja || "" }; LS.set("cfg", cfg);
         if (r.rascunhos) { rasc = r.rascunhos; LS.set("rascCache", rasc); }
         $("telaLogin").classList.remove("aberta");
         window.scrollTo(0, 0);
@@ -1786,6 +1820,31 @@ window.PedidoPDF = (function () {
   }
   // ---- cadastro obrigatório do manager (1º acesso) ----
   var cadToken = null;
+  var gerToken = null;
+  function abrirTrocaGer(r) {
+    gerToken = r.trocaToken; $("gerLoja").textContent = r.loja || r.email; $("gerSenha").value = ""; $("gerConf").value = "";
+    $("logMsg").className = "msg"; $("logMsg").textContent = "";
+    document.querySelector("#telaLogin .caixa").classList.add("troca"); $("gerSenha").focus();
+  }
+  function fecharTrocaGer(msg, ok) {
+    gerToken = null; document.querySelector("#telaLogin .caixa").classList.remove("troca");
+    $("logSenha").value = ""; $("logMsg").className = "msg" + (ok ? " ok" : ""); $("logMsg").textContent = msg || "";
+  }
+  function salvarTrocaGer() {
+    var nova = $("gerSenha").value, conf = $("gerConf").value;
+    var erro = nova.length < 6 ? "A senha precisa ter pelo menos 6 caracteres." : nova !== conf ? "A confirmação não é igual à senha." : "";
+    if (erro) { $("logMsg").className = "msg erro"; $("logMsg").textContent = erro; return; }
+    var b = $("btnGerSalvar"); b.disabled = true; b.textContent = "Salvando…";
+    google.script.run.withSuccessHandler(function () {
+      b.disabled = false; b.textContent = "Salvar senha";
+      fecharTrocaGer("Senha da gerência criada! Agora entre com o e-mail da loja, cargo Gerência e a nova senha.", true); $("logSenha").focus();
+    }).withFailureHandler(function (e) {
+      b.disabled = false; b.textContent = "Salvar senha";
+      var m = String(e && e.message || e);
+      if (m.indexOf("LOGIN:") >= 0) { fecharTrocaGer(m.replace(/^.*LOGIN:\s*/, "")); return; }
+      $("logMsg").className = "msg erro"; $("logMsg").textContent = m;
+    }).salvarSenhaGerencia(gerToken, nova, conf);
+  }
   function abrirCadastro(r) {
     cadToken = r.cadastroToken;
     $("cadEmail").value = r.email; $("cadNome").value = ""; $("cadZap").value = ""; $("cadSenha").value = ""; $("cadConf").value = "";
@@ -1994,7 +2053,7 @@ window.PedidoPDF = (function () {
   /** Estoque e vendas por loja numa tabela só. No topo: total Matriz + lojas e total só da Matriz (CD 001). */
   function desenharFichaLojas(it, r) {
     var box = $("fichaLojas"); if (!box) return;
-    var cx = it.t && it.q > 1, preco = r.lojas.some(function (l) { return l.venda != null; }), custo = !!r.manager, vend = !!r.vendasPeriodo;
+    var cx = it.t && it.q > 1, preco = r.lojas.some(function (l) { return l.venda != null; }), custo = r.lojas.some(function (l) { return l.custo != null; }), vend = !!r.vendasPeriodo;
     var cab = "<tr><th>Loja</th>" + (cx ? "<th>" + esc(it.t) + "</th>" : "") + "<th>UN</th>" + (vend ? "<th>V.UN</th>" + (cx ? "<th>V." + esc(it.t) + "</th>" : "") : "") +
       (preco ? "<th>Preço</th>" : "") + (custo ? "<th>Custo</th>" : "") + "</tr>";
     function linha(classe, nome, e, v, l) {
@@ -2041,6 +2100,7 @@ window.PedidoPDF = (function () {
       // preço por embalagem: o que o comprador já digitou; senão o custo unitário do CD x quantidade da embalagem
       var preco = c && c.preco != null ? c.preco : (x.preco != null ? x.preco : r4((Number(x.c) || 0) * (Number(x.q) || 1)));
       compra.itens[plu] = { p: x.p, d: x.d, m: x.m, f: x.f || "", b: x.b || "", t: x.t || "", q: x.q || "", qtd: q,
+        e: typeof x.e === "number" ? x.e : (c && typeof c.e === "number" ? c.e : (porPlu[plu] ? porPlu[plu].e : 0)),
         preco: preco, desc: c ? c.desc || 0 : (x.desc || 0), ipi: c ? c.ipi || 0 : (x.ipi || 0), ref: c ? c.ref || "" : (x.ref || "") };
     } else delete compra.itens[plu];
     if (q > 0 && !compra.fornecedor && x.f) { compra.fornecedor = x.f; var i = $("cmpForn"); if (i) i.value = x.f; carregarFornDados(x.f); }
@@ -2172,7 +2232,7 @@ window.PedidoPDF = (function () {
   function corpoCompra() {
     var f = (($("cmpForn") && $("cmpForn").value) || compra.fornecedor || "").trim();
     var itens = Object.keys(compra.itens).map(function (k) { var x = compra.itens[k], it = porPlu[k];
-      return { p: x.p, d: x.d, m: x.m, b: x.b, f: x.f, t: x.t, q: x.q, qtd: x.qtd, preco: x.preco, desc: x.desc, ipi: x.ipi, ref: x.ref, e: it ? it.e : 0 }; });
+      return { p: x.p, d: x.d, m: x.m, b: x.b, f: x.f, t: x.t, q: x.q, qtd: x.qtd, preco: x.preco, desc: x.desc, ipi: x.ipi, ref: x.ref, e: typeof x.e === "number" ? x.e : (it ? it.e : 0) }; });
     return { id: compra.id || "", fornecedor: f, obs: compra.obs || "", cobertura: compra.cobertura || "", pagamento: compra.pagamento || "",
       formaPagto: compra.formaPagto || "CARTEIRA", frete: compra.frete || "CIF", dataEntrega: compra.dataEntrega || "", entrega: compra.entrega || null, itens: itens };
   }
@@ -2293,8 +2353,8 @@ window.PedidoPDF = (function () {
   var tCmp;
   function buscarCmp(v) {
     cmp.termo = v; cmp.limite = 150;
-    if (Array.isArray(cmp.forn) || semAcento(v.trim()).length < 2) { atualizarCmp(); return; }
     clearTimeout(tCmp);
+    if (Array.isArray(cmp.forn) || semAcento(v.trim()).length < 2) { tCmp = setTimeout(atualizarCmp, 150); return; }
     tCmp = setTimeout(function () {
       cmp.busca = "carregando"; atualizarCmp();
       var pedido = v;
@@ -2381,8 +2441,11 @@ window.PedidoPDF = (function () {
   // ---------------- busca por EAN + leitor de código de barras ----------------
   function soDigitos(s) { return String(s || "").replace(/\D/g, "").replace(/^0+/, ""); }
   function numBusca(termo) { return /^[\d\s.-]+$/.test(termo) ? soDigitos(termo) : ""; }   // busca só com números = pode ser EAN
+  var TXT_BUSCA = new WeakMap();
   function casaBusca(it, termo, termoNum) {
-    return semAcento((it.d || "") + " " + (it.p || "") + " " + (it.m || "")).indexOf(termo) >= 0 ||
+    var t = TXT_BUSCA.get(it);   // texto sem acento calculado 1 vez por produto (não vai para o armazenamento do celular)
+    if (t == null) { t = semAcento((it.d || "") + " " + (it.p || "") + " " + (it.m || "")); TXT_BUSCA.set(it, t); }
+    return t.indexOf(termo) >= 0 ||
       (termoNum.length >= 6 && !!it.b && it.b.indexOf(termoNum) >= 0);
   }
   // Câmera ao vivo (BarcodeDetector do Android ou a biblioteca ZXing). Se o celular não deixar abrir a câmera
@@ -2676,6 +2739,9 @@ window.PedidoPDF = (function () {
   $("logSenha").addEventListener("keydown", function (e) { if (e.key === "Enter") entrar(); });
   $("btnEsqueci").addEventListener("click", esqueci);
   $("btnCadastrar").addEventListener("click", cadastrar);
+  $("btnGerSalvar").addEventListener("click", salvarTrocaGer);
+  $("btnGerVoltar").addEventListener("click", function () { fecharTrocaGer(""); });
+  $("gerConf").addEventListener("keydown", function (e) { if (e.key === "Enter") salvarTrocaGer(); });
   $("btnCadVoltar").addEventListener("click", function () { fecharCadastro(""); });
   $("cadConf").addEventListener("keydown", function (e) { if (e.key === "Enter") cadastrar(); });
   $("btnSair").addEventListener("click", function () { sair("Você saiu do app."); });
