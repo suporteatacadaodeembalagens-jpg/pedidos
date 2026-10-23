@@ -340,6 +340,7 @@
   .login .msg.ok{color:var(--azul)}
   .login .caixa.cadastro .so-login, .login .caixa:not(.cadastro) .so-cad{display:none}
   .login .caixa.troca .so-login, .login .caixa:not(.troca) .so-ger{display:none}
+  .login .caixa.reset .so-login, .login .caixa:not(.reset) .so-res{display:none}
   .login .caixa.cadastro{max-height:calc(100vh - 40px - var(--corte, 0px));overflow-y:auto}
   .cad-titulo{background:#fff6d6;border-radius:10px;padding:10px 12px;margin:4px 0 10px;font-size:13.5px;color:var(--texto)}
   .cad-titulo b{display:block;color:var(--marrom);font-size:15px;margin-bottom:2px}
@@ -517,6 +518,13 @@
     <div class="campo so-ger"><label for="gerConf">Confirmação</label><input id="gerConf" type="password" autocomplete="new-password" placeholder="Digite a senha de novo"></div>
     <button class="btn btn-verde so-ger" id="btnGerSalvar">Salvar senha</button>
     <button class="link so-ger" id="btnGerVoltar">Voltar</button>
+    <div class="so-res cad-titulo"><b>Esqueci minha senha</b>Vamos mandar um código para o e-mail <span id="resEmail"></span> (cargo <span id="resCargo"></span>). Digite o código e a nova senha.</div>
+    <button class="btn btn-cinza so-res" id="btnResEnviar">Enviar código para o e-mail</button>
+    <div class="campo so-res"><label for="resCodigo">Código (6 números)</label><input id="resCodigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000"></div>
+    <div class="campo so-res"><label for="resSenha">Nova senha</label><input id="resSenha" type="password" autocomplete="new-password" placeholder="Pelo menos 6 caracteres"></div>
+    <div class="campo so-res"><label for="resConf">Confirmação</label><input id="resConf" type="password" autocomplete="new-password" placeholder="Digite a senha de novo"></div>
+    <button class="btn btn-verde so-res" id="btnResSalvar">Salvar nova senha</button>
+    <button class="link so-res" id="btnResVoltar">Voltar</button>
     <div class="campo so-login"><label for="logEmail">E-mail</label><input id="logEmail" type="email" autocomplete="username" inputmode="email" placeholder="seu.email@atacadaodeembalagens.com.br"></div>
     <div class="campo so-login"><label for="logCargo">Cargo</label><select id="logCargo">
       <option value="">Escolha o cargo…</option><option value="DIRETORIA">Diretoria</option><option value="ADMINISTRACAO">Administração</option>
@@ -1878,14 +1886,39 @@ window.PedidoPDF = (function () {
       })
       .salvarCadastroManager(cadToken, d);
   }
+  /** Esqueci a senha: código de 6 dígitos vai para o PRÓPRIO e-mail; com ele a pessoa cria a senha nova (do cargo escolhido). */
   function esqueci() {
-    var email = $("logEmail").value.trim();
-    if (!email) { $("logMsg").className = "msg erro"; $("logMsg").textContent = "Digite o e-mail da loja e toque de novo em \"Esqueci minha senha\"."; return; }
-    $("logMsg").className = "msg"; $("logMsg").textContent = "Enviando…";
-    google.script.run
-      .withSuccessHandler(function (m) { $("logMsg").className = "msg ok"; $("logMsg").textContent = m; })
-      .withFailureHandler(function (e) { $("logMsg").className = "msg erro"; $("logMsg").textContent = String(e && e.message || e); })
-      .esqueciSenha(email);
+    var email = $("logEmail").value.trim(), cargo = $("logCargo").value;
+    if (!email || !cargo) { $("logMsg").className = "msg erro"; $("logMsg").textContent = "Preencha o e-mail e o cargo e toque de novo em \"Esqueci minha senha\"."; return; }
+    $("resEmail").textContent = email; $("resCargo").textContent = $("logCargo").options[$("logCargo").selectedIndex].text;
+    $("resCodigo").value = ""; $("resSenha").value = ""; $("resConf").value = "";
+    $("logMsg").className = "msg"; $("logMsg").textContent = "";
+    document.querySelector("#telaLogin .caixa").classList.add("reset");
+  }
+  function fecharReset(msg, ok) {
+    document.querySelector("#telaLogin .caixa").classList.remove("reset");
+    $("logSenha").value = ""; $("logMsg").className = "msg" + (ok ? " ok" : ""); $("logMsg").textContent = msg || "";
+  }
+  function enviarCodigoReset() {
+    var b = $("btnResEnviar"); b.disabled = true; b.textContent = "Enviando…";
+    google.script.run.withSuccessHandler(function (m) {
+      b.disabled = false; b.textContent = "Enviar outro código"; $("logMsg").className = "msg ok"; $("logMsg").textContent = m; $("resCodigo").focus();
+    }).withFailureHandler(function (e) {
+      b.disabled = false; b.textContent = "Enviar código para o e-mail"; $("logMsg").className = "msg erro"; $("logMsg").textContent = String(e && e.message || e);
+    }).pedirCodigoSenha($("logEmail").value.trim(), $("logCargo").value);
+  }
+  function salvarReset() {
+    var cod = $("resCodigo").value.replace(/\D/g, ""), nova = $("resSenha").value, conf = $("resConf").value;
+    var erro = cod.length !== 6 ? "Digite o código de 6 números que chegou no e-mail." : nova.length < 6 ? "A senha precisa ter pelo menos 6 caracteres." :
+      nova !== conf ? "A confirmação não é igual à senha." : "";
+    if (erro) { $("logMsg").className = "msg erro"; $("logMsg").textContent = erro; return; }
+    var b = $("btnResSalvar"); b.disabled = true; b.textContent = "Salvando…";
+    google.script.run.withSuccessHandler(function () {
+      b.disabled = false; b.textContent = "Salvar nova senha";
+      fecharReset("Senha nova salva! Entre com o e-mail, o cargo e a nova senha.", true); $("logSenha").focus();
+    }).withFailureHandler(function (e) {
+      b.disabled = false; b.textContent = "Salvar nova senha"; $("logMsg").className = "msg erro"; $("logMsg").textContent = String(e && e.message || e);
+    }).redefinirSenha($("logEmail").value.trim(), $("logCargo").value, cod, nova, conf);
   }
 
   function abrirConfig() {
@@ -2740,6 +2773,9 @@ window.PedidoPDF = (function () {
   $("btnEsqueci").addEventListener("click", esqueci);
   $("btnCadastrar").addEventListener("click", cadastrar);
   $("btnGerSalvar").addEventListener("click", salvarTrocaGer);
+  $("btnResEnviar").addEventListener("click", enviarCodigoReset);
+  $("btnResSalvar").addEventListener("click", salvarReset);
+  $("btnResVoltar").addEventListener("click", function () { fecharReset(""); });
   $("btnGerVoltar").addEventListener("click", function () { fecharTrocaGer(""); });
   $("gerConf").addEventListener("keydown", function (e) { if (e.key === "Enter") salvarTrocaGer(); });
   $("btnCadVoltar").addEventListener("click", function () { fecharCadastro(""); });
