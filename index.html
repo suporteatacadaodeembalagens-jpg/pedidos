@@ -82,6 +82,10 @@
   .tile svg{color:var(--principal)}
   .tile b{font-size:16.5px;color:var(--marrom);line-height:1.2}
   .tile span{font-size:13px;color:var(--sub);line-height:1.3}
+  .tile.bloq{opacity:.55;filter:grayscale(1);border-left-color:#bbb;position:relative}
+  .tile.bloq::after{content:"\1F512";position:absolute;top:10px;right:12px;font-size:16px}
+  #logCargo{width:100%;padding:12px;border:1px solid #d8c9ae;border-radius:10px;font-size:16px;background:#fff}
+  .btn.bloq{background:#9a9a9a !important}
   .tile.destaque{background:var(--marrom);border-left-color:var(--ouro)}
   .tile.destaque b{color:#fff} .tile.destaque span{color:#f0dfc0} .tile.destaque svg{color:var(--ouro)}
   .titulo-tela{font-size:18px;font-weight:800;color:var(--marrom);margin:6px 2px 12px}
@@ -508,6 +512,9 @@
     <button class="btn btn-verde so-cad" id="btnCadastrar">Salvar cadastro</button>
     <button class="link so-cad" id="btnCadVoltar">Voltar</button>
     <div class="campo so-login"><label for="logEmail">E-mail</label><input id="logEmail" type="email" autocomplete="username" inputmode="email" placeholder="seu.email@atacadaodeembalagens.com.br"></div>
+    <div class="campo so-login"><label for="logCargo">Cargo</label><select id="logCargo">
+      <option value="">Escolha o cargo…</option><option value="DIRETORIA">Diretoria</option><option value="ADMINISTRACAO">Administração</option>
+      <option value="GERENCIA">Gerência</option><option value="OPERACIONAL">Operacional</option></select></div>
     <div class="campo so-login"><label for="logSenha">Senha</label><input id="logSenha" type="password" autocomplete="current-password" placeholder="Senha da loja"></div>
     <button class="btn btn-verde so-login" id="btnEntrar">Entrar</button>
     <button class="link so-login" id="btnEsqueci">Esqueci minha senha</button>
@@ -905,6 +912,11 @@ window.PedidoPDF = (function () {
     produtosFornecedor: 1, buscarCadastro: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
     salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1 };
   function ehMgrLogin() { return !!(sessao && sessao.perfil === "MANAGER"); }
+  /** Nível: 4 Diretoria, 3 Administração, 2 Gerência, 1 Operacional (função sem acesso aparece com cadeado, não some). */
+  var NIVEL_NUM = { DIRETORIA: 4, ADMINISTRACAO: 3, GERENCIA: 2, OPERACIONAL: 1 };
+  function nivelNum() { return !sessao ? 0 : ehMgrLogin() ? (NIVEL_NUM[sessao.nivel] || 4) : (NIVEL_NUM[sessao.nivel] || 1); }
+  function nomeNivel() { return (sessao && sessao.nivelNome) || (ehMgrLogin() ? "Diretoria" : "Operacional"); }
+  function avisoBloqueio() { toast("Seu acesso (" + nomeNivel() + ") não libera esta função."); }
   function nomeMgr() { return (sessao && sessao.nome) || "Manager"; }
 
   // ---------------- carregar dados ----------------
@@ -1247,8 +1259,11 @@ window.PedidoPDF = (function () {
         "006": "Tatuí", "007": "Itu", "008": "Paraty", "009": "Cajamar", "010": "Cotia" };
       var mg = ehMgrLogin(), m = String((sessao && sessao.loja) || "").match(/(\d{1,3})/), minha = mg ? "" : (m ? ("000" + m[1]).slice(-3) : "");
       var p = (window.DEMO_LOJAS || {})[plu] || {}, V = window.DEMO_VENDAS, pv = V ? (V.plu[plu] || {}) : {};
-      return { plu: plu, minha: minha, manager: mg, lojas: Object.keys(NOM).map(function (c) { var v = p[c] || [0, 0, 0], x = { cod: c, nome: NOM[c], e: v[0] };
-        if (mg) { x.venda = v[1]; x.custo = v[2]; } else if (c === minha) x.venda = v[1]; if (V) x.vendas = pv[c] || 0; return x; }), vendasPeriodo: V ? V.periodo : "" };
+      var ger = !mg && nivelNum() >= 2;   // igual ao servidor: loja vê CD + a própria; gerência com preço/custo/vendas dela
+      return { plu: plu, minha: minha, manager: mg, lojas: Object.keys(NOM).filter(function (c) { return mg || c === "001" || c === minha; }).map(function (c) {
+        var v = p[c] || [0, 0, 0], x = { cod: c, nome: NOM[c], e: v[0] };
+        if (mg) { x.venda = v[1]; x.custo = v[2]; } else if (ger && c === minha) { x.venda = v[1]; x.custo = v[2]; }
+        if (V && (mg || (ger && c === minha))) x.vendas = pv[c] || 0; return x; }), vendasPeriodo: V && (mg || ger) ? V.periodo : "" };
     },
     fornecedoresCompra: function () { var n = {}; demo._cad().forEach(function (x) { n[x.f] = (n[x.f] || 0) + 1; });
       return Object.keys(n).sort().map(function (f) { return { nome: f, n: n[f] }; }); },
@@ -1688,11 +1703,16 @@ window.PedidoPDF = (function () {
     });
     $("revCorpo").innerHTML = html;
     $("btnEnviar").disabled = false; $("btnEnviar").textContent = comoLoja ? "Aprovar e enviar" : "Enviar pedido";
+    $("btnEnviar").classList.toggle("bloq", !comoLoja && nivelNum() < 2);
+    if (!comoLoja && nivelNum() < 2) $("btnEnviar").textContent = "\uD83D\uDD12 Enviar (só Gerência)";
     $("telaRevisao").classList.add("aberta");
   }
 
   function enviar() {
     if (!lojaAtual()) { $("telaRevisao").classList.remove("aberta"); abrirConfig(); return; }
+    if (!comoLoja && EM_APPS_SCRIPT && nivelNum() < 2) {
+      toast("Operacional monta e salva o pedido. Para enviar, a Gerência entra com o e-mail da loja e envia."); return;
+    }
     var corpo = { loja: lojaAtual(), nome: atual ? atual.nome : "", rascunhoId: atual ? atual.id : null, dataLista: dados.data, itens: itensDoPedido() };
     var b = $("btnEnviar"); b.disabled = true; b.textContent = "Enviando…";
     function ok(r) {
@@ -1717,6 +1737,7 @@ window.PedidoPDF = (function () {
 
   function abrirLogin(msg) {
     $("logEmail").value = (sessao && sessao.email) || LS.get("ultimoEmail", "") || "";
+    $("logCargo").value = LS.get("ultimoCargo", "") || "";
     $("logSenha").value = "";
     $("logMsg").className = "msg erro"; $("logMsg").textContent = msg || "";
     $("telaLogin").classList.add("aberta");
@@ -1730,15 +1751,17 @@ window.PedidoPDF = (function () {
     abrirLogin(msg);
   }
   function entrar() {
-    var email = $("logEmail").value.trim(), senha = $("logSenha").value.trim();
-    if (!email || !senha) { $("logMsg").className = "msg erro"; $("logMsg").textContent = "Preencha e-mail e senha."; return; }
+    var email = $("logEmail").value.trim(), senha = $("logSenha").value.trim(), cargo = $("logCargo").value;
+    if (!email || !senha || !cargo) { $("logMsg").className = "msg erro"; $("logMsg").textContent = "Preencha e-mail, cargo e senha."; return; }
+    LS.set("ultimoCargo", cargo);
     var b = $("btnEntrar"); b.disabled = true; b.textContent = "Entrando…";
     google.script.run
       .withSuccessHandler(function (r) {
         b.disabled = false; b.textContent = "Entrar";
         try { document.activeElement.blur(); } catch (x) {}   // fecha o teclado antes de mostrar a lista
         if (r.precisaCadastro) { abrirCadastro(r); return; }   // 1º acesso do manager
-        sessao = { token: r.token, email: r.email, loja: r.loja, perfil: r.perfil || "LOJA", aprova: !!r.aprova, nome: r.nome || "" };
+        sessao = { token: r.token, email: r.email, loja: r.loja, perfil: r.perfil || "LOJA", aprova: !!r.aprova, nome: r.nome || "",
+          nivel: r.nivel || "", nivelNome: r.nivelNome || "" };
         mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
         comoLoja = null; LS.set("comoLoja", null);
         tela = "inicio"; cons.precos = null; cmp.forns = null; cmp.recentes = null; cmp.entregas = null; cmp.fornDados = {};
@@ -1759,7 +1782,7 @@ window.PedidoPDF = (function () {
         b.disabled = false; b.textContent = "Entrar";
         $("logMsg").className = "msg erro"; $("logMsg").textContent = String(e && e.message || e);
       })
-      .entrar(email, senha, (function () { var c = LS.get("dados", null); return c && c.gerado ? String(c.gerado) : ""; })());
+      .entrar(email, senha, (function () { var c = LS.get("dados", null); return c && c.gerado ? String(c.gerado) : ""; })(), cargo);
   }
   // ---- cadastro obrigatório do manager (1º acesso) ----
   var cadToken = null;
@@ -1831,7 +1854,7 @@ window.PedidoPDF = (function () {
     renderId++; atualizarModo();
     var m = ehMgrLogin(), t = [];
     $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + (dados ? "Lista de " + dados.data : "Carregando a lista…") +
-      (m ? " · " + nomeMgr() : (cfg.loja ? " · " + cfg.loja : ""));
+      (m ? " · " + nomeMgr() : (cfg.loja ? " · " + cfg.loja : "")) + (sessao ? " · " + nomeNivel() : "");
     if (m) {
       var np = mgr.lista ? mgr.lista.pedidos.filter(function (x) { return x.status === "pendente"; }).length : null;
       var nc = Object.keys(compra.itens).length;
@@ -1846,6 +1869,9 @@ window.PedidoPDF = (function () {
       t.push(tile("lj:atual", "Pedido atual", atual ? n + (n === 1 ? " item em " : " itens em ") + atual.nome : "Nenhum pedido aberto", ICO.lista));
       t.push(tile("lj:hist", "Pedidos anteriores", "Enviados e aprovados", ICO.relogio));
       t.push(tile("consulta", "Consulta de produtos", "Estoque, fornecedor e EAN", ICO.lupa));
+      // funções de Diretoria/Administração: aparecem com cadeado (não somem)
+      t.push(tile("bloq", "Aguardando aprovação", "Diretoria e Administração", ICO.relogio, "bloq"));
+      t.push(tile("bloq", "Pedido de compra", "Diretoria e Administração", ICO.caminhao, "bloq"));
     }
     $("lista").innerHTML = '<div class="inicio-ola">O que você quer fazer?</div><div class="tiles">' + t.join("") + "</div>";
     if (m && !mgr.lista && !desenharInicio.buscando) {   // contagem de "Aguardando aprovação"
@@ -1855,6 +1881,7 @@ window.PedidoPDF = (function () {
     }
   }
   function irPara(acao) {
+    if (acao === "bloq") { avisoBloqueio(); return; }
     if (acao === "consulta" || acao === "compra") { tela = acao; $("busca").value = ""; desenharLista(); window.scrollTo(0, 0); return; }
     if (!dados) { toast("Aguarde a lista de estoque carregar"); return; }
     var p = acao.split(":");
@@ -1978,7 +2005,7 @@ window.PedidoPDF = (function () {
     }
     var soma = function (f) { return r.lojas.reduce(function (s, l) { return s + (Number(f(l)) || 0); }, 0); };
     var cd = r.lojas.filter(function (l) { return l.cod === "001"; })[0] || { e: 0, vendas: 0 };
-    var tot = linha("total" + (soma(function (l) { return l.e; }) < 0 ? " neg" : ""), "Total Matriz + lojas", soma(function (l) { return l.e; }), soma(function (l) { return l.vendas; }), null) +
+    var tot = !r.manager ? "" : linha("total" + (soma(function (l) { return l.e; }) < 0 ? " neg" : ""), "Total Matriz + lojas", soma(function (l) { return l.e; }), soma(function (l) { return l.vendas; }), null) +
       linha("total" + (cd.e < 0 ? " neg" : ""), "Total só Matriz", cd.e, cd.vendas, null);
     var lin = r.lojas.map(function (l) {
       return linha((l.cod === r.minha ? "minha " : "") + (l.e < 0 ? "neg" : l.e || l.vendas ? "" : "zero"), l.cod + " " + l.nome, l.e, l.vendas, l);
@@ -2674,7 +2701,9 @@ window.PedidoPDF = (function () {
   if (EM_APPS_SCRIPT && sessao && sessao.token) {   // perfil (loja/manager) pode ter mudado na planilha
     google.script.run.withSuccessHandler(function (q) {
       var mudou = sessao.perfil !== q.perfil || !!sessao.aprova !== !!q.aprova;
-      sessao.perfil = q.perfil; sessao.aprova = q.aprova; if (q.nome) sessao.nome = q.nome; LS.set("sessao", sessao);
+      sessao.perfil = q.perfil; sessao.aprova = q.aprova; if (q.nome) sessao.nome = q.nome;
+      if (q.nivel) { mudou = mudou || sessao.nivel !== q.nivel; sessao.nivel = q.nivel; sessao.nivelNome = q.nivelNome || ""; }
+      LS.set("sessao", sessao);
       if (mudou) { if (dados) { desenharAbas(); desenharLista(); } else if (ehManager()) desenharManager(); }
     }).withFailureHandler(function (e) { erroLogin(e); }).quemSou(sessao.token);
   }
