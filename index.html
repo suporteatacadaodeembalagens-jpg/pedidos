@@ -125,8 +125,8 @@
   .tab-lojas tr.minha td{background:#fff6d6;font-weight:800}
   .tab-lojas tr.zero td{color:#b3a79c}
   .tab-lojas tr.neg td{color:var(--vermelho);font-weight:600}
-  .tab-lojas.compacta{font-size:12.5px}
-  .tab-lojas.compacta th,.tab-lojas.compacta td{padding:6px 3px}
+  .tab-lojas.compacta{font-size:12px}
+  .tab-lojas.compacta th,.tab-lojas.compacta td{padding:6px 2px}
   .tab-lojas tr.total td{background:#f3ead9;font-weight:800;color:var(--marrom,#5c2f2e)}
   .tab-lojas tr.total + tr:not(.total) td{border-top:2px solid var(--ouro)}
   .tab-lojas tr.total.neg td{color:var(--vermelho)}
@@ -1968,11 +1968,11 @@ window.PedidoPDF = (function () {
   function desenharFichaLojas(it, r) {
     var box = $("fichaLojas"); if (!box) return;
     var cx = it.t && it.q > 1, preco = r.lojas.some(function (l) { return l.venda != null; }), custo = !!r.manager, vend = !!r.vendasPeriodo;
-    var cab = "<tr><th>Loja</th>" + (cx ? "<th>" + esc(it.t) + "</th>" : "") + "<th>UN</th>" + (vend ? "<th>Vend.</th>" : "") +
+    var cab = "<tr><th>Loja</th>" + (cx ? "<th>" + esc(it.t) + "</th>" : "") + "<th>UN</th>" + (vend ? "<th>V.UN</th>" + (cx ? "<th>V." + esc(it.t) + "</th>" : "") : "") +
       (preco ? "<th>Preço</th>" : "") + (custo ? "<th>Custo</th>" : "") + "</tr>";
     function linha(classe, nome, e, v, l) {
       return '<tr class="' + classe + '"><td>' + esc(nome) + "</td>" + (cx ? "<td>" + num(cxDe(e, it.q)) + "</td>" : "") + "<td>" + num(e) + "</td>" +
-        (vend ? "<td>" + num(v || 0) + "</td>" : "") +
+        (vend ? "<td>" + num(v || 0) + "</td>" + (cx ? "<td>" + num(Math.round((Number(v) || 0) / it.q * 10) / 10) + "</td>" : "") : "") +
         (preco ? "<td>" + (l && l.venda ? reais(l.venda) : l ? "—" : "") + "</td>" : "") +
         (custo ? "<td>" + (l && l.custo ? reais(l.custo) : l ? "—" : "") + "</td>" : "") + "</tr>";
     }
@@ -1983,7 +1983,7 @@ window.PedidoPDF = (function () {
     var lin = r.lojas.map(function (l) {
       return linha((l.cod === r.minha ? "minha " : "") + (l.e < 0 ? "neg" : l.e || l.vendas ? "" : "zero"), l.cod + " " + l.nome, l.e, l.vendas, l);
     }).join("");
-    box.innerHTML = (vend ? '<div class="cmp-dica">Vendas (Vend., em UN) no período <b>' + esc(r.vendasPeriodo) + "</b></div>" :
+    box.innerHTML = (vend ? '<div class="cmp-dica">Vendas no período <b>' + esc(r.vendasPeriodo) + "</b> (V.UN = unidades" + (cx ? ", V." + esc(it.t) + " = em " + esc(it.t) : "") + ")</div>" :
         '<div class="cmp-dica">As vendas por loja aparecem quando o robô mandar o relatório de vendas.</div>') +
       '<table class="tab-lojas compacta"><thead>' + cab + "</thead><tbody>" + tot + lin + "</tbody></table>";
   }
