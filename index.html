@@ -1295,6 +1295,9 @@ window.PedidoPDF = (function () {
     r[fn].apply(r, [MGR_FN[fn] ? sessao.token : tk()].concat(args));
   }
   var demo = {
+    analiseVendas: function (plu) { var ms = [], d = new Date(); for (var i = 0; i < 13; i++) { var x = new Date(d.getFullYear(), d.getMonth() - i, 1);
+      ms.push({ mes: x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2), parcial: i === 0, periodo: "", lojas: { "004": Math.round(20 + 15 * Math.sin(i)) } }); }
+      return { plu: plu, lojas: ["004"], nomes: { "004": "Pirituba" }, meses: ms }; },
     apagarErro: function () { return { ok: true }; },
     favoritoAdd: function (p, d, c) { return { ok: true, ja: false, loja: c || "sua loja", n: 1 }; },
     favoritosLoja: function () { return { loja: "", itens: [] }; },
@@ -2085,6 +2088,7 @@ window.PedidoPDF = (function () {
     ok: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>',
     loja: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M3 10 5 4h14l2 6z"/><path d="M10 20v-5h4v5"/></svg>',
     lupa: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+    grafico: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
     caminhao: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M2 6h12v10H2zM14 10h4l3 3v3h-7z"/><circle cx="6" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>'
   };
   var ICO_EAN = '<svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><rect width="2" height="16"/><rect x="3" width="1" height="16"/><rect x="5" width="2" height="16"/><rect x="8" width="1" height="16"/><rect x="10" width="3" height="16"/><rect x="14" width="1" height="16"/><rect x="16" width="2" height="16"/><rect x="19" width="1" height="16"/><rect x="21" width="1" height="16"/></svg>';
@@ -2104,6 +2108,7 @@ window.PedidoPDF = (function () {
       t.push(tile("mg:lojas", "Pedidos lojas", "Fazer pedido por uma loja", ICO.loja));
       t.push(tile("consulta", "Consulta de produtos", "Estoque, preço, fornecedor e EAN", ICO.lupa));
       t.push(tile("compra", "Pedido de compra", nc ? nc + (nc === 1 ? " item em andamento" : " itens em andamento") : "Montar o PDF e mandar pelo WhatsApp", ICO.caminhao));
+      t.push(tile("analise", "Análise de vendas", "Vendas mês a mês de cada produto, por loja", ICO.grafico));
       if (ehMestre()) t.push(tile("erros", "Relatório de erros", "Tudo que deu erro: ERP, login, pedidos, app", ICO.lista));
     } else {
       var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
@@ -2111,6 +2116,8 @@ window.PedidoPDF = (function () {
       t.push(tile("lj:atual", "Pedido atual", atual ? n + (n === 1 ? " item em " : " itens em ") + atual.nome : "Nenhum pedido aberto", ICO.lista));
       t.push(tile("lj:hist", "Pedidos anteriores", "Enviados e aprovados", ICO.relogio));
       t.push(tile("consulta", "Consulta de produtos", "Estoque, fornecedor e EAN", ICO.lupa));
+      if (nivelNum() >= 2) t.push(tile("analise", "Análise de vendas", "Vendas mês a mês da sua loja", ICO.grafico));
+      else t.push(tile("bloq", "Análise de vendas", "Gerência, Administração e Diretoria", ICO.grafico, "bloq"));
       // funções de Diretoria/Administração: aparecem com cadeado (não somem)
       t.push(tile("bloq", "Aguardando aprovação", "Diretoria e Administração", ICO.relogio, "bloq"));
       t.push(tile("bloq", "Pedido de compra", "Diretoria e Administração", ICO.caminhao, "bloq"));
@@ -2156,6 +2163,92 @@ window.PedidoPDF = (function () {
     }).join("");
     $("fichaCorpo").innerHTML = h;
   }
+  // ---------------- ANÁLISE DE VENDAS (mensal, por loja) ----------------
+  var MESES_NOME = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  function abrirAnalise() {
+    modal("Análise de vendas", '<input id="anaBusca" type="search" placeholder="Produto, PLU ou código de barras" autocomplete="off" ' +
+      'style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #d8ccb9;border-radius:10px;font-size:16px">' +
+      '<div id="anaRes" style="margin-top:10px"><div class="vazio" style="padding:10px 0">Digite o nome, o PLU ou o código de barras do produto.</div></div>');
+    setTimeout(function () { var i = $("anaBusca"); if (i) i.focus(); }, 150);
+  }
+  function buscarAnalise(t) {
+    var q = semAcento(t).trim(), box = $("anaRes");
+    if (!box) return;
+    if (q.length < 2) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Digite pelo menos 2 letras.</div>'; return; }
+    var achados = [], vistos = {};
+    Object.keys(porPlu).forEach(function (k) {
+      var it = porPlu[k];
+      if (achados.length < 40 && (it.p.indexOf(q) === 0 || (it.b && String(it.b) === q) || semAcento(it.d).indexOf(q) >= 0)) { achados.push(it); vistos[it.p] = 1; }
+    });
+    function desenhar(extra) {
+      var l = achados.concat((extra || []).filter(function (x) { return !vistos[x.p]; }));
+      box.innerHTML = l.length ? l.map(function (it) {
+        return '<button class="btn btn-cinza" style="display:block;width:100%;text-align:left;margin:0 0 6px;padding:10px" data-ana="' + esc(it.p) + '" data-anad="' + esc(it.d) + '">' +
+          "<b>" + esc(it.d) + "</b><br><small>PLU " + esc(it.p) + (it.t ? " · " + esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "") + "</small></button>";
+      }).join("") : '<div class="vazio" style="padding:10px 0">Nada encontrado.</div>';
+    }
+    desenhar();
+    if (achados.length < 5 && q.length >= 3) {
+      clearTimeout(buscarAnalise.h);
+      buscarAnalise.h = setTimeout(function () {
+        chamar("buscarProdutos", [t], function (l) { if ($("anaBusca") && $("anaBusca").value === t) desenhar(l || []); }, function () {});
+      }, 300);
+    }
+  }
+  function nomeMes(m, parcial, periodo) {
+    var a = m.split("-"); var nome = MESES_NOME[Number(a[1]) - 1] + "/" + a[0].slice(2);
+    if (parcial) { var f = String(periodo || "").match(/a (\d{2}\/\d{2})/); nome += " (até " + (f ? f[1] : "hoje") + ")"; }
+    return nome;
+  }
+  function abrirAnaliseItem(plu, desc) {
+    var box = $("anaRes"); if (!box) return;
+    box.innerHTML = '<div class="carregando"><div class="giro"></div>Calculando…</div>';
+    chamar("analiseVendas", [plu], function (r) { desenharAnalise(plu, desc, r); },
+      function (e) { box.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
+  function desenharAnalise(plu, desc, r) {
+    var box = $("anaRes"); if (!box) return;
+    var it = porPlu[plu] || {}, q = Number(it.q) || 0, t = it.t || "CX";
+    var volta = '<button class="btn btn-cinza" style="margin:0 0 10px" data-anavolta="1">&#8592; Outro produto</button>';
+    var cab = '<div style="margin:0 0 8px"><b>' + esc(it.d || desc || "PLU " + plu) + "</b><br><small>PLU " + esc(plu) + (it.t ? " · " + esc(it.t) + (q > 1 ? " c/ " + num(q) : "") : "") + "</small></div>";
+    var meses = (r && r.meses) || [], cods = (r && r.lojas) || [];
+    if (!meses.length) { box.innerHTML = volta + cab + '<div class="aviso">Ainda não há vendas mensais carregadas. O robô busca os meses no ERP aos poucos (ou rode no PC do robô o 21_CARGA_VENDAS_MESES.bat).</div>'; return; }
+    function tot(m) { return cods.reduce(function (a, c) { return a + (Number(m.lojas[c]) || 0); }, 0); }
+    var fech = meses.filter(function (m) { return !m.parcial; }).slice(0, 12);
+    var soma = fech.reduce(function (a, m) { return a + tot(m); }, 0), media = fech.length ? soma / fech.length : 0;
+    var u3 = fech.slice(0, 3).reduce(function (a, m) { return a + tot(m); }, 0), a3 = fech.slice(3, 6).reduce(function (a, m) { return a + tot(m); }, 0);
+    var tend = fech.length >= 6 && a3 > 0 ? Math.round((u3 - a3) / a3 * 100) : null;
+    var melhor = fech.slice().sort(function (a, b) { return tot(b) - tot(a); })[0];
+    var resumo = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px">' +
+      [["Total " + fech.length + (fech.length === 1 ? " mês" : " meses"), num(soma) + " UN"],
+       ["Média por mês", num(Math.round(media)) + " UN" + (q > 1 ? " · " + num(Math.round(media / q * 10) / 10) + " " + esc(t) : "")],
+       ["Últimos 3 meses x 3 anteriores", tend == null ? "—" : (tend > 0 ? "+" : "") + tend + "%"],
+       ["Melhor mês", melhor ? nomeMes(melhor.mes) + " (" + num(tot(melhor)) + ")" : "—"]].map(function (x) {
+        return '<div style="background:#f6f0e6;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
+      }).join("") + "</div>";
+    // gráfico de barras (mês mais antigo à esquerda)
+    var serie = meses.slice().reverse(), maxv = Math.max.apply(null, serie.map(tot).concat([1])), W = 300, H = 110, bw = W / serie.length;
+    var svg = '<svg viewBox="0 0 ' + W + " " + (H + 18) + '" style="width:100%;height:auto;margin:0 0 10px">' + serie.map(function (m, i) {
+      var v = tot(m), h = Math.round(v / maxv * H);
+      return '<rect x="' + (i * bw + 2) + '" y="' + (H - h) + '" width="' + (bw - 4) + '" height="' + h + '" rx="2" fill="' + (m.parcial ? "#e7b9b9" : "#c62828") + '"/>' +
+        '<text x="' + (i * bw + bw / 2) + '" y="' + (H + 12) + '" font-size="8" text-anchor="middle" fill="#7a6a5c">' + MESES_NOME[Number(m.mes.slice(5)) - 1] + "</text>";
+    }).join("") + "</svg>";
+    var tabela;
+    if (cods.length === 1) {
+      tabela = '<table class="tab-lojas tab-lj"><tr><th>Mês</th><th>Vendas UN</th>' + (q > 1 ? "<th>" + esc(t) + "</th>" : "") + "</tr>" + meses.map(function (m) {
+        var v = tot(m);
+        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + num(v) + "</b></td>" + (q > 1 ? "<td>" + num(Math.round(v / q * 10) / 10) + "</td>" : "") + "</tr>";
+      }).join("") + "</table>";
+    } else {
+      tabela = '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:' + (140 + cods.length * 58) + 'px"><tr><th>Mês</th><th>Total</th>' +
+        cods.map(function (c) { return '<th title="' + esc(r.nomes[c] || "") + '">' + esc(c) + "<br><small>" + esc((r.nomes[c] || "").slice(0, 7)) + "</small></th>"; }).join("") + "</tr>" +
+        meses.map(function (m) {
+          return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + num(tot(m)) + "</b></td>" +
+            cods.map(function (c) { return "<td>" + num(Number(m.lojas[c]) || 0) + "</td>"; }).join("") + "</tr>";
+        }).join("") + "</table></div>";
+    }
+    box.innerHTML = volta + cab + resumo + svg + tabela + '<p style="margin:10px 0 0"><small>Vendas em unidades. Mês "(até …)" ainda está correndo.</small></p>';
+  }
   // erro na tela do celular -> vai para o relatório (no máximo 5 por vez que o app abre, sem repetir)
   var errTelaN = 0, errTelaVistos = {};
   function mandarErroTela(msg) {
@@ -2169,6 +2262,7 @@ window.PedidoPDF = (function () {
   function irPara(acao) {
     if (acao === "bloq") { avisoBloqueio(); return; }
     if (acao === "erros") { abrirErrosErp(); return; }
+    if (acao === "analise") { if (!dados) { toast("Aguarde a lista de estoque carregar"); return; } abrirAnalise(); return; }
     if (acao === "consulta" || acao === "compra") { tela = acao; $("busca").value = ""; desenharLista(); window.scrollTo(0, 0); return; }
     if (!dados) { toast("Aguarde a lista de estoque carregar"); return; }
     var p = acao.split(":");
@@ -2910,12 +3004,17 @@ window.PedidoPDF = (function () {
   $("lista").addEventListener("focusin", function (e) { if (e.target.id === "cmpForn") mostrarForn(); });
   $("btnFecharEnvio").addEventListener("click", fecharEnvio);
   $("btnFecharFicha").addEventListener("click", function () { $("telaFicha").classList.remove("aberta"); if (checarFavoritos.resp) { var f = checarFavoritos.resp; checarFavoritos.resp = null; f(false); } });
+  $("fichaCorpo").addEventListener("input", function (e) {
+    if (e.target.id === "anaBusca") { clearTimeout(buscarAnalise.t); var v = e.target.value; buscarAnalise.t = setTimeout(function () { buscarAnalise(v); }, 200); }
+  });
   $("fichaCorpo").addEventListener("click", function (e) {
     var b = e.target.closest("[data-favloja]"); if (b) { addFavorito(b.getAttribute("data-favplu"), b.getAttribute("data-favloja")); return; }
     if (e.target.closest("[data-fav-sim]") || e.target.closest("[data-fav-nao]")) {
       var f = checarFavoritos.resp; checarFavoritos.resp = null; if (f) f(!!e.target.closest("[data-fav-sim]")); return;
     }
     if (e.target.closest("[data-favok]")) fecharModal();
+    var an = e.target.closest("[data-ana]"); if (an) { abrirAnaliseItem(an.getAttribute("data-ana"), an.getAttribute("data-anad")); return; }
+    if (e.target.closest("[data-anavolta]")) { var ib = $("anaBusca"); buscarAnalise(ib ? ib.value : ""); if (ib) ib.focus(); return; }
     var ef = e.target.closest("[data-errfiltro]"); if (ef) { ERR.filtro = ef.getAttribute("data-errfiltro"); desenharErros(); return; }
     var ea = e.target.closest("[data-errapagar]");
     if (ea) {
