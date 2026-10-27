@@ -939,7 +939,7 @@ window.PedidoPDF = (function () {
   function tk() { return sessao.token + (comoLoja ? "~" + encodeURIComponent(comoLoja) : ""); }
   var MGR_FN = { pedidosManager: 1, pedidoManager: 1, salvarEdicao: 1, aprovarPedido: 1, precosManager: 1, fornecedoresCompra: 1,
     produtosFornecedor: 1, buscarCadastro: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
-    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1, errosErp: 1, lojasResumo: 1 };
+    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1, errosErp: 1, lojasResumo: 1, apagarErro: 1 };
   var EMAIL_MESTRE_APP = "marcelo@atacadaodeembalagens.com.br";   // administrador do sistema (o servidor confere de novo)
   function ehMestre() { return !!(sessao && String(sessao.email || "").toLowerCase() === EMAIL_MESTRE_APP); }
   function ehMgrLogin() { return !!(sessao && sessao.perfil === "MANAGER"); }
@@ -1295,6 +1295,7 @@ window.PedidoPDF = (function () {
     r[fn].apply(r, [MGR_FN[fn] ? sessao.token : tk()].concat(args));
   }
   var demo = {
+    apagarErro: function () { return { ok: true }; },
     favoritoAdd: function (p, d, c) { return { ok: true, ja: false, loja: c || "sua loja", n: 1 }; },
     favoritosLoja: function () { return { loja: "", itens: [] }; },
     favoritosTirar: function () { return { ok: true }; },
@@ -2103,7 +2104,7 @@ window.PedidoPDF = (function () {
       t.push(tile("mg:lojas", "Pedidos lojas", "Fazer pedido por uma loja", ICO.loja));
       t.push(tile("consulta", "Consulta de produtos", "Estoque, preço, fornecedor e EAN", ICO.lupa));
       t.push(tile("compra", "Pedido de compra", nc ? nc + (nc === 1 ? " item em andamento" : " itens em andamento") : "Montar o PDF e mandar pelo WhatsApp", ICO.caminhao));
-      if (ehMestre()) t.push(tile("erros", "Relatório de erros do ERP", "Itens que o robô não digitou", ICO.lista));
+      if (ehMestre()) t.push(tile("erros", "Relatório de erros", "Tudo que deu erro: ERP, login, pedidos, app", ICO.lista));
     } else {
       var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
       t.push(tile("lj:lista", "Fazer pedido", atual ? "Continuar: " + atual.nome : "Começar ou continuar um pedido", ICO.carrinho, "destaque"));
@@ -2121,35 +2122,50 @@ window.PedidoPDF = (function () {
         function () { desenharInicio.buscando = false; });
     }
   }
-  // Relatório de erros do ERP (só o administrador): itens que o robô não conseguiu digitar, agrupados por pedido
+  // Relatório de erros (só o administrador): TUDO que deu erro — robô do ERP, login/senha, pedidos, compras, sessão, tela
+  var ERR = { lista: [], filtro: "Todos", dias: 120 };
   function abrirErrosErp() {
-    $("fichaTitulo").textContent = "Relatório de erros do ERP";
+    $("fichaTitulo").textContent = "Relatório de erros";
     $("fichaCorpo").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando…</div>';
     $("telaFicha").classList.add("aberta");
-    chamar("errosErp", [], function (r) {
-      var l = (r && r.erros) || [];
-      if (!l.length) { $("fichaCorpo").innerHTML = '<div class="aviso">Nenhum erro nos últimos ' + ((r && r.dias) || 120) + ' dias. O robô digitou tudo.</div>'; return; }
-      var grupos = [], idx = {};
-      l.forEach(function (e) {
-        var k = e.pedido + "|" + e.quando;
-        if (!idx[k]) { idx[k] = { e: e, itens: [] }; grupos.push(idx[k]); }
-        idx[k].itens.push(e);
-      });
-      $("fichaCorpo").innerHTML = '<p style="margin:0 0 10px">' + l.length + (l.length === 1 ? " item" : " itens") + " para digitar à mão no ERP (últimos " + r.dias + " dias).</p>" +
-        grupos.map(function (g) {
-          var e = g.e;
-          return '<div style="margin:0 0 14px;border:1px solid #dde3ea;border-radius:10px;overflow:hidden">' +
-            '<div style="background:#f3f6f9;padding:8px 10px"><b>' + esc(e.loja) + "</b> · " + esc(e.nome) + "<br><small>" + esc(e.quando) +
-            (e.bloco ? " · bloco " + esc(e.bloco) : "") + "</small></div>" +
-            '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-            '<tr style="text-align:left;color:#5b6573"><th style="padding:6px 8px">PLU</th><th style="padding:6px 8px">Produto</th><th style="padding:6px 8px;text-align:right">Qtd</th></tr>' +
-            g.itens.map(function (x) {
-              return '<tr style="border-top:1px solid #eef1f4"><td style="padding:6px 8px;vertical-align:top">' + esc(x.p || "—") + '</td><td style="padding:6px 8px">' + esc(x.d || "") +
-                '<br><small style="color:#9b1c1c">' + esc(x.motivo || "") + '</small></td><td style="padding:6px 8px;text-align:right;vertical-align:top">' + esc(String(x.q || "")) + "</td></tr>";
-            }).join("") + "</table></div>";
-        }).join("");
-    }, function (e) { $("fichaCorpo").innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+    chamar("errosErp", [], function (r) { ERR.lista = (r && r.erros) || []; ERR.dias = (r && r.dias) || 120; desenharErros(); },
+      function (e) { $("fichaCorpo").innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
+  function desenharErros() {
+    var l = ERR.lista, tipos = ["Todos"];
+    l.forEach(function (e) { if (tipos.indexOf(e.tipo || "ERP") < 0) tipos.push(e.tipo || "ERP"); });
+    if (tipos.indexOf(ERR.filtro) < 0) ERR.filtro = "Todos";
+    var vis = l.filter(function (e) { return ERR.filtro === "Todos" || (e.tipo || "ERP") === ERR.filtro; });
+    var cor = { "ERP": "#9b1c1c", "Login/Senha": "#8a5a00", "Pedido": "#1d4e89", "Compra": "#4b3b8f", "Sessão": "#666", "Tela": "#0b6b5a", "App": "#444" };
+    var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">' + tipos.map(function (t) {
+        var n = t === "Todos" ? l.length : l.filter(function (e) { return (e.tipo || "ERP") === t; }).length;
+        return '<button class="btn ' + (t === ERR.filtro ? "btn-verde" : "btn-cinza") + '" style="padding:6px 10px;font-size:13px" data-errfiltro="' + esc(t) + '">' + esc(t) + " (" + n + ")</button>";
+      }).join("") + "</div>";
+    if (!l.length) h += '<div class="aviso">Nenhum erro nos últimos ' + ERR.dias + " dias.</div>";
+    else h += '<button class="btn btn-cinza" style="width:100%;margin:0 0 12px;color:#9b1c1c" data-errlimpar="1">Limpar a lista inteira (' + l.length + ")</button>";
+    h += vis.map(function (e) {
+      var t = e.tipo || "ERP";
+      var quem = [e.loja, e.email].filter(Boolean).join(" · ");
+      var det = t === "ERP"
+        ? (e.p ? "PLU " + esc(e.p) + (e.d ? " · " + esc(e.d) : "") + (e.q ? " · qtd " + esc(String(e.q)) : "") + "<br>" : "") + (e.nome ? "Pedido: " + esc(e.nome) + (e.bloco ? " · bloco " + esc(e.bloco) : "") + "<br>" : "")
+        : (e.fn ? "Onde: " + esc(e.fn) + "<br>" : "");
+      return '<div style="border:1px solid #e6dccd;border-radius:10px;padding:8px 10px;margin:0 0 8px;display:flex;gap:8px;align-items:flex-start">' +
+        '<div style="flex:1;min-width:0"><span style="display:inline-block;font-size:11px;font-weight:700;color:#fff;background:' + (cor[t] || "#444") + ';border-radius:5px;padding:1px 6px">' + esc(t) + "</span> " +
+        "<small>" + esc(e.quando || "") + "</small>" + (quem ? "<br><b>" + esc(quem) + "</b>" : "") + "<br><small>" + det + '</small><span style="color:#9b1c1c">' + esc(e.motivo || "") + "</span></div>" +
+        '<button class="btn btn-cinza" style="padding:6px 9px;font-size:12px" data-errapagar="' + esc(e.id || "") + '">Apagar</button></div>';
+    }).join("");
+    $("fichaCorpo").innerHTML = h;
+  }
+  // erro na tela do celular -> vai para o relatório (no máximo 5 por vez que o app abre, sem repetir)
+  var errTelaN = 0, errTelaVistos = {};
+  function mandarErroTela(msg) {
+    msg = String(msg || "").slice(0, 280);
+    if (!EM_APPS_SCRIPT || !sessao || errTelaN >= 5 || errTelaVistos[msg]) return;
+    errTelaVistos[msg] = 1; errTelaN++;
+    try { google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).registrarErroTela(sessao.token, msg, "tela"); } catch (e) {}
+  }
+  window.addEventListener("error", function (ev) { mandarErroTela((ev.message || "erro") + (ev.lineno ? " (linha " + ev.lineno + ")" : "")); });
+  window.addEventListener("unhandledrejection", function (ev) { mandarErroTela("promessa: " + (ev.reason && ev.reason.message || ev.reason)); });
   function irPara(acao) {
     if (acao === "bloq") { avisoBloqueio(); return; }
     if (acao === "erros") { abrirErrosErp(); return; }
@@ -2900,6 +2916,18 @@ window.PedidoPDF = (function () {
       var f = checarFavoritos.resp; checarFavoritos.resp = null; if (f) f(!!e.target.closest("[data-fav-sim]")); return;
     }
     if (e.target.closest("[data-favok]")) fecharModal();
+    var ef = e.target.closest("[data-errfiltro]"); if (ef) { ERR.filtro = ef.getAttribute("data-errfiltro"); desenharErros(); return; }
+    var ea = e.target.closest("[data-errapagar]");
+    if (ea) {
+      var id = ea.getAttribute("data-errapagar"); ea.disabled = true;
+      chamar("apagarErro", [id], function () { ERR.lista = ERR.lista.filter(function (x) { return x.id !== id; }); desenharErros(); toast("Erro apagado"); },
+        function (x) { ea.disabled = false; toast(String(x && x.message || x)); });
+      return;
+    }
+    if (e.target.closest("[data-errlimpar]")) {
+      if (!confirm("Apagar TODOS os " + ERR.lista.length + " erros da lista? Não dá para desfazer.")) return;
+      chamar("apagarErro", [""], function () { ERR.lista = []; desenharErros(); toast("Lista de erros limpa"); });
+    }
   });
   $("telaFicha").addEventListener("click", function (e) { if (e.target === $("telaFicha")) $("telaFicha").classList.remove("aberta"); });
   $("btnEnvioDepois").addEventListener("click", function () { fecharEnvio(); toast("O pedido ficou guardado em Pedido de compra › Enviados. Dá para enviar depois."); });
