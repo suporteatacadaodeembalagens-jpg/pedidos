@@ -199,6 +199,9 @@
   .chip.pend{background:#fff6d1;color:#7a5c00;border:1px solid var(--ouro)}
   .chip.ok{background:#e3f4e8;color:#1d6b35}
   .chip.ed{background:var(--azul-claro);color:var(--azul);margin-left:4px}
+  .chip.erp{margin-left:4px;background:#eef1f5;color:#44505e}
+  .chip.erp.ok{background:#e3f4e8;color:#1d6b35}
+  .chip.erp.mal{background:#fde8e8;color:#9b1c1c;border:1px solid #f3b4b4}
   .mgr-item{background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;box-shadow:0 1px 2px rgba(63,31,30,.08)}
   .mgr-item .d{flex:1;min-width:0;font-weight:600;font-size:14.5px;line-height:1.25}
   .mgr-item .d small{display:block;color:var(--sub);font-weight:400;font-size:12px;margin-top:3px}
@@ -924,7 +927,7 @@ window.PedidoPDF = (function () {
   function tk() { return sessao.token + (comoLoja ? "~" + encodeURIComponent(comoLoja) : ""); }
   var MGR_FN = { pedidosManager: 1, pedidoManager: 1, salvarEdicao: 1, aprovarPedido: 1, precosManager: 1, fornecedoresCompra: 1,
     produtosFornecedor: 1, buscarCadastro: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
-    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1 };
+    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1 };
   function ehMgrLogin() { return !!(sessao && sessao.perfil === "MANAGER"); }
   /** Nível: 4 Diretoria, 3 Administração, 2 Gerência, 1 Operacional (função sem acesso aparece com cadeado, não some). */
   var NIVEL_NUM = { DIRETORIA: 4, ADMINISTRACAO: 3, GERENCIA: 2, OPERACIONAL: 1 };
@@ -1427,7 +1430,34 @@ window.PedidoPDF = (function () {
   var mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
   function chipStatus(x) {
     return x.status === "pendente" ? '<span class="chip pend">Aguardando aprovação</span>'
-      : '<span class="chip ok">Aprovado' + (x.aprovadoEm ? " em " + esc(x.aprovadoEm) : "") + "</span>" + (x.editado ? '<span class="chip ed">com alterações</span>' : "");
+      : '<span class="chip ok">Aprovado' + (x.aprovadoEm ? " em " + esc(x.aprovadoEm) : "") + "</span>" + (x.editado ? '<span class="chip ed">com alterações</span>' : "") + chipErp(x.erp);
+  }
+  var ERP_TXT = { fila: "ERP: na fila do robô", digitando: "ERP: robô digitando…", digitado: "ERP: digitado", erro: "ERP: erro", verificar: "ERP: conferir" };
+  function chipErp(e) {
+    if (!e || !ERP_TXT[e.st]) return "";
+    var cls = e.st === "digitado" ? (e.falhas ? " mal" : " ok") : (e.st === "erro" || e.st === "verificar") ? " mal" : "";
+    return '<span class="chip erp' + cls + '">' + ERP_TXT[e.st] + (e.st === "digitado" && e.falhas ? " (" + e.falhas + " com problema)" : "") + "</span>";
+  }
+  function blocoErp(x) {
+    var e = x.erp;
+    if (!e || x.status !== "aprovado") return "";
+    var h = '<div class="aviso">' + chipErp({ st: e.st, falhas: (e.falhas || []).length }) +
+      (e.bloco ? "<br>Bloco no ERP: <b>" + esc(e.bloco) + "</b>" : "") + (e.quando ? "<br><small>" + esc(e.quando) + "</small>" : "") +
+      (e.msg ? "<br>" + esc(e.msg) : "");
+    if ((e.falhas || []).length) h += "<br><small>Não digitados: " + e.falhas.map(function (f) { return esc(f.p) + " (" + esc(f.motivo) + ")"; }).join(", ") + "</small>";
+    if (sessao && sessao.aprova && e.st !== "fila" && e.st !== "digitando")
+      h += '<br><button class="btn btn-cinza" style="margin-top:8px;padding:9px 14px" id="btnErpDeNovo" type="button">Digitar de novo no ERP</button>';
+    return h + "</div>";
+  }
+  function erpDeNovo() {
+    var e = mgr.aberto && mgr.aberto.erp;
+    var aviso = e && e.st === "digitado" ? "O robô JÁ digitou este pedido. Mandar de novo cria OUTRO bloco no ERP. Continuar?"
+      : "Antes, confira no ERP se o bloco deste pedido não ficou pela metade (apague-o se ficou). Mandar para o robô digitar de novo?";
+    if (!confirm(aviso)) return;
+    chamar("reenviarErp", [mgr.aberto.id], function (r) {
+      mgr.aberto.erp = Object.assign({}, mgr.aberto.erp || {}, { st: "fila", msg: "", falhas: [] });
+      toast("Na fila: o robô digita em até 10 minutos."); mgr.lista = null; desenharManager();
+    }, function (err) { toast(String(err && err.message || err)); });
   }
   function desenharManager() {
     if (tela !== "app") { desenharLista(); return; }
@@ -1515,7 +1545,7 @@ window.PedidoPDF = (function () {
     var html = '<button class="voltar" id="mgrVoltar">← Voltar para a lista</button>' +
       '<div class="aviso">Loja: <b>' + esc(x.loja) + "</b><br>Pedido: <b>" + esc(x.nome) + "</b><br>Feito por " + (x.feitoPor ? "manager " + esc(x.feitoPor) : esc(x.email)) + " em " + esc(x.quando) +
       "<br>Lista de estoque de " + esc(x.dataLista) + "<br>" + chipStatus({ status: x.status, aprovadoEm: x.aprovadoEm, editado: !!x.editadoPor }) +
-      (x.aprovadoPor ? "<br><small>Aprovado por " + esc(x.aprovadoPor) + "</small>" : "") + "</div>";
+      (x.aprovadoPor ? "<br><small>Aprovado por " + esc(x.aprovadoPor) + "</small>" : "") + "</div>" + blocoErp(x);
     if (pode) {
       html += '<div class="campo"><label for="mgrBusca">Adicionar produto ao pedido</label>' +
         '<input id="mgrBusca" autocomplete="off" placeholder="Buscar produto, PLU, marca ou EAN" value="' + esc(mgr.busca) + '">' +
@@ -2636,6 +2666,7 @@ window.PedidoPDF = (function () {
       var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
       var cl = e.target.closest("[data-comoloja]"); if (cl) { entrarComoLoja(cl.getAttribute("data-comoloja")); return; }
       if (e.target.closest("#mgrVoltar")) { voltarMgr(); return; }
+      if (e.target.closest("#btnErpDeNovo")) { erpDeNovo(); return; }
       if (e.target.closest("#btnLerMgr")) { lerParaMgr(); return; }
       var st = e.target.closest("[data-setor]");
       if (st) {   // abre/fecha o setor sem redesenhar a tela
