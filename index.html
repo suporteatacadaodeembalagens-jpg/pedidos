@@ -274,6 +274,16 @@
   .info .est{color:var(--texto);font-size:14px;font-weight:700}
   .info .est-cd{display:inline-block;margin:1px 0;font-size:15px;color:var(--marrom);font-weight:500}
   .info .est-cd b{font-size:16px;font-weight:800;color:var(--texto)}
+  .lojas-mini{margin:4px 0 4px;font-size:13px;line-height:1.35;color:var(--marrom)}
+  .lojas-mini .tit{display:block;font-size:12px;opacity:.8}
+  .tab-lojas{width:100%;border-collapse:collapse;font-size:13px;margin-top:2px}
+  .tab-lojas th{font-weight:600;font-size:12px;text-align:right;padding:3px 6px;background:#f4ede2;color:var(--marrom)}
+  .tab-lojas th:first-child,.tab-lojas td:first-child{text-align:left}
+  .tab-lojas td{text-align:right;padding:2px 6px;border-top:1px solid #f0e8dc}
+  .tab-lojas td b{color:var(--texto)}
+  .lojas-mini .lj{padding:2px 5px;border-radius:6px;background:#f4ede2;white-space:nowrap;font-size:12px;overflow:hidden;text-overflow:ellipsis}
+  .lojas-mini .lj b{color:var(--texto)}
+  .lojas-mini .uma b{font-size:15px;color:var(--texto)}
   .info .tag-un{display:inline-block;background:var(--azul);color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;vertical-align:1px}
   .info .dep{display:inline-block;background:var(--azul-claro);color:var(--azul);border-radius:6px;padding:0 6px;font-size:11px;margin-left:4px}
   .stepper{display:flex;align-items:center;gap:6px}
@@ -927,7 +937,7 @@ window.PedidoPDF = (function () {
   function tk() { return sessao.token + (comoLoja ? "~" + encodeURIComponent(comoLoja) : ""); }
   var MGR_FN = { pedidosManager: 1, pedidoManager: 1, salvarEdicao: 1, aprovarPedido: 1, precosManager: 1, fornecedoresCompra: 1,
     produtosFornecedor: 1, buscarCadastro: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
-    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1, errosErp: 1 };
+    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1, errosErp: 1, lojasResumo: 1 };
   var EMAIL_MESTRE_APP = "marcelo@atacadaodeembalagens.com.br";   // administrador do sistema (o servidor confere de novo)
   function ehMestre() { return !!(sessao && String(sessao.email || "").toLowerCase() === EMAIL_MESTRE_APP); }
   function ehMgrLogin() { return !!(sessao && sessao.perfil === "MANAGER"); }
@@ -939,6 +949,37 @@ window.PedidoPDF = (function () {
   function nomeMgr() { return (sessao && sessao.nome) || "Manager"; }
 
   // ---------------- carregar dados ----------------
+  // Estoque e vendas da última semana por loja, direto no cartão do produto (o servidor manda só o que o nível pode ver)
+  var RES = null;
+  function carregarResumoLojas() {
+    chamar("lojasResumo", [], function (r) {
+      if (!r || !r.d) return;
+      r.idx = {}; (r.lojas || []).forEach(function (c, i) { r.idx[c] = i; });
+      RES = r;
+      if (dados) desenharLista();
+    }, function () {});
+  }
+  function codLoja(nome) { var m = String(nome || "").match(/(\d{1,3})/); return m ? ("000" + m[1]).slice(-3) : ""; }
+  /** Bloco "lojas" do cartão. so = código de UMA loja (conferência do pedido: só a loja do pedido). */
+  function htmlLojas(plu, so) {
+    if (!RES || !RES.lojas || !RES.lojas.length) return "";
+    var l = RES.d[plu] || [], cods = so ? RES.lojas.filter(function (c) { return c === so; }) : RES.lojas;
+    if (!cods.length) return "";
+    var it = porPlu[plu] || {}, q = Number(it.q) || 0, t = it.t || "CX", temCx = q > 1;
+    function cx(e) { return num(Math.floor((Number(e) || 0) / q)); }
+    if (cods.length === 1) {
+      var i = RES.idx[cods[0]], e = l[2 * i] || 0;
+      return '<div class="lojas-mini uma">Loja ' + esc(cods[0]) + " " + esc(RES.nomes[cods[0]] || "") + "<br>Estoque: <b>" + num(e) + "</b> UN" +
+        (temCx ? " · <b>" + cx(e) + "</b> " + esc(t) : "") + "<br>Vendas 7 dias: <b>" + num(l[2 * i + 1] || 0) + "</b> UN</div>";
+    }
+    return '<div class="lojas-mini"><table class="tab-lojas"><tr><th>Loja</th><th>Estoque UN</th>' + (temCx ? "<th>Estoque " + esc(t) + "</th>" : "") +
+      "<th>Vendas 7 dias</th></tr>" +
+      cods.map(function (c) {
+        var i = RES.idx[c], e = l[2 * i] || 0;
+        return "<tr><td>" + esc(c) + " " + esc(RES.nomes[c] || "") + "</td><td><b>" + num(e) + "</b></td>" + (temCx ? "<td><b>" + cx(e) + "</b></td>" : "") +
+          "<td>" + num(l[2 * i + 1] || 0) + "</td></tr>";
+      }).join("") + "</table></div>";
+  }
   function aplicarDados(json, deServidor) {
     if (!json) return false;
     var novo = typeof json === "string" ? JSON.parse(json) : json;
@@ -977,6 +1018,7 @@ window.PedidoPDF = (function () {
         })
         .withFailureHandler(function (e) { if (erroLogin(e)) return; if (!cache) $("lista").innerHTML = '<div class="vazio">Sem conexão. Tente de novo.</div>'; else toast("Sem conexão: mostrando a última lista"); })
         .getDados(sessao.token, cache && cache.gerado ? String(cache.gerado) : "");
+      carregarResumoLojas();
     } else if (window.DEMO_DADOS) {
       aplicarDados(window.DEMO_DADOS, true);
     }
@@ -1094,13 +1136,14 @@ window.PedidoPDF = (function () {
             (emUnidade(it) ? ' <span class="tag-un">pedido em UN</span>' : "") + "<br>"
           : "") +
         '<span class="est-cd">Estoque CD ' + esc(it.q > 1 || !it.t ? "UN" : it.t) + ': <b>' + num(it.e) + "</b></span><br>" +
+        (RES && RES.lojas && RES.lojas.length === 1 ? htmlLojas(it.p) : "") +
         "PLU " + esc(it.p) + (emb ? " · " + emb : "") + (mostrarDep ? '<span class="dep">' + esc(nomeAba(it.dep)) + "</span>" : "") +
       "</div>" +
       '<div class="stepper">' +
         '<button class="seta menos" data-acao="-" aria-label="Diminuir">&#9660;</button>' +
         '<div class="qtd" data-acao="editar"><b>' + q + "</b><small>" + esc(unPedido(it)) + "</small></div>" +
         '<button class="seta mais" data-acao="+" aria-label="Aumentar">&#9650;</button>' +
-      "</div></div></div>";
+      "</div></div>" + (RES && RES.lojas && RES.lojas.length > 1 ? htmlLojas(it.p) : "") + "</div>";   // várias lojas: largura toda do cartão
   }
 
   // Desenha a lista em partes: os primeiros produtos na hora (tela já responde ao toque) e o resto aos poucos.
@@ -1250,6 +1293,7 @@ window.PedidoPDF = (function () {
     r[fn].apply(r, [MGR_FN[fn] ? sessao.token : tk()].concat(args));
   }
   var demo = {
+    lojasResumo: function () { return { lojas: ["004"], nomes: { "004": "Pirituba" }, periodo: "20/10 a 26/10", d: {} }; },
     errosErp: function () { return { dias: 120, erros: [{ ts: 1, quando: "27/10/2026 11:52", pedido: "demo", loja: "Filial 04_Pirituba", nome: "Lista semanal", bloco: "LISTA SEMANAL_LOJA PIRITUBA", p: "297417", d: "Suflair Choc Ao Leite 80gr-nestle", q: 2, motivo: "aviso do ERP: preço de venda zerado para o destinatario informado" }] }; },
     listarRascunhos: function () { return LS.get("demoRasc", []); },
     salvarRascunho: function (r) {
@@ -1598,6 +1642,7 @@ window.PedidoPDF = (function () {
       info = (it.t && it.q > 1 ? '<span class="est-cd">Estoque CD ' + esc(it.t) + ": <b>" +
                 (emUnidade(it) ? "menos de 1" : num(it.c != null ? it.c : Math.floor(it.e / it.q))) + "</b></span><br>" : "") +
         '<span class="est-cd">Estoque CD ' + esc(it.q > 1 || !it.t ? "UN" : it.t) + ": <b>" + num(it.e) + "</b></span><br>" +
+        htmlLojas(i.p, codLoja(mgr.aberto && mgr.aberto.loja) || "x") +     // conferência: SÓ a loja do pedido
         "PLU " + esc(i.p) + (emb ? " · " + emb : "");
     } else {
       info = '<span class="est-cd">Fora da lista de estoque atual</span><br>PLU ' + esc(i.p);
@@ -1817,7 +1862,7 @@ window.PedidoPDF = (function () {
       cons.termo = ""; cons.precos = null; cons.extra = null; mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
     }
     try { localStorage.removeItem("rascCache"); } catch (e) {}   // a lista de estoque fica guardada (é igual para todas as lojas)
-    renderId++; dados = null; $("lista").innerHTML = ""; $("abas").innerHTML = "";
+    renderId++; dados = null; RES = null; $("lista").innerHTML = ""; $("abas").innerHTML = "";
     $("telaConfig").classList.remove("aberta");
     abrirLogin(msg);
   }
@@ -2112,7 +2157,7 @@ window.PedidoPDF = (function () {
     var fic = [["PLU", it.p], ["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"], ["Embalagem", emb]].concat(it.dep ? [["Setor", nomeAba(it.dep)]] : []);
     if (m) fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : "—"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : "—"]);
     var est = (it.t && it.q > 1 ? '<span class="est-cd">Estoque CD ' + esc(it.t) + ": " + (emUnidade(it) ? "<b>menos de 1</b>" : bNum(it.c != null && !it.fora ? it.c : cxDe(it.e, it.q))) + "</span><br>" : "") +
-      '<span class="est-cd">Estoque CD UN: ' + bNum(it.e) + "</span>";
+      '<span class="est-cd">Estoque CD UN: ' + bNum(it.e) + "</span>" + htmlLojas(it.p);
     var acao;
     if (m) {
       var c = compra.itens[it.p];
