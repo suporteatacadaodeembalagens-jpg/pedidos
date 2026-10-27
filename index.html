@@ -927,7 +927,9 @@ window.PedidoPDF = (function () {
   function tk() { return sessao.token + (comoLoja ? "~" + encodeURIComponent(comoLoja) : ""); }
   var MGR_FN = { pedidosManager: 1, pedidoManager: 1, salvarEdicao: 1, aprovarPedido: 1, precosManager: 1, fornecedoresCompra: 1,
     produtosFornecedor: 1, buscarCadastro: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
-    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1 };
+    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1, errosErp: 1 };
+  var EMAIL_MESTRE_APP = "marcelo@atacadaodeembalagens.com.br";   // administrador do sistema (o servidor confere de novo)
+  function ehMestre() { return !!(sessao && String(sessao.email || "").toLowerCase() === EMAIL_MESTRE_APP); }
   function ehMgrLogin() { return !!(sessao && sessao.perfil === "MANAGER"); }
   /** Nível: 4 Diretoria, 3 Administração, 2 Gerência, 1 Operacional (função sem acesso aparece com cadeado, não some). */
   var NIVEL_NUM = { DIRETORIA: 4, ADMINISTRACAO: 3, GERENCIA: 2, OPERACIONAL: 1 };
@@ -1248,6 +1250,7 @@ window.PedidoPDF = (function () {
     r[fn].apply(r, [MGR_FN[fn] ? sessao.token : tk()].concat(args));
   }
   var demo = {
+    errosErp: function () { return { dias: 120, erros: [{ ts: 1, quando: "27/10/2026 11:52", pedido: "demo", loja: "Filial 04_Pirituba", nome: "Lista semanal", bloco: "LISTA SEMANAL_LOJA PIRITUBA", p: "297417", d: "Suflair Choc Ao Leite 80gr-nestle", q: 2, motivo: "aviso do ERP: preço de venda zerado para o destinatario informado" }] }; },
     listarRascunhos: function () { return LS.get("demoRasc", []); },
     salvarRascunho: function (r) {
       var l = LS.get("demoRasc", []), x = r.id && l.filter(function (y) { return y.id === r.id; })[0];
@@ -1985,6 +1988,7 @@ window.PedidoPDF = (function () {
       t.push(tile("mg:lojas", "Pedidos lojas", "Fazer pedido por uma loja", ICO.loja));
       t.push(tile("consulta", "Consulta de produtos", "Estoque, preço, fornecedor e EAN", ICO.lupa));
       t.push(tile("compra", "Pedido de compra", nc ? nc + (nc === 1 ? " item em andamento" : " itens em andamento") : "Montar o PDF e mandar pelo WhatsApp", ICO.caminhao));
+      if (ehMestre()) t.push(tile("erros", "Relatório de erros do ERP", "Itens que o robô não digitou", ICO.lista));
     } else {
       var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
       t.push(tile("lj:lista", "Fazer pedido", atual ? "Continuar: " + atual.nome : "Começar ou continuar um pedido", ICO.carrinho, "destaque"));
@@ -2002,8 +2006,38 @@ window.PedidoPDF = (function () {
         function () { desenharInicio.buscando = false; });
     }
   }
+  // Relatório de erros do ERP (só o administrador): itens que o robô não conseguiu digitar, agrupados por pedido
+  function abrirErrosErp() {
+    $("fichaTitulo").textContent = "Relatório de erros do ERP";
+    $("fichaCorpo").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando…</div>';
+    $("telaFicha").classList.add("aberta");
+    chamar("errosErp", [], function (r) {
+      var l = (r && r.erros) || [];
+      if (!l.length) { $("fichaCorpo").innerHTML = '<div class="aviso">Nenhum erro nos últimos ' + ((r && r.dias) || 120) + ' dias. O robô digitou tudo.</div>'; return; }
+      var grupos = [], idx = {};
+      l.forEach(function (e) {
+        var k = e.pedido + "|" + e.quando;
+        if (!idx[k]) { idx[k] = { e: e, itens: [] }; grupos.push(idx[k]); }
+        idx[k].itens.push(e);
+      });
+      $("fichaCorpo").innerHTML = '<p style="margin:0 0 10px">' + l.length + (l.length === 1 ? " item" : " itens") + " para digitar à mão no ERP (últimos " + r.dias + " dias).</p>" +
+        grupos.map(function (g) {
+          var e = g.e;
+          return '<div style="margin:0 0 14px;border:1px solid #dde3ea;border-radius:10px;overflow:hidden">' +
+            '<div style="background:#f3f6f9;padding:8px 10px"><b>' + esc(e.loja) + "</b> · " + esc(e.nome) + "<br><small>" + esc(e.quando) +
+            (e.bloco ? " · bloco " + esc(e.bloco) : "") + "</small></div>" +
+            '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+            '<tr style="text-align:left;color:#5b6573"><th style="padding:6px 8px">PLU</th><th style="padding:6px 8px">Produto</th><th style="padding:6px 8px;text-align:right">Qtd</th></tr>' +
+            g.itens.map(function (x) {
+              return '<tr style="border-top:1px solid #eef1f4"><td style="padding:6px 8px;vertical-align:top">' + esc(x.p || "—") + '</td><td style="padding:6px 8px">' + esc(x.d || "") +
+                '<br><small style="color:#9b1c1c">' + esc(x.motivo || "") + '</small></td><td style="padding:6px 8px;text-align:right;vertical-align:top">' + esc(String(x.q || "")) + "</td></tr>";
+            }).join("") + "</table></div>";
+        }).join("");
+    }, function (e) { $("fichaCorpo").innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
   function irPara(acao) {
     if (acao === "bloq") { avisoBloqueio(); return; }
+    if (acao === "erros") { abrirErrosErp(); return; }
     if (acao === "consulta" || acao === "compra") { tela = acao; $("busca").value = ""; desenharLista(); window.scrollTo(0, 0); return; }
     if (!dados) { toast("Aguarde a lista de estoque carregar"); return; }
     var p = acao.split(":");
