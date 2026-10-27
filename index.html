@@ -93,6 +93,8 @@
   .ficha dt{color:var(--sub)} .ficha dd{margin:0;font-weight:700;color:var(--texto);word-break:break-word}
   .acao-cons{margin-top:10px;display:flex;justify-content:flex-end}
   .acao-cons .btn{padding:11px 14px}
+  .acao-cons{flex-wrap:wrap;gap:8px}
+  .acao-cons .btn-fav{width:100%}
   .btn.largo{width:100%;margin:-4px 0 12px}
   .dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .cmp-abas{display:flex;gap:8px;margin:0 0 12px}
@@ -276,11 +278,11 @@
   .info .est-cd b{font-size:16px;font-weight:800;color:var(--texto)}
   .lojas-mini{margin:4px 0 4px;font-size:13px;line-height:1.35;color:var(--marrom)}
   .lojas-mini .tit{display:block;font-size:12px;opacity:.8}
-  .tab-lojas{width:100%;border-collapse:collapse;font-size:13px;margin-top:2px}
-  .tab-lojas th{font-weight:600;font-size:12px;text-align:right;padding:3px 6px;background:#f4ede2;color:var(--marrom)}
-  .tab-lojas th:first-child,.tab-lojas td:first-child{text-align:left}
-  .tab-lojas td{text-align:right;padding:2px 6px;border-top:1px solid #f0e8dc}
-  .tab-lojas td b{color:var(--texto)}
+  .tab-lj{width:100%;border-collapse:collapse;font-size:13px;margin-top:2px}
+  .tab-lj th{font-weight:600;font-size:12px;text-align:right;padding:3px 6px;background:#f4ede2;color:var(--marrom)}
+  .tab-lj th:first-child,.tab-lj td:first-child{text-align:left}
+  .tab-lj td{text-align:right;padding:2px 6px;border-top:1px solid #f0e8dc}
+  .tab-lj td b{color:var(--texto)}
   .lojas-mini .lj{padding:2px 5px;border-radius:6px;background:#f4ede2;white-space:nowrap;font-size:12px;overflow:hidden;text-overflow:ellipsis}
   .lojas-mini .lj b{color:var(--texto)}
   .lojas-mini .uma b{font-size:15px;color:var(--texto)}
@@ -972,7 +974,7 @@ window.PedidoPDF = (function () {
       return '<div class="lojas-mini uma">Loja ' + esc(cods[0]) + " " + esc(RES.nomes[cods[0]] || "") + "<br>Estoque: <b>" + num(e) + "</b> UN" +
         (temCx ? " · <b>" + cx(e) + "</b> " + esc(t) : "") + "<br>Vendas 7 dias: <b>" + num(l[2 * i + 1] || 0) + "</b> UN</div>";
     }
-    return '<div class="lojas-mini"><table class="tab-lojas"><tr><th>Loja</th><th>Estoque UN</th>' + (temCx ? "<th>Estoque " + esc(t) + "</th>" : "") +
+    return '<div class="lojas-mini"><table class="tab-lojas tab-lj"><tr><th>Loja</th><th>Estoque UN</th>' + (temCx ? "<th>Estoque " + esc(t) + "</th>" : "") +
       "<th>Vendas 7 dias</th></tr>" +
       cods.map(function (c) {
         var i = RES.idx[c], e = l[2 * i] || 0;
@@ -1293,6 +1295,9 @@ window.PedidoPDF = (function () {
     r[fn].apply(r, [MGR_FN[fn] ? sessao.token : tk()].concat(args));
   }
   var demo = {
+    favoritoAdd: function (p, d, c) { return { ok: true, ja: false, loja: c || "sua loja", n: 1 }; },
+    favoritosLoja: function () { return { loja: "", itens: [] }; },
+    favoritosTirar: function () { return { ok: true }; },
     lojasResumo: function () { return { lojas: ["004"], nomes: { "004": "Pirituba" }, periodo: "20/10 a 26/10", d: {} }; },
     errosErp: function () { return { dias: 120, erros: [{ ts: 1, quando: "27/10/2026 11:52", pedido: "demo", loja: "Filial 04_Pirituba", nome: "Lista semanal", bloco: "LISTA SEMANAL_LOJA PIRITUBA", p: "297417", d: "Suflair Choc Ao Leite 80gr-nestle", q: 2, motivo: "aviso do ERP: preço de venda zerado para o destinatario informado" }] }; },
     listarRascunhos: function () { return LS.get("demoRasc", []); },
@@ -1409,6 +1414,71 @@ window.PedidoPDF = (function () {
     if (!novosVistos()) abaAtual = NOVOS;   // pedido começa pelos produtos novos
     $("busca").value = ""; desenharAbas(); desenharLista(); window.scrollTo(0, 0);
     if (fora) toast(fora + " produto(s) não estão mais na lista e saíram do pedido");
+    checarFavoritos();
+  }
+  // ---------------- FAVORITOS DO PEDIDO DA LOJA ----------------
+  // Consulta > "Adicionar ao pedido loja" guarda o produto nos favoritos da loja. Ao abrir um pedido da loja, o app oferece.
+  function modal(titulo, html) {
+    $("fichaTitulo").textContent = titulo; $("fichaCorpo").innerHTML = html; $("telaFicha").classList.add("aberta");
+  }
+  function fecharModal() { $("telaFicha").classList.remove("aberta"); }
+  function listaFav(l) {
+    return '<div style="max-height:46vh;overflow:auto;margin:8px 0 14px;border:1px solid #eadfce;border-radius:10px">' + l.map(function (x) {
+      var it = porPlu[x.p];
+      return '<div style="padding:8px 10px;border-top:1px solid #f1e8db"><b>' + esc(it ? it.d : x.d || "") + "</b><br><small>PLU " + esc(x.p) +
+        (it && it.t ? " · " + esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "") + "</small></div>";
+    }).join("") + "</div>";
+  }
+  function addFavorito(plu, cod) {
+    var it = porPlu[plu] || (cons.extra && cons.extra.lista || []).filter(function (x) { return x.p === plu; })[0] || {};
+    chamar("favoritoAdd", [plu, it.d || "", cod || ""], function (r) {
+      fecharModal();
+      toast(r.ja ? "Já estava nos favoritos de " + r.loja : "Nos favoritos do próximo pedido de " + r.loja);
+    });
+  }
+  function favoritoClique(plu) {
+    if (ehMgrLogin() && !comoLoja) {   // manager: escolhe a loja
+      var cods = (RES && RES.lojas && RES.lojas.length > 1) ? RES.lojas : ["002", "003", "004", "005", "006", "007", "008", "009", "010"];
+      var it = porPlu[plu] || {};
+      modal("Adicionar ao pedido de qual loja?", (it.d ? '<p style="margin:0 0 10px"><b>' + esc(it.d) + "</b></p>" : "") +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' + cods.map(function (c) {
+          return '<button class="btn btn-cinza" data-favloja="' + esc(c) + '" data-favplu="' + esc(plu) + '">' + esc(c) + " " + esc(RES && RES.nomes && RES.nomes[c] || "") + "</button>";
+        }).join("") + "</div>");
+      return;
+    }
+    addFavorito(plu, "");
+  }
+  var favPerguntado = {};
+  function checarFavoritos() {
+    if (!EM_APPS_SCRIPT || !atual || (ehMgrLogin() && !comoLoja)) return;
+    var chave = (comoLoja || "") + "|" + (atual.id || atual.nome);
+    if (favPerguntado[chave]) return;
+    favPerguntado[chave] = 1;
+    chamar("favoritosLoja", [], function (r) {
+      var l = (r && r.itens) || [];
+      if (!l.length) return;
+      var tem = l.filter(function (x) { return porPlu[x.p]; }), sem = l.filter(function (x) { return !porPlu[x.p]; });
+      function avisarSem() {
+        if (!sem.length) return;
+        modal("Sem estoque no CD", '<p style="margin:0">Estes produtos dos favoritos <b>não estão na lista</b> porque estão sem estoque no CD. Eles foram tirados dos favoritos:</p>' +
+          listaFav(sem) + '<button class="btn btn-verde" style="width:100%" data-favok="1">OK</button>');
+        chamar("favoritosTirar", [sem.map(function (x) { return x.p; })], function () {}, function () {});
+      }
+      if (!tem.length) { avisarSem(); return; }
+      modal("Produtos favoritos", '<p style="margin:0">Deseja adicionar os seguintes itens dos favoritos à lista atual?</p>' + listaFav(tem) +
+        '<div style="display:flex;gap:10px"><button class="btn btn-cinza" style="flex:1" data-fav-nao="1">Não</button>' +
+        '<button class="btn btn-verde" style="flex:1" data-fav-sim="1">Sim</button></div>');
+      checarFavoritos.resp = function (sim) {
+        fecharModal();
+        if (sim) {
+          tem.forEach(function (x) { if (!pedido[x.p]) pedido[x.p] = 1; });
+          salvarPedido(); desenharAbas(); desenharLista();
+          toast(tem.length + (tem.length === 1 ? " produto incluído" : " produtos incluídos") + " no pedido");
+          chamar("favoritosTirar", [tem.map(function (x) { return x.p; })], function () {}, function () {});
+        }
+        setTimeout(avisarSem, 250);
+      };
+    }, function () {});
   }
   function novoPedido() {
     var nome = ($("nomeNovo").value || "").trim();
@@ -2168,6 +2238,7 @@ window.PedidoPDF = (function () {
         "</b><small>" + esc(unPedido(it)) + '</small></div><button class="seta mais" data-acao="+" aria-label="Aumentar">&#9650;</button></div>';
     } else acao = '<button class="btn btn-verde" data-cped="' + esc(it.p) + '">Colocar no pedido</button>';
     if (it.fora && !m) acao = '<div class="fora-lista">' + (it.e < 0 ? "Estoque negativo no CD" : it.e > 0 ? "Fora da lista de pedido" : "Sem estoque no CD") + " — não entra no pedido.</div>";
+    if (sessao) acao += '<button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>';   // favoritos do próximo pedido da loja
     return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       '<div class="info">' + est + '</div><dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
       '<div class="acao-cons">' + acao + "</div></div>";
@@ -2722,6 +2793,7 @@ window.PedidoPDF = (function () {
     if (tela === "consulta") {
       if (e.target.closest("#btnLerCons")) { abrirLeitor(function (c) { cons.termo = c; var i = $("consBusca"); if (i) i.value = c; resultadosConsulta(); }); return; }
       var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
+      var fv = e.target.closest("[data-fav]"); if (fv) { favoritoClique(fv.getAttribute("data-fav")); return; }
       var cr = e.target.closest("[data-cpr]"); if (cr) { var pc = cr.getAttribute("data-cpr"); mudarCompra(pc, 1); resultadosConsulta(); toast("Colocado no pedido de compra"); return; }
     }
     if (tela === "compra") {
@@ -2821,7 +2893,14 @@ window.PedidoPDF = (function () {
   $("btnSalvarCompra").addEventListener("click", salvarCompraServidor);
   $("lista").addEventListener("focusin", function (e) { if (e.target.id === "cmpForn") mostrarForn(); });
   $("btnFecharEnvio").addEventListener("click", fecharEnvio);
-  $("btnFecharFicha").addEventListener("click", function () { $("telaFicha").classList.remove("aberta"); });
+  $("btnFecharFicha").addEventListener("click", function () { $("telaFicha").classList.remove("aberta"); if (checarFavoritos.resp) { var f = checarFavoritos.resp; checarFavoritos.resp = null; f(false); } });
+  $("fichaCorpo").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-favloja]"); if (b) { addFavorito(b.getAttribute("data-favplu"), b.getAttribute("data-favloja")); return; }
+    if (e.target.closest("[data-fav-sim]") || e.target.closest("[data-fav-nao]")) {
+      var f = checarFavoritos.resp; checarFavoritos.resp = null; if (f) f(!!e.target.closest("[data-fav-sim]")); return;
+    }
+    if (e.target.closest("[data-favok]")) fecharModal();
+  });
   $("telaFicha").addEventListener("click", function (e) { if (e.target === $("telaFicha")) $("telaFicha").classList.remove("aberta"); });
   $("btnEnvioDepois").addEventListener("click", function () { fecharEnvio(); toast("O pedido ficou guardado em Pedido de compra › Enviados. Dá para enviar depois."); });
   $("btnZap").addEventListener("click", enviarZap);
