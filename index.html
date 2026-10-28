@@ -979,23 +979,29 @@ window.PedidoPDF = (function () {
   }
   function codLoja(nome) { var m = String(nome || "").match(/(\d{1,3})/); return m ? ("000" + m[1]).slice(-3) : ""; }
   /** Bloco "lojas" do cartão. so = código de UMA loja (conferência do pedido: só a loja do pedido). */
+  /** Quantidade na EMBALAGEM DE COMPRA, com quebrado (ex.: 360 UN em CX c/ 240 = "1,5"). Sem embalagem: em UN. */
+  function emEmb(v, q) {
+    v = Number(v) || 0; q = Number(q) || 0;
+    if (q <= 1) return num(v);
+    var n = Math.trunc(v / q * 10) / 10;   // corta (não arredonda para cima): 9,96 CX mostra 9,9 — nunca mais do que tem
+    if (n === 0 && v !== 0) return v > 0 ? "&lt;0,1" : "&gt;-0,1";
+    return num(n);
+  }
   function htmlLojas(plu, so) {
     if (!RES || !RES.lojas || !RES.lojas.length) return "";
     var l = RES.d[plu] || [], cods = so ? RES.lojas.filter(function (c) { return c === so; }) : RES.lojas;
     if (!cods.length) return "";
-    var it = porPlu[plu] || {}, q = Number(it.q) || 0, t = it.t || "CX", temCx = q > 1;
-    function cx(e) { return num(Math.floor((Number(e) || 0) / q)); }
+    var it = porPlu[plu] || {}, q = Number(it.q) || 0, t = q > 1 ? (it.t || "CX") : "UN";
     if (cods.length === 1) {
       var i = RES.idx[cods[0]], e = l[2 * i] || 0;
-      return '<div class="lojas-mini uma">Loja ' + esc(cods[0]) + " " + esc(RES.nomes[cods[0]] || "") + "<br>Estoque: <b>" + num(e) + "</b> UN" +
-        (temCx ? " · <b>" + cx(e) + "</b> " + esc(t) : "") + "<br>Vendas 7 dias: <b>" + num(l[2 * i + 1] || 0) + "</b> UN</div>";
+      return '<div class="lojas-mini uma">Loja ' + esc(cods[0]) + " " + esc(RES.nomes[cods[0]] || "") + "<br>Estoque: <b>" + emEmb(e, q) + "</b> " + esc(t) +
+        "<br>Vendas 7 dias: <b>" + emEmb(l[2 * i + 1] || 0, q) + "</b> " + esc(t) + "</div>";
     }
-    return '<div class="lojas-mini"><table class="tab-lojas tab-lj"><tr><th>Loja</th><th>Estoque UN</th>' + (temCx ? "<th>Estoque " + esc(t) + "</th>" : "") +
-      "<th>Vendas 7 dias</th></tr>" +
+    return '<div class="lojas-mini"><table class="tab-lojas tab-lj"><tr><th>Loja</th><th>Estoque ' + esc(t) + "</th><th>Vendas 7 dias " + esc(t) + "</th></tr>" +
       cods.map(function (c) {
-        var i = RES.idx[c], e = l[2 * i] || 0;
-        return "<tr><td>" + esc(c) + " " + esc(RES.nomes[c] || "") + "</td><td><b>" + num(e) + "</b></td>" + (temCx ? "<td><b>" + cx(e) + "</b></td>" : "") +
-          "<td>" + num(l[2 * i + 1] || 0) + "</td></tr>";
+        var i = RES.idx[c], e = Number(l[2 * i]) || 0;
+        return "<tr><td>" + esc(c) + " " + esc(RES.nomes[c] || "") + "</td><td" + (e < 0 ? ' class="neg"' : "") + "><b>" + emEmb(e, q) + "</b></td>" +
+          "<td>" + emEmb(l[2 * i + 1] || 0, q) + "</td></tr>";
       }).join("") + "</table></div>";
   }
   function aplicarDados(json, deServidor) {
@@ -1165,16 +1171,12 @@ window.PedidoPDF = (function () {
         cods.forEach(function (x) { var i = RES.idx[x]; le += Number(l[2 * i]) || 0; lv += Number(l[2 * i + 1]) || 0; });
       }
     }
-    function cel(v, cx, venda) {
+    function cel(v, cx) {   // na embalagem de compra, com quebrado (1,5 CX)
       if (v == null) return '<td class="sem">—</td>';
-      var n = cx ? (venda ? Math.round(v / q * 10) / 10 : cxDe(v, q)) : v;
-      var txt = cx && venda && v > 0 && n < 0.1 ? "&lt;0,1" : num(n);   // vendeu menos de 1 caixa: não mostra 0
-      return "<td" + (n < 0 ? ' class="neg"' : "") + ">" + txt + "</td>";
+      return "<td" + (v < 0 ? ' class="neg"' : "") + ">" + (cx ? emEmb(v, q) : num(v)) + "</td>";
     }
-    var cdCx = c != null ? Number(c) : cxDe(e, q);
     var h = '<table class="tab-est"><tr><th></th><th>Vendas 7 dias</th><th>' + (umaLoja ? "Estoque loja" : "Estoque lojas") + "</th><th>Estoque CD</th></tr>";
-    if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + cel(lv, true, true) + cel(le, true) +
-      "<td" + (cdCx < 0 ? ' class="neg"' : "") + ">" + (e > 0 && e < q ? "&lt;1" : num(cdCx)) + "</td></tr>";
+    if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + cel(lv, true) + cel(le, true) + cel(e, true) + "</tr>";
     if (!temCx) h += "<tr><td>UN</td>" + cel(lv) + cel(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td></tr>";   // UN só quando não tem embalagem de compra
     h += "</table>";
     if (!so && !umaLoja) h += '<details class="det-lojas"><summary>Ver por loja</summary>' + htmlLojas(p) + "</details>";
