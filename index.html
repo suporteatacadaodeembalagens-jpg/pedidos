@@ -289,6 +289,21 @@
   .info .tag-un{display:inline-block;background:var(--azul);color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;vertical-align:1px}
   .info .dep{display:inline-block;background:var(--azul-claro);color:var(--azul);border-radius:6px;padding:0 6px;font-size:11px;margin-left:4px}
   .stepper{display:flex;align-items:center;gap:6px}
+  /* cartão do produto (desenho do Marcelo 28/10): nome; PLU · embalagem · setor; quadro Vendas 7 dias | Estoque lojas | Estoque CD; setas embaixo */
+  .item .sub{font-size:13px;color:var(--sub);margin-top:3px;line-height:1.35}
+  .item .sub .tag-un{display:inline-block;background:var(--azul);color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px}
+  .tab-est{width:100%;border-collapse:collapse;table-layout:fixed;margin:8px 0 2px}
+  .tab-est th{font-size:11.5px;font-weight:600;color:var(--marrom);text-align:center;padding:2px 3px 4px;border-bottom:2px solid var(--ouro);line-height:1.15}
+  .tab-est td{text-align:center;padding:5px 3px;font-size:16px;font-weight:800;color:var(--texto);border-bottom:1px solid #efe6d8}
+  .tab-est th + th, .tab-est td + td{border-left:1px solid #e3d6c3}
+  .tab-est th:first-child, .tab-est td:first-child{width:44px;text-align:left;font-size:12.5px;font-weight:700;color:var(--marrom)}
+  .tab-est tr.un td{font-size:13.5px;font-weight:600;color:var(--sub)}
+  .tab-est tr.un td:first-child{font-size:12px}
+  .tab-est .neg{color:var(--vermelho)}
+  .tab-est .sem{color:#b9ab9b;font-weight:500}
+  .det-lojas{margin:4px 0 0;font-size:13px}
+  .det-lojas summary{cursor:pointer;color:var(--azul);font-weight:600;padding:2px 0}
+  .rodape-item{display:flex;justify-content:center;align-items:center;margin-top:8px}
   .seta{width:46px;height:46px;border-radius:12px;border:0;font-size:20px;display:flex;align-items:center;justify-content:center;
     background:var(--creme);color:var(--marrom)}
   .seta.mais{background:var(--principal);color:#fff}
@@ -1126,26 +1141,49 @@ window.PedidoPDF = (function () {
   // Estoque do CD abaixo de 1 embalagem (ex.: 66 un e a CX tem 72) -> o pedido passa a ser em UNIDADE.
   function emUnidade(it) { return !!(it && it.t && it.q > 1 && it.e > 0 && it.e < it.q); }
   function unPedido(it) { return emUnidade(it) ? "UN" : ((it && it.t) || "UN"); }
+  /** Quadro do cartão: uma linha na embalagem de compra (CX/FD/...) — ou em UN quando o produto não tem embalagem; colunas Vendas 7 dias | Estoque loja(s) | Estoque CD.
+   *  so = código de UMA loja (conferência: só a loja do pedido). Sem 'so': loja vê a dela; Diretoria/Administração vê a soma das lojas. */
+  function blocoEstoque(p, e, c, t, q, so) {
+    q = Number(q) || 0; e = Number(e) || 0;
+    var temCx = q > 1, lv = null, le = null, umaLoja = true;
+    if (RES && RES.lojas && RES.lojas.length) {
+      var l = RES.d[p] || [], cods = so ? RES.lojas.filter(function (x) { return x === so; }) : RES.lojas;
+      umaLoja = cods.length === 1;
+      if (cods.length) {
+        lv = 0; le = 0;
+        cods.forEach(function (x) { var i = RES.idx[x]; le += Number(l[2 * i]) || 0; lv += Number(l[2 * i + 1]) || 0; });
+      }
+    }
+    function cel(v, cx, venda) {
+      if (v == null) return '<td class="sem">—</td>';
+      var n = cx ? (venda ? Math.round(v / q * 10) / 10 : cxDe(v, q)) : v;
+      var txt = cx && venda && v > 0 && n < 0.1 ? "&lt;0,1" : num(n);   // vendeu menos de 1 caixa: não mostra 0
+      return "<td" + (n < 0 ? ' class="neg"' : "") + ">" + txt + "</td>";
+    }
+    var cdCx = c != null ? Number(c) : cxDe(e, q);
+    var h = '<table class="tab-est"><tr><th></th><th>Vendas 7 dias</th><th>' + (umaLoja ? "Estoque loja" : "Estoque lojas") + "</th><th>Estoque CD</th></tr>";
+    if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + cel(lv, true, true) + cel(le, true) +
+      "<td" + (cdCx < 0 ? ' class="neg"' : "") + ">" + (e > 0 && e < q ? "&lt;1" : num(cdCx)) + "</td></tr>";
+    if (!temCx) h += "<tr><td>UN</td>" + cel(lv) + cel(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td></tr>";   // UN só quando não tem embalagem de compra
+    h += "</table>";
+    if (!so && !umaLoja) h += '<details class="det-lojas"><summary>Ver por loja</summary>' + htmlLojas(p) + "</details>";
+    return h;
+  }
+  function subItem(p, t, q, dep, extra) {
+    return '<div class="sub">PLU ' + esc(p) + (t ? " · " + esc(t) + (q > 1 ? " c/ " + num(q) : "") : "") + (dep ? " · " + esc(nomeAba(dep)) : "") + (extra || "") + "</div>";
+  }
   function htmlItem(it, mostrarDep) {
     var q = pedido[it.p] || 0;
     var emb = it.t ? esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "";
     return '<div class="item' + (q > 0 ? " com-pedido" : "") + '" data-plu="' + esc(it.p) + '">' +
       '<div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
-      '<div class="linha2"><div class="info">' +
-        // dois estoques: na embalagem de compra (CX/FD/DP...) e, abaixo, em unidade
-        (it.t && it.q > 1
-          ? '<span class="est-cd">Estoque CD ' + esc(it.t) + ': <b>' + (emUnidade(it) ? "menos de 1" : num(it.c != null ? it.c : Math.floor(it.e / it.q))) + "</b></span>" +
-            (emUnidade(it) ? ' <span class="tag-un">pedido em UN</span>' : "") + "<br>"
-          : "") +
-        '<span class="est-cd">Estoque CD ' + esc(it.q > 1 || !it.t ? "UN" : it.t) + ': <b>' + num(it.e) + "</b></span><br>" +
-        (RES && RES.lojas && RES.lojas.length === 1 ? htmlLojas(it.p) : "") +
-        "PLU " + esc(it.p) + (emb ? " · " + emb : "") + (mostrarDep ? '<span class="dep">' + esc(nomeAba(it.dep)) + "</span>" : "") +
-      "</div>" +
-      '<div class="stepper">' +
+      subItem(it.p, it.t, it.q, it.dep, emUnidade(it) ? ' <span class="tag-un">pedido em UN</span>' : "") +
+      blocoEstoque(it.p, it.e, it.c, it.t, it.q) +
+      '<div class="rodape-item"><div class="stepper">' +
         '<button class="seta menos" data-acao="-" aria-label="Diminuir">&#9660;</button>' +
         '<div class="qtd" data-acao="editar"><b>' + q + "</b><small>" + esc(unPedido(it)) + "</small></div>" +
         '<button class="seta mais" data-acao="+" aria-label="Aumentar">&#9650;</button>' +
-      "</div></div>" + (RES && RES.lojas && RES.lojas.length > 1 ? htmlLojas(it.p) : "") + "</div>";   // várias lojas: largura toda do cartão
+      "</div></div></div>";
   }
 
   // Desenha a lista em partes: os primeiros produtos na hora (tela já responde ao toque) e o resto aos poucos.
@@ -1711,15 +1749,11 @@ window.PedidoPDF = (function () {
   function htmlItemMgr(i, pode, o) {
     var it = porPlu[i.p], mudou = o !== i.qtd;
     var info = "";
-    if (it) {
-      var emb = it.t ? esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "";
-      info = (it.t && it.q > 1 ? '<span class="est-cd">Estoque CD ' + esc(it.t) + ": <b>" +
-                (emUnidade(it) ? "menos de 1" : num(it.c != null ? it.c : Math.floor(it.e / it.q))) + "</b></span><br>" : "") +
-        '<span class="est-cd">Estoque CD ' + esc(it.q > 1 || !it.t ? "UN" : it.t) + ": <b>" + num(it.e) + "</b></span><br>" +
-        htmlLojas(i.p, codLoja(mgr.aberto && mgr.aberto.loja) || "x") +     // conferência: SÓ a loja do pedido
-        "PLU " + esc(i.p) + (emb ? " · " + emb : "");
+    var topo;
+    if (it) {   // conferência: SÓ a loja do pedido (vendas 7 dias e estoque da loja)
+      topo = subItem(i.p, it.t, it.q, it.dep) + blocoEstoque(i.p, it.e, it.c, it.t, it.q, codLoja(mgr.aberto && mgr.aberto.loja) || "x");
     } else {
-      info = '<span class="est-cd">Fora da lista de estoque atual</span><br>PLU ' + esc(i.p);
+      topo = subItem(i.p, i.t, 0, "", ' · <b>fora da lista de estoque atual</b>');
     }
     var tr = (mgr.aberto && mgr.aberto.transito || {})[i.p];
     if (tr && tr.length) {   // o que outras listas (aguardando ou aprovadas) já pedem deste produto
@@ -1730,12 +1764,12 @@ window.PedidoPDF = (function () {
           (ok ? "aprovado" : "aguardando aprovação") + "</span></div>";
       }).join("") + "</div>";
     }
-    if (mudou) info += '<br><span class="tag-mgr">' + (o == null ? "Incluído pelo manager" : "Loja pediu " + o + " " + esc(i.t || "un")) + "</span>";
+    if (mudou) info += '<span class="tag-mgr">' + (o == null ? "Incluído pelo manager" : "Loja pediu " + o + " " + esc(i.t || "un")) + "</span>";
     var qtd = '<div class="qtd"><b>' + i.qtd + "</b><small>" + esc(i.t || "un") + "</small></div>";
     return '<div class="item' + (i.qtd > 0 ? " com-pedido" : " zerado") + '" data-mp="' + esc(i.p) + '">' +
-      '<div class="desc">' + (it && it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(i.d) + "</div>" +
-      '<div class="linha2"><div class="info">' + info + "</div>" +
-      (pode ? '<div class="stepper"><button class="seta menos" data-mq="-1" aria-label="Diminuir">&#9660;</button>' + qtd +
+      '<div class="desc">' + (it && it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(i.d) + "</div>" + topo +
+      (info ? '<div class="info" style="margin-top:4px">' + info + "</div>" : "") +
+      '<div class="rodape-item">' + (pode ? '<div class="stepper"><button class="seta menos" data-mq="-1" aria-label="Diminuir">&#9660;</button>' + qtd +
               '<button class="seta mais" data-mq="1" aria-label="Aumentar">&#9650;</button></div>' : qtd) +
       "</div></div>";
   }
@@ -2336,8 +2370,7 @@ window.PedidoPDF = (function () {
     var emb = it.t ? it.t + (it.q > 1 ? " c/ " + num(it.q) : "") : "—";
     var fic = [["PLU", it.p], ["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"], ["Embalagem", emb]].concat(it.dep ? [["Setor", nomeAba(it.dep)]] : []);
     if (m) fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : "—"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : "—"]);
-    var est = (it.t && it.q > 1 ? '<span class="est-cd">Estoque CD ' + esc(it.t) + ": " + (emUnidade(it) ? "<b>menos de 1</b>" : bNum(it.c != null && !it.fora ? it.c : cxDe(it.e, it.q))) + "</span><br>" : "") +
-      '<span class="est-cd">Estoque CD UN: ' + bNum(it.e) + "</span>" + htmlLojas(it.p);
+    var est = blocoEstoque(it.p, it.e, it.c != null && !it.fora ? it.c : null, it.t, it.q);
     var acao;
     if (m) {
       var c = compra.itens[it.p];
@@ -2350,7 +2383,7 @@ window.PedidoPDF = (function () {
     if (it.fora && !m) acao = '<div class="fora-lista">' + (it.e < 0 ? "Estoque negativo no CD" : it.e > 0 ? "Fora da lista de pedido" : "Sem estoque no CD") + " — não entra no pedido.</div>";
     if (sessao) acao += '<button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>';   // favoritos do próximo pedido da loja
     return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
-      '<div class="info">' + est + '</div><dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
+      subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
       '<div class="acao-cons">' + acao + "</div></div>";
   }
   function consultaParaPedido(plu) {   // loja sem pedido aberto: escolhe/começa um pedido e o produto entra nele
@@ -2610,12 +2643,11 @@ window.PedidoPDF = (function () {
         '<div class="cmp-tot" data-cpt="' + esc(x.p) + '">' + textoTotItem(c) + "</div>";
     }
     return '<div class="item' + (q > 0 ? " com-pedido" : "") + '" data-cp="' + esc(x.p) + '"><div class="desc">' + esc(x.d) + "</div>" +
-      '<div class="linha2"><div class="info"><span class="est-cd">Estoque CD: ' + bNum(eCD) + " un</span><br>" +
-      (x.t && x.q > 1 ? '<span class="est-cd">Estoque CD ' + esc(x.t) + ": " + bNum(cxDe(eCD, x.q)) + "</span><br>" : "") +
-      "PLU " + esc(x.p) + (x.b ? " · EAN " + esc(x.b) : "") + "<br>" + esc(x.m || "") + (emb ? " · " + esc(emb) : "") +
+      subItem(x.p, x.t, x.q, it && it.dep) + blocoEstoque(x.p, eCD, null, x.t, x.q) +
+      '<div class="info" style="margin-top:4px">' + (x.b ? "EAN " + esc(x.b) + " · " : "") + esc(x.m || "") +
       (x.f && x.f !== compra.fornecedor ? '<br><small>' + esc(x.f) + "</small>" : "") +
       (!c && x.c ? "<br>Custo CD: " + reais(x.c) + " un" : "") + "</div>" +
-      '<div class="stepper"><button class="seta menos" data-cq="-1" aria-label="Diminuir">&#9660;</button><div class="qtd" data-cq="ed"><b>' + q + "</b><small>" + esc(un) +
+      '<div class="rodape-item"><div class="stepper"><button class="seta menos" data-cq="-1" aria-label="Diminuir">&#9660;</button><div class="qtd" data-cq="ed"><b>' + q + "</b><small>" + esc(un) +
       '</small></div><button class="seta mais" data-cq="1" aria-label="Aumentar">&#9650;</button></div></div>' + precos + "</div>";
   }
   function textoTotItem(c) {
