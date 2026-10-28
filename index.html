@@ -269,7 +269,8 @@
     padding:12px 4px 6px}
   .item{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;
     box-shadow:0 1px 2px rgba(63,31,30,.08);border:2px solid transparent}
-  .item.com-pedido{background:var(--amarelo);border-color:var(--amarelo-borda)}
+  .item.com-pedido{background:#eaf7ea;border-color:#b9dfb9}   /* com quantidade: verde bem claro */
+  .item.sel{background:var(--amarelo);border-color:var(--amarelo-borda)}   /* item tocado: amarelo (vale mais que o verde) */
   .desc{font-weight:600;font-size:15px;line-height:1.25}
   .linha2{display:flex;align-items:center;gap:10px;margin-top:8px}
   .info{flex:1;min-width:0;font-size:12.5px;color:var(--sub);line-height:1.45}
@@ -1143,6 +1144,16 @@ window.PedidoPDF = (function () {
   function unPedido(it) { return emUnidade(it) ? "UN" : ((it && it.t) || "UN"); }
   /** Quadro do cartão: uma linha na embalagem de compra (CX/FD/...) — ou em UN quando o produto não tem embalagem; colunas Vendas 7 dias | Estoque loja(s) | Estoque CD.
    *  so = código de UMA loja (conferência: só a loja do pedido). Sem 'so': loja vê a dela; Diretoria/Administração vê a soma das lojas. */
+  // item tocado fica AMARELO (um por vez); os que têm quantidade ficam verde claro
+  var selPlu = null;
+  function selCls(p) { return selPlu === String(p) ? " sel" : ""; }
+  function marcarSel(card) {
+    var p = card.getAttribute("data-plu") || card.getAttribute("data-mp") || card.getAttribute("data-cp");
+    if (!p || selPlu === p && card.classList.contains("sel")) return;
+    selPlu = p;
+    Array.prototype.forEach.call(document.querySelectorAll(".item.sel"), function (x) { if (x !== card) x.classList.remove("sel"); });
+    card.classList.add("sel");
+  }
   function blocoEstoque(p, e, c, t, q, so) {
     q = Number(q) || 0; e = Number(e) || 0;
     var temCx = q > 1, lv = null, le = null, umaLoja = true;
@@ -1175,7 +1186,7 @@ window.PedidoPDF = (function () {
   function htmlItem(it, mostrarDep) {
     var q = pedido[it.p] || 0;
     var emb = it.t ? esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "";
-    return '<div class="item' + (q > 0 ? " com-pedido" : "") + '" data-plu="' + esc(it.p) + '">' +
+    return '<div class="item' + (q > 0 ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '">' +
       '<div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep, emUnidade(it) ? ' <span class="tag-un">pedido em UN</span>' : "") +
       blocoEstoque(it.p, it.e, it.c, it.t, it.q) +
@@ -1766,7 +1777,7 @@ window.PedidoPDF = (function () {
     }
     if (mudou) info += '<span class="tag-mgr">' + (o == null ? "Incluído pelo manager" : "Loja pediu " + o + " " + esc(i.t || "un")) + "</span>";
     var qtd = '<div class="qtd"><b>' + i.qtd + "</b><small>" + esc(i.t || "un") + "</small></div>";
-    return '<div class="item' + (i.qtd > 0 ? " com-pedido" : " zerado") + '" data-mp="' + esc(i.p) + '">' +
+    return '<div class="item' + (i.qtd > 0 ? " com-pedido" : " zerado") + selCls(i.p) + '" data-mp="' + esc(i.p) + '">' +
       '<div class="desc">' + (it && it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(i.d) + "</div>" + topo +
       (info ? '<div class="info" style="margin-top:4px">' + info + "</div>" : "") +
       '<div class="rodape-item">' + (pode ? '<div class="stepper"><button class="seta menos" data-mq="-1" aria-label="Diminuir">&#9660;</button>' + qtd +
@@ -2382,7 +2393,7 @@ window.PedidoPDF = (function () {
     } else acao = '<button class="btn btn-verde" data-cped="' + esc(it.p) + '">Colocar no pedido</button>';
     if (it.fora && !m) acao = '<div class="fora-lista">' + (it.e < 0 ? "Estoque negativo no CD" : it.e > 0 ? "Fora da lista de pedido" : "Sem estoque no CD") + " — não entra no pedido.</div>";
     if (sessao) acao += '<button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>';   // favoritos do próximo pedido da loja
-    return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
+    return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
       '<div class="acao-cons">' + acao + "</div></div>";
   }
@@ -2642,7 +2653,7 @@ window.PedidoPDF = (function () {
         '<div><label>% IPI</label><input inputmode="decimal" data-cpf="ipi" aria-label="Porcentagem de IPI" value="' + esc(numCampo(c.ipi, 4)) + '" placeholder="0"></div></div>' +
         '<div class="cmp-tot" data-cpt="' + esc(x.p) + '">' + textoTotItem(c) + "</div>";
     }
-    return '<div class="item' + (q > 0 ? " com-pedido" : "") + '" data-cp="' + esc(x.p) + '"><div class="desc">' + esc(x.d) + "</div>" +
+    return '<div class="item' + (q > 0 ? " com-pedido" : "") + selCls(x.p) + '" data-cp="' + esc(x.p) + '"><div class="desc">' + esc(x.d) + "</div>" +
       subItem(x.p, x.t, x.q, it && it.dep) + blocoEstoque(x.p, eCD, null, x.t, x.q) +
       '<div class="info" style="margin-top:4px">' + (x.b ? "EAN " + esc(x.b) + " · " : "") + esc(x.m || "") +
       (x.f && x.f !== compra.fornecedor ? '<br><small>' + esc(x.f) + "</small>" : "") +
@@ -2928,6 +2939,7 @@ window.PedidoPDF = (function () {
     desenharAbas(); desenharLista(); window.scrollTo(0, 0);
   });
   $("lista").addEventListener("click", function (e) {
+    var cardSel = e.target.closest(".item"); if (cardSel) marcarSel(cardSel);
     var ir = e.target.closest("[data-ir]"); if (ir) { irPara(ir.getAttribute("data-ir")); return; }
     var dsc = e.target.closest(".item .desc");
     if (dsc) { var dono = dsc.closest("[data-plu],[data-mp],[data-cp]");
