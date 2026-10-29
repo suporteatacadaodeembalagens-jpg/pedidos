@@ -2381,7 +2381,8 @@ window.PedidoPDF = (function () {
   function htmlConsulta(it) {
     var m = ehMgrLogin(), pr = m && cons.precos ? cons.precos[it.p] : null;
     var emb = it.t ? it.t + (it.q > 1 ? " c/ " + num(it.q) : "") : "—";
-    var fic = [["PLU", it.p], ["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"], ["Embalagem", emb]].concat(it.dep ? [["Setor", nomeAba(it.dep)]] : []);
+    // 29/10: PLU, embalagem e setor já aparecem embaixo do nome do produto -> não repete na ficha
+    var fic = [["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"]];
     if (m) fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : "—"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : "—"]);
     var est = blocoEstoque(it.p, it.e, it.c != null && !it.fora ? it.c : null, it.t, it.q);
     var acao;
