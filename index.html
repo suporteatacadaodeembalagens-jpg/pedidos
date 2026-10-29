@@ -95,7 +95,9 @@
   .acao-cons .btn{padding:11px 14px}
   .acao-cons{flex-wrap:wrap;gap:8px}
   .acao-cons .btn-fav{width:100%}
-  .acao-cons .btn-cont{background:#efe6d8;color:var(--marrom)}
+  .acao-cons .btn-cont{background:var(--marrom);color:#fff;border:2px solid var(--ouro)}   /* 29/10: cor forte, à esquerda do outro botão */
+  .acao-cons .linha-acao{display:flex;gap:8px;width:100%;align-items:stretch}
+  .acao-cons .linha-acao > *{flex:1 1 0;min-width:0}
   .cont-abas{display:flex;gap:6px;margin:0 0 10px;flex-wrap:wrap}
   .cont-abas button{border:0;border-radius:999px;padding:8px 12px;font-weight:700;background:#efe6d8;color:var(--marrom)}
   .cont-abas button.ativa{background:var(--marrom);color:#fff}
@@ -2611,7 +2613,7 @@ window.PedidoPDF = (function () {
         "</b><small>" + esc(unPedido(it)) + '</small></div><button class="seta mais" data-acao="+" aria-label="Aumentar">&#9650;</button></div>';
     } else acao = '<button class="btn btn-verde" data-cped="' + esc(it.p) + '">Colocar no pedido</button>';
     if (it.fora && !m) acao = '<div class="fora-lista">' + (it.e < 0 ? "Estoque negativo no CD" : it.e > 0 ? "Fora da lista de pedido" : "Sem estoque no CD") + " — não entra no pedido.</div>";
-    if (sessao) acao = '<button class="btn btn-cont" data-cont="' + esc(it.p) + '">Pedir contagem de estoque</button>' + acao;   // vai para a lista de contagem (todos os logins)
+    if (sessao) acao = '<div class="linha-acao"><button class="btn btn-cont" data-cont="' + esc(it.p) + '">Pedir contagem de estoque</button>' + acao + "</div>";   // à ESQUERDA do outro botão, na mesma linha (todos os logins)
     if (sessao) acao += '<button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>';   // favoritos do próximo pedido da loja
     return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
