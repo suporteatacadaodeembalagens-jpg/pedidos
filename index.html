@@ -2173,8 +2173,7 @@ window.PedidoPDF = (function () {
       t.push(tile("consulta", "Consulta de produtos", "Estoque, fornecedor e EAN", ICO.lupa));
       if (nivelNum() >= 2) t.push(tile("analise", "Análise de vendas", "Vendas mês a mês da sua loja", ICO.grafico));
       else t.push(tile("bloq", "Análise de vendas", "Gerência, Administração e Diretoria", ICO.grafico, "bloq"));
-      if (nivelNum() >= 2) t.push(tile("contagem", "Contagem de estoque", "Itens pedidos para contar na sua loja", ICO.lista));
-      else t.push(tile("bloq", "Contagem de estoque", "Gerência, Administração e Diretoria", ICO.lista, "bloq"));
+      t.push(tile("contagem", "Contagem de estoque", "Sugestão de contagem e contar os produtos da loja", ICO.lista));
       // funções de Diretoria/Administração: aparecem com cadeado (não somem)
       t.push(tile("bloq", "Aguardando aprovação", "Diretoria e Administração", ICO.relogio, "bloq"));
       t.push(tile("bloq", "Pedido de compra", "Diretoria e Administração", ICO.caminhao, "bloq"));
@@ -2223,7 +2222,7 @@ window.PedidoPDF = (function () {
   // ---------------- CONTAGEM DE ESTOQUE ----------------
   // Consulta > "Pedir contagem de estoque" (todos os logins): loja -> a própria loja; Diretoria/Administração escolhem as lojas.
   // Página "Contagem de estoque" (Gerência, Administração e Diretoria) > aba "Análise de estoque por loja".
-  var contagem = { itens: null, nomes: {}, filtro: "" };
+  var contagem = { itens: null, nomes: {}, filtro: "", aba: "sug", minha: "", lojaCont: "", rasc: null };
   function itemQualquer(plu) {
     return porPlu[plu] || (cons.extra && cons.extra.lista || []).filter(function (x) { return x.p === plu; })[0] || { p: plu };
   }
@@ -2252,17 +2251,143 @@ window.PedidoPDF = (function () {
                     : "Já estava na lista de contagem de " + r.lojas.join(", "));
     });
   }
-  function abrirContagem() {
-    modal("Contagem de estoque", '<div class="cont-abas"><button class="ativa">Análise de estoque por loja</button></div>' +
-      '<div id="contRes"><div class="carregando"><div class="giro"></div>Carregando…</div></div>');
-    chamar("contagemLista", [], function (r) { contagem.itens = r.itens || []; contagem.nomes = r.nomes || {}; contagem.filtro = ""; desenharContagem(); },
-      function (e) { var b = $("contRes"); if (b) b.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  function abrirContagem(aba) {
+    contagem.aba = aba || contagem.aba || "sug";
+    modal("Contagem de estoque", '<div class="cont-abas" id="contAbas"></div><div id="contRes"><div class="carregando"><div class="giro"></div>Carregando…</div></div>');
+    desenharAbasContagem();
+    chamar("contagemLista", [], function (r) {
+      contagem.itens = r.itens || []; contagem.nomes = r.nomes || {}; contagem.minha = r.minhaLoja || ""; contagem.filtro = "";
+      if (contagem.minha) contagem.lojaCont = contagem.minha;
+      desenharContagemAba();
+    }, function (e) { var b = $("contRes"); if (b) b.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
+  var ABAS_CONT = [["sug", "Sugestão de contagem"], ["contar", "Iniciar contagem"], ["ana", "Análise de estoque por loja"]];
+  function desenharAbasContagem() {
+    var a = $("contAbas"); if (!a) return;
+    a.innerHTML = ABAS_CONT.map(function (x) { return '<button class="' + (contagem.aba === x[0] ? "ativa" : "") + '" data-conttab="' + x[0] + '">' + x[1] + "</button>"; }).join("");
+  }
+  function desenharContagemAba() {
+    desenharAbasContagem();
+    if (contagem.aba === "contar") desenharContar(); else if (contagem.aba === "ana") desenharContagem(); else desenharSugestao();
   }
   function estoqueLojaRes(plu, cod) {   // estoque da loja no sistema (lista do robô) - null se não tiver
     if (!RES || !RES.lojas) return null;
     var i = RES.lojas.indexOf(cod); if (i < 0) return null;
     var l = RES.d && RES.d[plu]; return l ? Number(l[2 * i]) || 0 : 0;
   }
+  function infoUn(p) { var it = porPlu[p] || {}, q = Number(it.q) || 0; return { it: it, q: q, un: q > 1 ? (it.t || "CX") : "UN" }; }
+  function filtroLojasCont(lista) {   // botões de loja (Diretoria/Administração)
+    var lojas = []; lista.forEach(function (x) { if (lojas.indexOf(x.loja) < 0) lojas.push(x.loja); }); lojas.sort();
+    if (lojas.length < 2) return { lojas: lojas, h: "" };
+    return { lojas: lojas, h: '<div class="cont-abas">' + [""].concat(lojas).map(function (c) {
+      return '<button class="' + (contagem.filtro === c ? "ativa" : "") + '" data-contfiltro="' + esc(c) + '">' + (c ? esc(c) + " " + esc(contagem.nomes[c] || "") : "Todas") + "</button>";
+    }).join("") + "</div>" };
+  }
+  // ---- aba 1: SUGESTÃO DE CONTAGEM (itens pedidos e ainda não contados, por loja)
+  function desenharSugestao() {
+    var box = $("contRes"); if (!box || !contagem.itens) return;
+    var l = contagem.itens.filter(function (x) { return x.status !== "contado"; });
+    if (!l.length) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Nenhum item na sugestão de contagem. Na Consulta de produtos, toque em <b>Pedir contagem de estoque</b>.</div>'; return; }
+    var f = filtroLojasCont(l), h = f.h, podeTirar = nivelNum() >= 2;
+    h += '<p style="margin:0 0 6px"><small>' + l.length + (l.length === 1 ? " item" : " itens") + " para contar. Toque em <b>Iniciar contagem</b> para digitar o que contou.</small></p>";
+    f.lojas.filter(function (c) { return !contagem.filtro || c === contagem.filtro; }).forEach(function (c) {
+      var its = l.filter(function (x) { return x.loja === c; });
+      h += '<div class="cont-loja">' + esc(c) + " " + esc(contagem.nomes[c] || "") + " · " + its.length + (its.length === 1 ? " item" : " itens") + "</div>" +
+        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:460px"><tr><th>Produto</th><th>Estoque sistema</th><th>Estoque CD</th><th>Pedido</th>' + (podeTirar ? "<th></th>" : "") + "</tr>" +
+        its.map(function (x) {
+          var u = infoUn(x.p), sis = estoqueLojaRes(x.p, c), cd = u.it.e != null ? Number(u.it.e) : null;
+          return '<tr><td style="text-align:left"><b>' + esc(u.it.d || x.d || "") + "</b><br><small>PLU " + esc(x.p) + "</small></td>" +
+            "<td>" + (sis == null ? "—" : "<b>" + emEmb(sis, u.q) + "</b> " + esc(u.un)) + "</td>" +
+            "<td>" + (cd == null ? "—" : emEmb(cd, u.q) + " " + esc(u.un)) + "</td>" +
+            "<td><small>" + esc(x.quando || "") + "<br>por " + esc(x.por || "") + "</small></td>" +
+            (podeTirar ? '<td><button class="btn btn-cinza" style="padding:6px 9px;font-size:12px" data-conttirar="' + esc(x.id) + '">Tirar</button></td>' : "") + "</tr>";
+        }).join("") + "</table></div>";
+    });
+    box.innerHTML = h;
+  }
+  // ---- aba 2: INICIAR CONTAGEM (digita caixas + unidades de cada item da sugestão da loja)
+  function rascCont() { if (!contagem.rasc) contagem.rasc = LS.get("contRasc", {}) || {}; return contagem.rasc; }
+  function guardarRascCont() { LS.set("contRasc", contagem.rasc || {}); }
+  function desenharContar() {
+    var box = $("contRes"); if (!box || !contagem.itens) return;
+    var h = "";
+    if (!contagem.minha) {   // Diretoria/Administração: escolhe a loja que está contando
+      var lojas = []; contagem.itens.forEach(function (x) { if (x.status !== "contado" && lojas.indexOf(x.loja) < 0) lojas.push(x.loja); });
+      if (!lojas.length) lojas = (RES && RES.lojas || []).filter(function (c) { return c !== "001"; });
+      lojas.sort();
+      if (!contagem.lojaCont || lojas.indexOf(contagem.lojaCont) < 0) contagem.lojaCont = lojas[0] || "";
+      h += '<p style="margin:0 0 6px">Loja que está contando:</p><div class="cont-abas">' + lojas.map(function (c) {
+        return '<button class="' + (contagem.lojaCont === c ? "ativa" : "") + '" data-contloja="' + esc(c) + '">' + esc(c) + " " + esc(contagem.nomes[c] || RES && RES.nomes && RES.nomes[c] || "") + "</button>";
+      }).join("") + "</div>";
+    }
+    var cod = contagem.lojaCont || contagem.minha;
+    if (!cod) { box.innerHTML = h + '<div class="vazio">Escolha a loja.</div>'; return; }
+    var r = rascCont(), rl = r[cod] = r[cod] || { v: {}, extras: [] };
+    var its = contagem.itens.filter(function (x) { return x.loja === cod && x.status !== "contado"; })
+      .map(function (x) { return { k: x.id, id: x.id, p: x.p, d: x.d }; })
+      .concat(rl.extras.map(function (x) { return { k: "x" + x.p, id: "", p: x.p, d: x.d }; }));
+    h += '<p style="margin:0 0 8px"><small>Conte o produto na loja e digite as <b>caixas fechadas</b> e as <b>unidades soltas</b>. O app soma. Deixe em branco o que não contou.</small></p>';
+    if (!its.length) h += '<div class="vazio" style="padding:6px 0">Nenhum item da sugestão para esta loja. Você pode incluir um produto abaixo.</div>';
+    h += its.map(function (x) {
+      var u = infoUn(x.p), v = rl.v[x.k] || {}, tot = totalCont(v, u.q);
+      return '<div class="item" style="padding:10px 12px;margin:0 0 8px"><div class="desc">' + esc(u.it.d || x.d || "PLU " + x.p) + "</div>" +
+        "<small>PLU " + esc(x.p) + (u.q > 1 ? " · " + esc(u.it.t || "CX") + " c/ " + num(u.q) : "") + (x.id ? "" : " · incluído agora") + "</small>" +
+        '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap">' +
+        (u.q > 1 ? '<label style="flex:1;min-width:90px"><small>' + esc(u.it.t || "CX") + " fechadas</small><br>" +
+          '<input type="number" inputmode="numeric" min="0" step="1" data-ccx="' + esc(x.k) + '" value="' + esc(v.cx == null ? "" : v.cx) + '" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid #d8ccb9;border-radius:8px"></label>' : "") +
+        '<label style="flex:1;min-width:90px"><small>Unidades' + (u.q > 1 ? " soltas" : "") + "</small><br>" +
+        '<input type="number" inputmode="decimal" min="0" step="any" data-cun="' + esc(x.k) + '" value="' + esc(v.un == null ? "" : v.un) + '" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid #d8ccb9;border-radius:8px"></label>' +
+        '<div style="min-width:90px;text-align:right" id="ctot_' + esc(x.k) + '"><small>Total</small><br><b>' + (tot == null ? "—" : num(tot) + " UN") + "</b></div></div></div>";
+    }).join("");
+    h += '<div style="margin:12px 0 6px"><input id="contBusca" type="search" placeholder="Incluir outro produto: nome, PLU ou código de barras" autocomplete="off" ' +
+      'style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #d8ccb9;border-radius:10px;font-size:16px"></div><div id="contAchados"></div>' +
+      '<button class="btn btn-verde" style="width:100%;margin-top:10px" data-contsalvar="1">Finalizar contagem</button>';
+    box.innerHTML = h;
+  }
+  function totalCont(v, q) {
+    var cx = v && v.cx !== "" && v.cx != null ? Number(v.cx) : null, un = v && v.un !== "" && v.un != null ? Number(v.un) : null;
+    if (cx == null && un == null) return null;
+    return (cx || 0) * (q > 1 ? q : 1) + (un || 0);
+  }
+  function buscarCont(t) {
+    var box = $("contAchados"); if (!box) return;
+    var q = semAcento(t).trim();
+    if (q.length < 2) { box.innerHTML = ""; return; }
+    var achados = [];
+    Object.keys(porPlu).forEach(function (k) {
+      var it = porPlu[k];
+      if (achados.length < 15 && (it.p.indexOf(q) === 0 || (it.b && String(it.b) === q) || semAcento(it.d).indexOf(q) >= 0)) achados.push(it);
+    });
+    box.innerHTML = achados.length ? achados.map(function (it) {
+      return '<button class="btn btn-cinza" style="display:block;width:100%;text-align:left;margin:6px 0 0;padding:9px" data-contadd="' + esc(it.p) + '"><b>' + esc(it.d) + "</b><br><small>PLU " + esc(it.p) + "</small></button>";
+    }).join("") : '<div class="vazio" style="padding:6px 0">Nada encontrado.</div>';
+  }
+  function incluirNaContagem(plu) {
+    var cod = contagem.lojaCont || contagem.minha; if (!cod) return;
+    var rl = rascCont()[cod] = rascCont()[cod] || { v: {}, extras: [] };
+    var ja = contagem.itens.some(function (x) { return x.loja === cod && x.p === plu && x.status !== "contado"; }) || rl.extras.some(function (x) { return x.p === plu; });
+    if (!ja) rl.extras.push({ p: plu, d: (porPlu[plu] || {}).d || "" });
+    guardarRascCont(); desenharContar(); toast(ja ? "Esse produto já está na contagem" : "Produto incluído na contagem");
+  }
+  function finalizarContagem() {
+    var cod = contagem.lojaCont || contagem.minha; if (!cod) return;
+    var rl = rascCont()[cod] || { v: {}, extras: [] }, envio = [], branco = 0;
+    var its = contagem.itens.filter(function (x) { return x.loja === cod && x.status !== "contado"; })
+      .map(function (x) { return { k: x.id, id: x.id, p: x.p, d: x.d }; })
+      .concat(rl.extras.map(function (x) { return { k: "x" + x.p, id: "", p: x.p, d: x.d }; }));
+    its.forEach(function (x) {
+      var tot = totalCont(rl.v[x.k], infoUn(x.p).q);
+      if (tot == null) branco++; else envio.push({ id: x.id, p: x.p, d: x.d || "", contado: tot });
+    });
+    if (!envio.length) { toast("Digite a quantidade de pelo menos um produto"); return; }
+    if (branco && !confirm(branco + (branco === 1 ? " produto ficou" : " produtos ficaram") + " sem contagem. Finalizar assim mesmo? (eles continuam na sugestão)")) return;
+    chamar("contagemSalvar", [cod, envio], function (r) {
+      delete rascCont()[cod]; guardarRascCont();
+      toast("Contagem salva: " + r.contados + (r.contados === 1 ? " produto" : " produtos") + " — " + r.loja);
+      abrirContagem("ana");
+    });
+  }
+  // ---- aba 3: ANÁLISE DE ESTOQUE POR LOJA (sistema x contado)
   function desenharContagem() {
     var box = $("contRes"); if (!box || !contagem.itens) return;
     var l = contagem.itens;
@@ -2297,7 +2422,7 @@ window.PedidoPDF = (function () {
   }
   function tirarContagem(id) {
     chamar("contagemTirar", [id], function () {
-      contagem.itens = (contagem.itens || []).filter(function (x) { return x.id !== id; }); desenharContagem(); toast("Tirado da lista de contagem");
+      contagem.itens = (contagem.itens || []).filter(function (x) { return x.id !== id; }); desenharContagemAba(); toast("Tirado da lista de contagem");
     });
   }
   // ---------------- ANÁLISE DE VENDAS (mensal, por loja) ----------------
@@ -3145,13 +3270,26 @@ window.PedidoPDF = (function () {
   $("btnFecharEnvio").addEventListener("click", fecharEnvio);
   $("btnFecharFicha").addEventListener("click", function () { $("telaFicha").classList.remove("aberta"); if (checarFavoritos.resp) { var f = checarFavoritos.resp; checarFavoritos.resp = null; f(false); } });
   $("fichaCorpo").addEventListener("input", function (e) {
+    var ck = e.target.getAttribute && (e.target.getAttribute("data-ccx") || e.target.getAttribute("data-cun"));
+    if (ck) {
+      var codC = contagem.lojaCont || contagem.minha, rlC = rascCont()[codC] = rascCont()[codC] || { v: {}, extras: [] };
+      var vC = rlC.v[ck] = rlC.v[ck] || {}; vC[e.target.getAttribute("data-ccx") ? "cx" : "un"] = e.target.value; guardarRascCont();
+      var pC = (contagem.itens.filter(function (x) { return x.id === ck; })[0] || { p: ck.slice(1) }).p, tC = totalCont(vC, infoUn(pC).q), bC = $("ctot_" + ck);
+      if (bC) bC.innerHTML = "<small>Total</small><br><b>" + (tC == null ? "—" : num(tC) + " UN") + "</b>";
+      return;
+    }
+    if (e.target.id === "contBusca") { clearTimeout(buscarCont.t); var vb = e.target.value; buscarCont.t = setTimeout(function () { buscarCont(vb); }, 200); return; }
     if (e.target.id === "anaBusca") { clearTimeout(buscarAnalise.t); var v = e.target.value; buscarAnalise.t = setTimeout(function () { buscarAnalise(v); }, 200); }
   });
   $("fichaCorpo").addEventListener("click", function (e) {
     var b = e.target.closest("[data-favloja]"); if (b) { addFavorito(b.getAttribute("data-favplu"), b.getAttribute("data-favloja")); return; }
     if (e.target.closest("[data-conttodas]")) { var cks = $("fichaCorpo").querySelectorAll("[data-contck]"), liga = false; for (var k = 0; k < cks.length; k++) if (!cks[k].checked) liga = true; for (k = 0; k < cks.length; k++) cks[k].checked = liga; return; }
     var cok = e.target.closest("[data-contok]"); if (cok) { var sel = [].slice.call($("fichaCorpo").querySelectorAll("[data-contck]:checked")).map(function (x) { return x.value; }); if (!sel.length) { toast("Marque pelo menos uma loja"); return; } pedirContagem(cok.getAttribute("data-contok"), sel); return; }
-    var cfl = e.target.closest("[data-contfiltro]"); if (cfl) { contagem.filtro = cfl.getAttribute("data-contfiltro"); desenharContagem(); return; }
+    var cfl = e.target.closest("[data-contfiltro]"); if (cfl) { contagem.filtro = cfl.getAttribute("data-contfiltro"); desenharContagemAba(); return; }
+    var ctab = e.target.closest("[data-conttab]"); if (ctab) { contagem.aba = ctab.getAttribute("data-conttab"); contagem.filtro = ""; desenharContagemAba(); return; }
+    var clj = e.target.closest("[data-contloja]"); if (clj) { contagem.lojaCont = clj.getAttribute("data-contloja"); desenharContar(); return; }
+    var cad = e.target.closest("[data-contadd]"); if (cad) { incluirNaContagem(cad.getAttribute("data-contadd")); return; }
+    if (e.target.closest("[data-contsalvar]")) { finalizarContagem(); return; }
     var ctr = e.target.closest("[data-conttirar]"); if (ctr) { tirarContagem(ctr.getAttribute("data-conttirar")); return; }
     if (e.target.closest("[data-fav-sim]") || e.target.closest("[data-fav-nao]")) {
       var f = checarFavoritos.resp; checarFavoritos.resp = null; if (f) f(!!e.target.closest("[data-fav-sim]")); return;
