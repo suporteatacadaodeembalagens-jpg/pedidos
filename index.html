@@ -95,6 +95,13 @@
   .acao-cons .btn{padding:11px 14px}
   .acao-cons{flex-wrap:wrap;gap:8px}
   .acao-cons .btn-fav{width:100%}
+  .acao-cons .btn-cont{background:#efe6d8;color:var(--marrom)}
+  .cont-abas{display:flex;gap:6px;margin:0 0 10px;flex-wrap:wrap}
+  .cont-abas button{border:0;border-radius:999px;padding:8px 12px;font-weight:700;background:#efe6d8;color:var(--marrom)}
+  .cont-abas button.ativa{background:var(--marrom);color:#fff}
+  .cont-sit{display:inline-block;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700}
+  .cont-sit.pend{background:#fff1c2;color:#7a5a00} .cont-sit.ok{background:#dff3df;color:#1d6b2a}
+  .cont-loja{font-weight:800;color:var(--marrom);margin:12px 0 6px}
   .btn.largo{width:100%;margin:-4px 0 12px}
   .dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .cmp-abas{display:flex;gap:8px;margin:0 0 12px}
@@ -2156,6 +2163,7 @@ window.PedidoPDF = (function () {
       t.push(tile("consulta", "Consulta de produtos", "Estoque, preço, fornecedor e EAN", ICO.lupa));
       t.push(tile("compra", "Pedido de compra", nc ? nc + (nc === 1 ? " item em andamento" : " itens em andamento") : "Montar o PDF e mandar pelo WhatsApp", ICO.caminhao));
       t.push(tile("analise", "Análise de vendas", "Vendas mês a mês de cada produto, por loja", ICO.grafico));
+      t.push(tile("contagem", "Contagem de estoque", "Itens pedidos para contar e análise por loja", ICO.lista));
       if (ehMestre()) t.push(tile("erros", "Relatório de erros", "Tudo que deu erro: ERP, login, pedidos, app", ICO.lista));
     } else {
       var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
@@ -2165,6 +2173,8 @@ window.PedidoPDF = (function () {
       t.push(tile("consulta", "Consulta de produtos", "Estoque, fornecedor e EAN", ICO.lupa));
       if (nivelNum() >= 2) t.push(tile("analise", "Análise de vendas", "Vendas mês a mês da sua loja", ICO.grafico));
       else t.push(tile("bloq", "Análise de vendas", "Gerência, Administração e Diretoria", ICO.grafico, "bloq"));
+      if (nivelNum() >= 2) t.push(tile("contagem", "Contagem de estoque", "Itens pedidos para contar na sua loja", ICO.lista));
+      else t.push(tile("bloq", "Contagem de estoque", "Gerência, Administração e Diretoria", ICO.lista, "bloq"));
       // funções de Diretoria/Administração: aparecem com cadeado (não somem)
       t.push(tile("bloq", "Aguardando aprovação", "Diretoria e Administração", ICO.relogio, "bloq"));
       t.push(tile("bloq", "Pedido de compra", "Diretoria e Administração", ICO.caminhao, "bloq"));
@@ -2209,6 +2219,86 @@ window.PedidoPDF = (function () {
         '<button class="btn btn-cinza" style="padding:6px 9px;font-size:12px" data-errapagar="' + esc(e.id || "") + '">Apagar</button></div>';
     }).join("");
     $("fichaCorpo").innerHTML = h;
+  }
+  // ---------------- CONTAGEM DE ESTOQUE ----------------
+  // Consulta > "Pedir contagem de estoque" (todos os logins): loja -> a própria loja; Diretoria/Administração escolhem as lojas.
+  // Página "Contagem de estoque" (Gerência, Administração e Diretoria) > aba "Análise de estoque por loja".
+  var contagem = { itens: null, nomes: {}, filtro: "" };
+  function itemQualquer(plu) {
+    return porPlu[plu] || (cons.extra && cons.extra.lista || []).filter(function (x) { return x.p === plu; })[0] || { p: plu };
+  }
+  function contagemClique(plu) {
+    if (ehMgrLogin() && !comoLoja) {   // Diretoria/Administração: escolhe uma ou várias lojas
+      var cods = (RES && RES.lojas && RES.lojas.length > 1 ? RES.lojas : ["002", "003", "004", "005", "006", "007", "008", "009", "010"])
+        .filter(function (c) { return c !== "001"; });
+      var it = itemQualquer(plu);
+      modal("Pedir contagem de estoque", (it.d ? '<p style="margin:0 0 6px"><b>' + esc(it.d) + "</b><br><small>PLU " + esc(plu) + "</small></p>" : "") +
+        '<p style="margin:0 0 8px">Em quais lojas contar?</p>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 10px">' + cods.map(function (c) {
+          return '<label style="display:flex;gap:6px;align-items:center;background:#f6f0e6;border-radius:8px;padding:8px"><input type="checkbox" data-contck="1" value="' + esc(c) + '">' +
+            esc(c) + " " + esc(RES && RES.nomes && RES.nomes[c] || "") + "</label>";
+        }).join("") + "</div>" +
+        '<div style="display:flex;gap:8px"><button class="btn btn-cinza" style="flex:1" data-conttodas="1">Marcar todas</button>' +
+        '<button class="btn btn-verde" style="flex:1" data-contok="' + esc(plu) + '">Pedir contagem</button></div>');
+      return;
+    }
+    pedirContagem(plu, []);
+  }
+  function pedirContagem(plu, cods) {
+    var it = itemQualquer(plu);
+    chamar("contagemPedir", [plu, it.d || "", cods], function (r) {
+      fecharModal(); contagem.itens = null;
+      toast(r.novos ? "Contagem pedida: " + r.lojas.join(", ") + (r.ja ? " (" + r.ja + " já estava na lista)" : "")
+                    : "Já estava na lista de contagem de " + r.lojas.join(", "));
+    });
+  }
+  function abrirContagem() {
+    modal("Contagem de estoque", '<div class="cont-abas"><button class="ativa">Análise de estoque por loja</button></div>' +
+      '<div id="contRes"><div class="carregando"><div class="giro"></div>Carregando…</div></div>');
+    chamar("contagemLista", [], function (r) { contagem.itens = r.itens || []; contagem.nomes = r.nomes || {}; contagem.filtro = ""; desenharContagem(); },
+      function (e) { var b = $("contRes"); if (b) b.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
+  function estoqueLojaRes(plu, cod) {   // estoque da loja no sistema (lista do robô) - null se não tiver
+    if (!RES || !RES.lojas) return null;
+    var i = RES.lojas.indexOf(cod); if (i < 0) return null;
+    var l = RES.d && RES.d[plu]; return l ? Number(l[2 * i]) || 0 : 0;
+  }
+  function desenharContagem() {
+    var box = $("contRes"); if (!box || !contagem.itens) return;
+    var l = contagem.itens;
+    if (!l.length) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Nenhum item pedido para contagem. Na Consulta de produtos, toque em <b>Pedir contagem de estoque</b>.</div>'; return; }
+    var lojas = []; l.forEach(function (x) { if (lojas.indexOf(x.loja) < 0) lojas.push(x.loja); }); lojas.sort();
+    var h = "";
+    if (lojas.length > 1) h += '<div class="cont-abas">' + [""].concat(lojas).map(function (c) {
+      return '<button class="' + (contagem.filtro === c ? "ativa" : "") + '" data-contfiltro="' + esc(c) + '">' + (c ? esc(c) + " " + esc(contagem.nomes[c] || "") : "Todas") + "</button>";
+    }).join("") + "</div>";
+    var pend = l.filter(function (x) { return x.status !== "contado"; }).length;
+    h += '<p style="margin:0 0 6px"><small>' + l.length + (l.length === 1 ? " item" : " itens") + " · " + pend + " aguardando contagem. Estoque na embalagem de compra.</small></p>";
+    lojas.filter(function (c) { return !contagem.filtro || c === contagem.filtro; }).forEach(function (c) {
+      var its = l.filter(function (x) { return x.loja === c; });
+      h += '<div class="cont-loja">' + esc(c) + " " + esc(contagem.nomes[c] || "") + "</div>" +
+        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:560px"><tr><th>Produto</th><th>Estoque sistema</th><th>Contado</th><th>Diferença</th><th>Estoque CD</th><th>Situação</th><th></th></tr>' +
+        its.map(function (x) {
+          var it = porPlu[x.p] || {}, q = Number(it.q) || 0, un = q > 1 ? (it.t || "CX") : "UN";
+          var sis = estoqueLojaRes(x.p, c), cd = it.e != null ? Number(it.e) : null;
+          var cont = x.contado == null ? null : Number(x.contado), dif = cont != null && sis != null ? cont - sis : null;
+          return "<tr><td style=\"text-align:left\"><b>" + esc(it.d || x.d || "") + "</b><br><small>PLU " + esc(x.p) + "</small></td>" +
+            "<td>" + (sis == null ? "—" : "<b>" + emEmb(sis, q) + "</b> " + esc(un)) + "</td>" +
+            "<td>" + (cont == null ? "—" : "<b>" + emEmb(cont, q) + "</b> " + esc(un)) + "</td>" +
+            "<td" + (dif != null && dif < 0 ? ' class="neg"' : "") + ">" + (dif == null ? "—" : (dif > 0 ? "+" : "") + emEmb(dif, q) + " " + esc(un)) + "</td>" +
+            "<td>" + (cd == null ? "—" : emEmb(cd, q) + " " + esc(un)) + "</td>" +
+            '<td><span class="cont-sit ' + (x.status === "contado" ? "ok" : "pend") + '">' + (x.status === "contado" ? "Contado" : "Aguardando contagem") + "</span>" +
+            "<br><small>Pedido " + esc(x.quando || "") + "<br>por " + esc(x.por || "") + "</small>" +
+            (x.status === "contado" ? "<br><small>Contado " + esc(x.contadoEm || "") + (x.contadoPor ? " por " + esc(x.contadoPor) : "") + "</small>" : "") + "</td>" +
+            '<td><button class="btn btn-cinza" style="padding:6px 9px;font-size:12px" data-conttirar="' + esc(x.id) + '">Tirar</button></td></tr>';
+        }).join("") + "</table></div>";
+    });
+    box.innerHTML = h;
+  }
+  function tirarContagem(id) {
+    chamar("contagemTirar", [id], function () {
+      contagem.itens = (contagem.itens || []).filter(function (x) { return x.id !== id; }); desenharContagem(); toast("Tirado da lista de contagem");
+    });
   }
   // ---------------- ANÁLISE DE VENDAS (mensal, por loja) ----------------
   var MESES_NOME = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -2309,6 +2399,7 @@ window.PedidoPDF = (function () {
   function irPara(acao) {
     if (acao === "bloq") { avisoBloqueio(); return; }
     if (acao === "erros") { abrirErrosErp(); return; }
+    if (acao === "contagem") { abrirContagem(); return; }
     if (acao === "analise") { if (!dados) { toast("Aguarde a lista de estoque carregar"); return; } abrirAnalise(); return; }
     if (acao === "consulta" || acao === "compra") { tela = acao; $("busca").value = ""; desenharLista(); window.scrollTo(0, 0); return; }
     if (!dados) { toast("Aguarde a lista de estoque carregar"); return; }
@@ -2395,6 +2486,7 @@ window.PedidoPDF = (function () {
         "</b><small>" + esc(unPedido(it)) + '</small></div><button class="seta mais" data-acao="+" aria-label="Aumentar">&#9650;</button></div>';
     } else acao = '<button class="btn btn-verde" data-cped="' + esc(it.p) + '">Colocar no pedido</button>';
     if (it.fora && !m) acao = '<div class="fora-lista">' + (it.e < 0 ? "Estoque negativo no CD" : it.e > 0 ? "Fora da lista de pedido" : "Sem estoque no CD") + " — não entra no pedido.</div>";
+    if (sessao) acao = '<button class="btn btn-cont" data-cont="' + esc(it.p) + '">Pedir contagem de estoque</button>' + acao;   // vai para a lista de contagem (todos os logins)
     if (sessao) acao += '<button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>';   // favoritos do próximo pedido da loja
     return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
@@ -2951,6 +3043,7 @@ window.PedidoPDF = (function () {
       if (e.target.closest("#btnLerCons")) { abrirLeitor(function (c) { cons.termo = c; var i = $("consBusca"); if (i) i.value = c; resultadosConsulta(); }); return; }
       var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
       var fv = e.target.closest("[data-fav]"); if (fv) { favoritoClique(fv.getAttribute("data-fav")); return; }
+      var ctb = e.target.closest("[data-cont]"); if (ctb) { contagemClique(ctb.getAttribute("data-cont")); return; }
       var cr = e.target.closest("[data-cpr]"); if (cr) { var pc = cr.getAttribute("data-cpr"); mudarCompra(pc, 1); resultadosConsulta(); toast("Colocado no pedido de compra"); return; }
     }
     if (tela === "compra") {
@@ -3056,6 +3149,10 @@ window.PedidoPDF = (function () {
   });
   $("fichaCorpo").addEventListener("click", function (e) {
     var b = e.target.closest("[data-favloja]"); if (b) { addFavorito(b.getAttribute("data-favplu"), b.getAttribute("data-favloja")); return; }
+    if (e.target.closest("[data-conttodas]")) { var cks = $("fichaCorpo").querySelectorAll("[data-contck]"), liga = false; for (var k = 0; k < cks.length; k++) if (!cks[k].checked) liga = true; for (k = 0; k < cks.length; k++) cks[k].checked = liga; return; }
+    var cok = e.target.closest("[data-contok]"); if (cok) { var sel = [].slice.call($("fichaCorpo").querySelectorAll("[data-contck]:checked")).map(function (x) { return x.value; }); if (!sel.length) { toast("Marque pelo menos uma loja"); return; } pedirContagem(cok.getAttribute("data-contok"), sel); return; }
+    var cfl = e.target.closest("[data-contfiltro]"); if (cfl) { contagem.filtro = cfl.getAttribute("data-contfiltro"); desenharContagem(); return; }
+    var ctr = e.target.closest("[data-conttirar]"); if (ctr) { tirarContagem(ctr.getAttribute("data-conttirar")); return; }
     if (e.target.closest("[data-fav-sim]") || e.target.closest("[data-fav-nao]")) {
       var f = checarFavoritos.resp; checarFavoritos.resp = null; if (f) f(!!e.target.closest("[data-fav-sim]")); return;
     }
