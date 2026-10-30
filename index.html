@@ -174,6 +174,7 @@
   html{overscroll-behavior-y:none}
   main{min-height:calc(100vh + 2px);box-sizing:border-box}
   .modos .modo{line-height:1.15}
+  #modos{gap:6px}#modos .modo{padding:8px 3px;font-size:12.5px}   /* 4 botões: Fazer pedido | Pedido atual | Pedidos salvos | Pedidos anteriores */
   .modo small{display:inline-block;margin-left:3px;background:var(--principal);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;font-weight:800}
   header.sem-pedido .busca, header.sem-pedido .abas{display:none}
   body.sem-rodape footer{display:none}
@@ -412,6 +413,7 @@
   <div class="modos" id="modos">
     <button class="modo ativo" data-modo="lista">Fazer pedido</button>
     <button class="modo" data-modo="atual" id="btnModoAtual">Pedido atual</button>
+    <button class="modo" data-modo="salvos">Pedidos salvos</button>
     <button class="modo" data-modo="hist">Pedidos anteriores</button>
   </div>
   <div class="barra-pedido" id="barraPedido" hidden>
@@ -1112,6 +1114,8 @@ window.PedidoPDF = (function () {
     return n;
   }
   var HIST = "__hist__";   // aba "Pedidos anteriores"
+  var SALVOS = "__salvos__";   // 30/10: aba "Pedidos salvos" (da LOJA: todos os cargos continuam o mesmo pedido)
+  function vendoSalvos() { return abaAtual === SALVOS || (abaAtual !== HIST && !atual); }
   var hist = null;          // {mestre, dias, pedidos:[{id, quando, loja, email, dataLista, n}]}
   var filtroLoja = "";
   var ultimaDep = null;     // departamento para voltar ao sair de "Pedidos anteriores"
@@ -1132,20 +1136,20 @@ window.PedidoPDF = (function () {
       return;
     }
     $("barraMgr").hidden = true;
-    var h = abaAtual === HIST;
+    var h = abaAtual === HIST || abaAtual === SALVOS;
     document.querySelector("header").classList.toggle("modo-hist", h);
     document.querySelector("header").classList.toggle("sem-pedido", !h && !atual);
     document.body.classList.toggle("sem-rodape", h || !atual);
     $("barraPedido").hidden = h || !atual;
     if (atual) $("nomePedido").textContent = atual.nome;
-    var modo = h ? "hist" : (abaAtual === ATUAL ? "atual" : "lista");
+    var modo = h ? (abaAtual === SALVOS ? "salvos" : "hist") : (abaAtual === ATUAL ? "atual" : "lista");
     document.querySelector("header").classList.toggle("modo-atual", modo === "atual");
     Array.prototype.forEach.call($("modos").children, function (b) { b.classList.toggle("ativo", b.getAttribute("data-modo") === modo); });
     contarBotaoAtual();
   }
   function desenharAbas() {
     atualizarModo();
-    if (abaAtual !== HIST && abaAtual !== ATUAL) ultimaDep = abaAtual;
+    if (abaAtual !== HIST && abaAtual !== ATUAL && abaAtual !== SALVOS) ultimaDep = abaAtual;
     $("abas").innerHTML = '<button class="aba aba-novos' + (abaAtual === NOVOS ? " ativa" : "") + '" data-dep="' + NOVOS + '">Produtos novos' +
         (novosLista.length ? '<i>' + (novosVistos() ? "✓" : novosLista.length) + '</i>' : "") + '</button>' +
       dados.departamentos.map(function (d) {
@@ -1247,7 +1251,7 @@ window.PedidoPDF = (function () {
     if (tela === "compra") { desenharCompra(); return; }
     if (!dados) return;
     if (ehManager()) { desenharManager(); return; }
-    if (abaAtual !== HIST && !atual) { desenharTelaPedidos(); return; }
+    if (vendoSalvos()) { desenharTelaPedidos(); return; }
     var termo = semAcento($("busca").value.trim()), termoNum = numBusca(termo);
     if (termo) {
       var achados = [];
@@ -1445,16 +1449,18 @@ window.PedidoPDF = (function () {
     if (buscarRasc.indo) return; buscarRasc.indo = true;
     chamar("listarRascunhos", [], function (l) {
       buscarRasc.indo = false; rasc = l || []; LS.set("rascCache", rasc);
-      if (abaAtual !== HIST && !atual) desenharTelaPedidos();
-    }, function (e) { buscarRasc.indo = false; if (!rasc) rasc = []; toast("Não foi possível carregar os pedidos salvos"); if (abaAtual !== HIST && !atual) desenharTelaPedidos(); });
+      if (vendoSalvos()) desenharTelaPedidos();
+    }, function (e) { buscarRasc.indo = false; if (!rasc) rasc = []; toast("Não foi possível carregar os pedidos salvos"); if (vendoSalvos()) desenharTelaPedidos(); });
   }
   function desenharTelaPedidos() {
     if (tela !== "app") return;
     renderId++;
-    var html = '<div class="novo-ped"><h3>Novo pedido</h3>' +
+    var html = (atual ? '<div class="novo-ped"><h3>Pedido aberto: ' + esc(atual.nome) + "</h3>" +   // aba "Pedidos salvos" com um pedido aberto
+        '<button class="btn btn-verde" data-voltar-ped="1">Voltar ao pedido</button></div>'
+      : '<div class="novo-ped"><h3>Novo pedido</h3>' +
       '<div class="campo"><label for="nomeNovo">Nome do pedido</label><input id="nomeNovo" maxlength="40" placeholder="Ex.: Reposição da semana"></div>' +
-      '<button class="btn btn-verde" id="btnNovoPed">Começar pedido</button></div>' +
-      '<div class="grupo">Pedidos salvos (ainda não enviados)</div>';
+      '<button class="btn btn-verde" id="btnNovoPed">Começar pedido</button></div>') +
+      '<div class="grupo">Pedidos salvos da loja (todos os cargos continuam)</div>';
     if (!rasc) {
       var guardado = LS.get("rascCache", null);   // mostra na hora o que já tinha; atualiza em seguida
       buscarRasc();
@@ -1466,10 +1472,11 @@ window.PedidoPDF = (function () {
     rasc.forEach(function (r) {
       var n = Object.keys(r.itens || {}).length, mesma = r.dataLista === dados.data || (!!r.semana && r.semana === dados.semana);   // mesma semana = mesma lista
       html += '<div class="ped rasc"><div class="q1"><b>' + esc(r.nome) + '</b><span>' + n + (n === 1 ? ' produto' : ' produtos') +
-        ' · salvo em ' + esc(r.quando) + '<br>lista de ' + esc(r.dataLista) +
+        ' · salvo em ' + esc(r.quando) + (r.por ? " por " + esc(r.por) : "") + '<br>lista de ' + esc(r.dataLista) +
         (mesma ? '<span class="tag-lista atual">lista atual</span>' : '<span class="tag-lista antiga">lista antiga</span>') + '</span></div>' +
-        '<div class="acoes-rasc"><button class="btn excluir" data-exc="' + esc(r.id) + '">' + (nivelNum() < 2 ? "\uD83D\uDD12 Excluir" : "Excluir") + "</button>" +   // só Gerência para cima
-        '<button class="btn btn-verde" data-cont="' + esc(r.id) + '">Continuar</button></div></div>';
+        (atual && atual.id === r.id ? '<div class="acoes-rasc"><button class="btn btn-verde" data-voltar-ped="1">Aberto agora: voltar</button></div></div>'
+        : '<div class="acoes-rasc"><button class="btn excluir" data-exc="' + esc(r.id) + '">' + (nivelNum() < 2 ? "\uD83D\uDD12 Excluir" : "Excluir") + "</button>" +   // só Gerência para cima
+        '<button class="btn btn-verde" data-cont="' + esc(r.id) + '">Continuar</button></div></div>');
     });
     $("lista").innerHTML = html;
   }
@@ -1560,7 +1567,21 @@ window.PedidoPDF = (function () {
   }
   function continuarPedido(id) {
     var r = (rasc || []).filter(function (x) { return x.id === id; })[0];
-    if (r) abrirPedido({ id: r.id, nome: r.nome, ts: r.ts }, r.itens);
+    if (!r) return;
+    if (atual && atual.id === id) { voltarAoPedido(); return; }
+    var abrir = function () { abrirPedido({ id: r.id, nome: r.nome, ts: r.ts }, r.itens); };
+    if (atual && (Object.keys(pedido).length || atual.id)) salvarAtual(function () { toast("Pedido “" + atual.nome + "” salvo"); abrir(); });   // o aberto fica salvo
+    else abrir();
+  }
+  function voltarAoPedido() {
+    abaAtual = ultimaDep || dados.departamentos[0].nome; LS.set("aba", abaAtual); $("busca").value = "";
+    desenharAbas(); desenharLista(); window.scrollTo(0, 0);
+  }
+  /** Operacional (30/10): não envia; salva e fecha para a Gerência (ou acima) continuar em "Pedidos salvos". */
+  function salvarEFechar() {
+    if (!atual) return;
+    $("btnRevisar").disabled = true;
+    salvarAtual(function () { toast("Pedido salvo e fechado. A Gerência continua em “Pedidos salvos”."); fecharPedido(); });
   }
   // Excluir: 1 toque. Some na hora e aparece "DESFAZER" por 5 segundos; depois apaga de verdade no servidor.
   var exclusao = null;   // {r, pos, t}
@@ -1581,7 +1602,7 @@ window.PedidoPDF = (function () {
     clearTimeout(exclusao.t);
     if (rasc) rasc.splice(Math.min(exclusao.pos, rasc.length), 0, exclusao.r);
     exclusao = null; $("snack").classList.remove("vis");
-    if (abaAtual !== HIST && !atual) desenharTelaPedidos();
+    if (vendoSalvos()) desenharTelaPedidos();
   }
   function confirmarExclusao() {
     if (!exclusao) return;
@@ -1589,7 +1610,7 @@ window.PedidoPDF = (function () {
     $("snack").classList.remove("vis");
     chamar("excluirRascunho", [x.r.id], function () {}, function () {
       if (rasc) rasc.splice(Math.min(x.pos, rasc.length), 0, x.r);
-      toast("Não foi possível excluir"); if (abaAtual !== HIST && !atual) desenharTelaPedidos();
+      toast("Não foi possível excluir"); if (vendoSalvos()) desenharTelaPedidos();
     });
   }
   /** Salva o pedido aberto no servidor; depois = função chamada quando terminar (ok). */
@@ -1601,7 +1622,7 @@ window.PedidoPDF = (function () {
       atual.id = r.id; atual.ts = r.ts; LS.set("pedidoAtual", atual); rasc = null;
       if (depois) depois(); else toast("Pedido salvo. Você pode continuar depois.");
     }, function (e) {
-      b.disabled = false; b.textContent = "Salvar";
+      b.disabled = false; b.textContent = "Salvar"; atualizarRodape();
       toast("Não foi possível salvar: " + String(e && e.message || e));
     });
   }
@@ -1925,7 +1946,9 @@ window.PedidoPDF = (function () {
     var n = itensDoPedido().length;
     $("qtdItens").textContent = n + (n === 1 ? " item" : " itens");
     $("txtRodape").textContent = n ? "no pedido" : "toque em ▲ para pedir";
-    $("btnRevisar").disabled = !n;
+    var op = !comoLoja && nivelNum() < 2;   // Operacional: "Salvar e fechar pedido" (só a Gerência para cima envia)
+    $("btnRevisar").textContent = op ? "Salvar e fechar pedido" : "Revisar e enviar";
+    $("btnRevisar").disabled = op ? !atual : !n;
   }
 
   function abrirRevisao() {
@@ -3222,6 +3245,7 @@ window.PedidoPDF = (function () {
     }
     var ver = e.target.closest("[data-ver]"); if (ver) { verPedido(ver); return; }
     if (e.target.closest("#btnNovoPed")) { novoPedido(); return; }
+    if (e.target.closest("[data-voltar-ped]")) { voltarAoPedido(); return; }
     var cont = e.target.closest("[data-cont]"); if (cont) { continuarPedido(cont.getAttribute("data-cont")); return; }
     var exc = e.target.closest("[data-exc]"); if (exc) { excluirPedido(exc); return; }
     var sl = e.target.closest("[data-setor]");
@@ -3347,14 +3371,15 @@ window.PedidoPDF = (function () {
   $("modos").addEventListener("click", function (e) {
     var b = e.target.closest("[data-modo]"); if (!b || !dados) return;
     var md = b.getAttribute("data-modo");
-    var nova = md === "hist" ? HIST : md === "atual" ? ATUAL : (ultimaDep || dados.departamentos[0].nome);
-    if (nova === abaAtual || (md === "lista" && abaAtual !== HIST && abaAtual !== ATUAL)) return;
+    var nova = md === "hist" ? HIST : md === "salvos" ? SALVOS : md === "atual" ? ATUAL : (ultimaDep || dados.departamentos[0].nome);
+    if (nova === abaAtual || (md === "lista" && abaAtual !== HIST && abaAtual !== ATUAL && abaAtual !== SALVOS)) return;
     abaAtual = nova;
+    if (nova === SALVOS) rasc = null;   // pedidos salvos são da loja toda: busca a lista mais nova
     if (nova === ATUAL) abertosAtual = {};   // toda vez que entra no "Pedido atual", os setores vêm fechados
     LS.set("aba", abaAtual); $("busca").value = "";
     desenharAbas(); desenharLista(); window.scrollTo(0, 0);
   });
-  $("btnRevisar").addEventListener("click", abrirRevisao);
+  $("btnRevisar").addEventListener("click", function () { if (!comoLoja && nivelNum() < 2) salvarEFechar(); else abrirRevisao(); });
   $("btnSalvarPed").addEventListener("click", function () { salvarAtual(); });
   $("btnTrocarPedido").addEventListener("click", trocarPedido);
   $("snackDesfazer").addEventListener("click", desfazerExclusao);
