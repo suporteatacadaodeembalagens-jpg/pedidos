@@ -1457,6 +1457,7 @@ window.PedidoPDF = (function () {
     renderId++;
     var html = (atual ? '<div class="novo-ped"><h3>Pedido aberto: ' + esc(atual.nome) + "</h3>" +   // aba "Pedidos salvos" com um pedido aberto
         '<button class="btn btn-verde" data-voltar-ped="1">Voltar ao pedido</button></div>'
+      : abaAtual === SALVOS ? ""   // aba "Pedidos salvos": só a lista (começar pedido fica em "Fazer pedido")
       : '<div class="novo-ped"><h3>Novo pedido</h3>' +
       '<div class="campo"><label for="nomeNovo">Nome do pedido</label><input id="nomeNovo" maxlength="40" placeholder="Ex.: Reposição da semana"></div>' +
       '<button class="btn btn-verde" id="btnNovoPed">Começar pedido</button></div>') +
@@ -1468,7 +1469,7 @@ window.PedidoPDF = (function () {
       if (!guardado) { $("lista").innerHTML = html + '<div class="carregando"><div class="giro"></div>Carregando…</div>'; return; }
       rasc = guardado;
     }
-    if (!rasc.length) html += '<div class="vazio" style="padding:18px">Nenhum pedido salvo. Comece um novo acima.</div>';
+    if (!rasc.length) html += '<div class="vazio" style="padding:18px">Nenhum pedido salvo. ' + (abaAtual === SALVOS ? "Para começar um, toque em “Fazer pedido”." : "Comece um novo acima.") + "</div>";
     rasc.forEach(function (r) {
       var n = Object.keys(r.itens || {}).length, mesma = r.dataLista === dados.data || (!!r.semana && r.semana === dados.semana);   // mesma semana = mesma lista
       html += '<div class="ped rasc"><div class="q1"><b>' + esc(r.nome) + '</b><span>' + n + (n === 1 ? ' produto' : ' produtos') +
