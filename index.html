@@ -2680,15 +2680,12 @@ window.PedidoPDF = (function () {
     if (m) fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : "—"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : "—"]);
     var est = blocoEstoque(it.p, it.e, it.c != null && !it.fora ? it.c : null, it.t, it.q);
     var acao;
+    // 30/10 (Marcelo): o botão vermelho da Consulta LANÇA NO PEDIDO DE COMPRA. Só clica quem faz pedido de compra
+    // (Diretoria/Administração); para os outros ele aparece cinza, travado. O pedido da loja usa "★ Adicionar ao pedido loja".
     if (m) {
       var c = compra.itens[it.p];
-      acao = '<button class="btn btn-cinza" data-cpr="' + esc(it.p) + '">' + (c ? "Na compra: " + c.qtd + " " + esc((c.t || "un").toLowerCase()) + " (+1)" : "Pôr no pedido de compra") + "</button>";
-    } else if (atual) {
-      var q = pedido[it.p] || 0;
-      acao = '<div class="stepper"><button class="seta menos" data-acao="-" aria-label="Diminuir">&#9660;</button><div class="qtd" data-acao="editar"><b>' + q +
-        "</b><small>" + esc(unPedido(it)) + '</small></div><button class="seta mais" data-acao="+" aria-label="Aumentar">&#9650;</button></div>';
-    } else acao = '<button class="btn btn-verde" data-cped="' + esc(it.p) + '">Colocar no pedido</button>';
-    if (it.fora && !m) acao = '<div class="fora-lista">' + (it.e < 0 ? "Estoque negativo no CD" : it.e > 0 ? "Fora da lista de pedido" : "Sem estoque no CD") + " — não entra no pedido.</div>";
+      acao = '<button class="btn btn-verde" data-cpr="' + esc(it.p) + '">' + (c ? "Na compra: " + c.qtd + " " + esc((c.t || "un").toLowerCase()) + " (+1)" : "Lançar no pedido de compra") + "</button>";
+    } else acao = '<button class="btn btn-verde bloq" disabled title="Só quem faz pedido de compra">\uD83D\uDD12 Pedido de compra</button>';
     if (sessao) acao = '<div class="linha-acao"><button class="btn btn-cont" data-cont="' + esc(it.p) + '">Pedir contagem de estoque</button>' + acao + "</div>";   // à ESQUERDA do outro botão, na mesma linha (todos os logins)
     if (sessao) acao += '<button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>';   // favoritos do próximo pedido da loja
     return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
