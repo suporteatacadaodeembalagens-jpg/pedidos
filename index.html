@@ -1011,7 +1011,11 @@ window.PedidoPDF = (function () {
         var i = RES.idx[c], e = Number(l[2 * i]) || 0;
         return "<tr><td>" + esc(c) + " " + esc(RES.nomes[c] || "") + "</td><td" + (e < 0 ? ' class="neg"' : "") + "><b>" + emEmb(e, q) + "</b></td>" +
           "<td>" + emEmb(l[2 * i + 1] || 0, q) + "</td></tr>";
-      }).join("") + "</table></div>";
+      }).join("") + (function () {   // total de todas as lojas
+        var te = 0, tv = 0;
+        cods.forEach(function (c) { var i = RES.idx[c]; te += Number(l[2 * i]) || 0; tv += Number(l[2 * i + 1]) || 0; });
+        return '<tr class="tot-lojas"><td><b>Total lojas</b></td><td><b>' + emEmb(te, q) + "</b></td><td><b>" + emEmb(tv, q) + "</b></td></tr>";
+      })() + "</table></div>";
   }
   function aplicarDados(json, deServidor) {
     if (!json) return false;
@@ -1169,11 +1173,14 @@ window.PedidoPDF = (function () {
     Array.prototype.forEach.call(document.querySelectorAll(".item.sel"), function (x) { if (x !== card) x.classList.remove("sel"); });
     card.classList.add("sel");
   }
-  function blocoEstoque(p, e, c, t, q, so) {
+  /** so = só UMA loja, sem "Ver por loja" (conferência). foco = digitação do pedido de UMA loja (Diretoria/Administração
+   *  fazendo o pedido pela loja): o quadro mostra só essa loja e o "Ver por loja" abre o total e as outras lojas. */
+  function blocoEstoque(p, e, c, t, q, so, foco) {
     q = Number(q) || 0; e = Number(e) || 0;
     var temCx = q > 1, lv = null, le = null, umaLoja = true;
     if (RES && RES.lojas && RES.lojas.length) {
-      var l = RES.d[p] || [], cods = so ? RES.lojas.filter(function (x) { return x === so; }) : RES.lojas;
+      var alvoLj = so || (foco && RES.lojas.indexOf(foco) >= 0 ? foco : "");
+      var l = RES.d[p] || [], cods = alvoLj ? RES.lojas.filter(function (x) { return x === alvoLj; }) : RES.lojas;
       umaLoja = cods.length === 1;
       if (cods.length) {
         lv = 0; le = 0;
@@ -1188,7 +1195,8 @@ window.PedidoPDF = (function () {
     if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + cel(lv, true) + cel(le, true) + cel(e, true) + "</tr>";
     if (!temCx) h += "<tr><td>UN</td>" + cel(lv) + cel(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td></tr>";   // UN só quando não tem embalagem de compra
     h += "</table>";
-    if (!so && !umaLoja) h += '<details class="det-lojas"><summary>Ver por loja</summary>' + htmlLojas(p) + "</details>";
+    if (!so && (!umaLoja || (foco && RES && RES.lojas && RES.lojas.length > 1)))
+      h += '<details class="det-lojas"><summary>Ver por loja</summary>' + htmlLojas(p) + "</details>";
     return h;
   }
   function subItem(p, t, q, dep, extra) {
@@ -1200,7 +1208,7 @@ window.PedidoPDF = (function () {
     return '<div class="item' + (q > 0 ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '">' +
       '<div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep, emUnidade(it) ? ' <span class="tag-un">pedido em UN</span>' : "") +
-      blocoEstoque(it.p, it.e, it.c, it.t, it.q) +
+      blocoEstoque(it.p, it.e, it.c, it.t, it.q, null, comoLoja ? codLoja(comoLoja) : "") +   // pedido de UMA loja: só ela
       '<div class="rodape-item"><div class="stepper">' +
         '<button class="seta menos" data-acao="-" aria-label="Diminuir">&#9660;</button>' +
         '<div class="qtd" data-acao="editar"><b>' + q + "</b><small>" + esc(unPedido(it)) + "</small></div>" +
