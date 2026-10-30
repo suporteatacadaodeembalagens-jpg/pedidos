@@ -174,7 +174,7 @@
   html{overscroll-behavior-y:none}
   main{min-height:calc(100vh + 2px);box-sizing:border-box}
   .modos .modo{line-height:1.15}
-  #modos{gap:6px}#modos .modo{padding:8px 3px;font-size:12.5px}   /* 4 botões: Fazer pedido | Pedido atual | Pedidos salvos | Pedidos anteriores */
+  #modos,#modosMgr{gap:6px}#modos .modo,#modosMgr .modo{padding:8px 3px;font-size:12.5px}   /* 4 botões: Fazer pedido | Pedido atual | Pedidos salvos | Pedidos anteriores */
   .modo small{display:inline-block;margin-left:3px;background:var(--principal);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;font-weight:800}
   header.sem-pedido .busca, header.sem-pedido .abas{display:none}
   body.sem-rodape footer{display:none}
@@ -423,6 +423,7 @@
   <div class="modos modos-mgr" id="modosMgr">
     <button class="modo ativo" data-mg="pendente">Aguardando aprovação</button>
     <button class="modo" data-mg="aprovado">Aprovados</button>
+    <button class="modo" data-mg="salvos">Pedidos salvos</button>
     <button class="modo" data-mg="lojas">Pedidos lojas</button>
   </div>
   <div class="busca"><input id="busca" type="search" placeholder="Buscar produto, PLU, marca ou EAN" autocomplete="off">
@@ -966,7 +967,7 @@ window.PedidoPDF = (function () {
   function tk() { return sessao.token + (comoLoja ? "~" + encodeURIComponent(comoLoja) : ""); }
   var MGR_FN = { pedidosManager: 1, pedidoManager: 1, salvarEdicao: 1, aprovarPedido: 1, precosManager: 1, fornecedoresCompra: 1,
     produtosFornecedor: 1, buscarCadastro: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
-    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1, errosErp: 1, lojasResumo: 1, apagarErro: 1 };
+    salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1, errosErp: 1, lojasResumo: 1, apagarErro: 1, rascunhosManager: 1 };
   var EMAIL_MESTRE_APP = "marcelo@atacadaodeembalagens.com.br";   // administrador do sistema (o servidor confere de novo)
   function ehMestre() { return !!(sessao && String(sessao.email || "").toLowerCase() === EMAIL_MESTRE_APP); }
   function ehMgrLogin() { return !!(sessao && sessao.perfil === "MANAGER"); }
@@ -1461,7 +1462,12 @@ window.PedidoPDF = (function () {
       : '<div class="novo-ped"><h3>Novo pedido</h3>' +
       '<div class="campo"><label for="nomeNovo">Nome do pedido</label><input id="nomeNovo" maxlength="40" placeholder="Ex.: Reposição da semana"></div>' +
       '<button class="btn btn-verde" id="btnNovoPed">Começar pedido</button></div>') +
-      '<div class="grupo">Pedidos salvos da loja (todos os cargos continuam)</div>';
+      '';
+    if (!atual && abaAtual !== SALVOS) {   // 30/10: "Fazer pedido" só começa pedido; os salvos ficam na aba "Pedidos salvos"
+      $("lista").innerHTML = html + '<div class="vazio" style="padding:14px">Para continuar um pedido salvo, toque em <b>Pedidos salvos</b> lá em cima.</div>';
+      return;
+    }
+    html += '<div class="grupo">Pedidos salvos da loja (todos os cargos continuam)</div>';
     if (!rasc) {
       var guardado = LS.get("rascCache", null);   // mostra na hora o que já tinha; atualiza em seguida
       buscarRasc();
@@ -1678,6 +1684,7 @@ window.PedidoPDF = (function () {
     $("subtitulo").textContent = nomeMgr() + " · Painel do manager" + (dados ? " · Lista de " + dados.data : "");
     atualizarModo();
     if (mgr.aberto) { desenharPedidoMgr(); return; }
+    if (mgr.filtro === "salvos") { desenharSalvosMgr(); return; }
     if (!mgr.lista) {
       $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando pedidos das lojas…</div>';
       chamar("pedidosManager", [], function (r) { mgr.lista = r; if (ehManager() && !mgr.aberto) desenharManager(); },
@@ -1723,6 +1730,41 @@ window.PedidoPDF = (function () {
     });
     $("lista").innerHTML = html;
   }
+  // ---- "Pedidos salvos" (30/10): os pedidos salvos de TODAS as lojas; Continuar = entra pela loja e abre o pedido ----
+  var salvosMgr = null, salvosLoja = "";
+  function desenharSalvosMgr() {
+    if (!salvosMgr) {
+      $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando os pedidos salvos das lojas…</div>';
+      chamar("rascunhosManager", [], function (l) { salvosMgr = l || []; if (ehManager() && mgr.filtro === "salvos" && !mgr.aberto) desenharSalvosMgr(); },
+        function (e) { $("lista").innerHTML = '<div class="vazio">Não foi possível carregar: ' + esc(e && e.message || e) + "</div>"; });
+      return;
+    }
+    var lojas = [], nPor = {};
+    salvosMgr.forEach(function (x) { nPor[x.loja] = (nPor[x.loja] || 0) + 1; if (lojas.indexOf(x.loja) < 0) lojas.push(x.loja); });
+    lojas.sort(function (a, b) { return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" }); });
+    if (salvosLoja && lojas.indexOf(salvosLoja) < 0) salvosLoja = "";
+    var lista = salvosMgr.filter(function (x) { return !salvosLoja || x.loja === salvosLoja; });
+    var html = '<div class="aviso">Pedidos que as lojas salvaram e ainda não enviaram. <b>Continuar</b> abre o pedido pela loja para terminar e enviar.</div>' +
+      '<select class="filtro-loja" id="salvosLoja"><option value="">Todas as lojas (' + salvosMgr.length + ")</option>" +
+      lojas.map(function (l) { return "<option" + (l === salvosLoja ? " selected" : "") + ' value="' + esc(l) + '">' + esc(l) + " (" + nPor[l] + ")</option>"; }).join("") + "</select>";
+    if (!lista.length) html += '<div class="vazio">Nenhum pedido salvo' + (salvosLoja ? " nesta loja." : " nas lojas.") + "</div>";
+    lista.forEach(function (x) {
+      html += '<div class="ped"><div class="topo-ped"><div class="q1"><b>' + esc(x.loja) + "</b><span>" + esc(x.nome) + "<br>" + x.n + (x.n === 1 ? " produto" : " produtos") +
+        " · salvo em " + esc(x.quando || "") + (x.por ? " por " + esc(x.por) : "") + "</span></div>" +
+        '<button class="ver" data-rascmgr="' + esc(x.id) + '" data-loja="' + esc(x.loja) + '">Continuar</button></div></div>';
+    });
+    $("lista").innerHTML = html;
+  }
+  function continuarSalvoMgr(loja, id) {
+    entrarComoLoja(loja);
+    if (comoLoja !== loja) return;
+    $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Abrindo o pedido salvo…</div>';
+    chamar("listarRascunhos", [], function (l) {
+      rasc = l || []; LS.set("rascCache", rasc);
+      if (rasc.some(function (x) { return x.id === id; })) continuarPedido(id);
+      else { toast("Esse pedido já foi enviado ou excluído"); abaAtual = SALVOS; desenharAbas(); desenharLista(); }
+    }, function (e) { toast("Não foi possível abrir: " + String(e && e.message || e)); abaAtual = SALVOS; rasc = null; desenharAbas(); desenharLista(); });
+  }
   function entrarComoLoja(loja) {
     if (!dados) { toast("Aguarde a lista de estoque carregar"); return; }
     comoLoja = loja; LS.set("comoLoja", loja);
@@ -1738,7 +1780,7 @@ window.PedidoPDF = (function () {
       comoLoja = null; LS.set("comoLoja", null);
       hist = null; rasc = null; atual = null; LS.set("pedidoAtual", null); pedido = {}; salvarPedido();
       try { localStorage.removeItem("rascCache"); } catch (e) {}
-      mgr.filtro = "lojas"; mgr.aberto = null; $("busca").value = "";
+      mgr.filtro = mgr.filtro === "salvos" ? "salvos" : "lojas"; mgr.aberto = null; salvosMgr = null; $("busca").value = "";
       desenharManager(); window.scrollTo(0, 0);
     };
     if (atual && Object.keys(pedido).length) salvarAtual(function () { toast("Pedido salvo"); fim(); }); else fim();
@@ -3227,6 +3269,7 @@ window.PedidoPDF = (function () {
     if (ehManager()) {
       var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
       var cl = e.target.closest("[data-comoloja]"); if (cl) { entrarComoLoja(cl.getAttribute("data-comoloja")); return; }
+      var rm = e.target.closest("[data-rascmgr]"); if (rm) { continuarSalvoMgr(rm.getAttribute("data-loja"), rm.getAttribute("data-rascmgr")); return; }
       if (e.target.closest("#mgrVoltar")) { voltarMgr(); return; }
       if (e.target.closest("#btnErpDeNovo")) { erpDeNovo(); return; }
       if (e.target.closest("#btnLerMgr")) { lerParaMgr(); return; }
@@ -3267,6 +3310,7 @@ window.PedidoPDF = (function () {
   $("lista").addEventListener("change", function (e) {
     if (e.target.id === "filtroLoja") { filtroLoja = e.target.value; desenharHistorico(); }
     if (e.target.id === "mgrLoja") { mgr.loja = e.target.value; desenharManager(); }
+    if (e.target.id === "salvosLoja") { salvosLoja = e.target.value; desenharSalvosMgr(); }
     if (e.target.id === "cmpForn") { compra.fornecedor = e.target.value.trim(); salvarCompra(); if (cmp.forn && cmp.fornNome !== compra.fornecedor) { cmp.forn = null; } carregarFornDados(compra.fornecedor); atualizarCmp(); }
     if (e.target.id === "cmpEnt") { var k = e.target.value; if (k !== "x" && Array.isArray(cmp.entregas) && cmp.entregas[+k]) { compra.entrega = cmp.entregas[+k]; salvarCompra(); } }
     if (e.target.id === "cmpFrete") { compra.frete = e.target.value === "FOB" ? "FOB" : "CIF"; salvarCompra(); }
@@ -3357,7 +3401,9 @@ window.PedidoPDF = (function () {
   $("lista").addEventListener("input", function (e) { if (e.target.id === "mgrBusca") { var v = e.target.value; clearTimeout(tMgr); tMgr = setTimeout(function () { buscarMgr(v); }, 200); } });
   $("modosMgr").addEventListener("click", function (e) {
     var b = e.target.closest("[data-mg]"); if (!b) return;
-    mgr.filtro = b.getAttribute("data-mg"); mgr.aberto = null; mgr.itens = null; mgr.sujo = false; desenharManager(); window.scrollTo(0, 0);
+    mgr.filtro = b.getAttribute("data-mg"); mgr.aberto = null; mgr.itens = null; mgr.sujo = false;
+    if (mgr.filtro === "salvos") salvosMgr = null;   // sempre a lista mais nova
+    desenharManager(); window.scrollTo(0, 0);
   });
   $("btnMgrSalvar").addEventListener("click", salvarMgr);
   $("btnSairComo").addEventListener("click", sairComoLoja);
