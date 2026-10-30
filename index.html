@@ -1175,7 +1175,7 @@ window.PedidoPDF = (function () {
   }
   /** so = só UMA loja, sem "Ver por loja" (conferência). foco = digitação do pedido de UMA loja (Diretoria/Administração
    *  fazendo o pedido pela loja): o quadro mostra só essa loja e o "Ver por loja" abre o total e as outras lojas. */
-  function blocoEstoque(p, e, c, t, q, so, foco) {
+  function blocoEstoque(p, e, c, t, q, so, foco, comTotal) {   // comTotal = pedido de COMPRA: + coluna Estoque total (lojas + CD)
     q = Number(q) || 0; e = Number(e) || 0;
     var temCx = q > 1, lv = null, le = null, umaLoja = true;
     if (RES && RES.lojas && RES.lojas.length) {
@@ -1191,9 +1191,10 @@ window.PedidoPDF = (function () {
       if (v == null) return '<td class="sem">—</td>';
       return "<td" + (v < 0 ? ' class="neg"' : "") + ">" + (cx ? emEmb(v, q) : num(v)) + "</td>";
     }
-    var h = '<table class="tab-est"><tr><th></th><th>Vendas 7 dias</th><th>' + (umaLoja ? "Estoque loja" : "Estoque lojas") + "</th><th>Estoque CD</th></tr>";
-    if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + cel(lv, true) + cel(le, true) + cel(e, true) + "</tr>";
-    if (!temCx) h += "<tr><td>UN</td>" + cel(lv) + cel(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td></tr>";   // UN só quando não tem embalagem de compra
+    var tot = (le || 0) + e;   // estoque total = lojas + CD (só no pedido de compra)
+    var h = '<table class="tab-est"><tr><th></th><th>Vendas 7 dias</th><th>' + (umaLoja ? "Estoque loja" : "Estoque lojas") + "</th><th>Estoque CD</th>" + (comTotal ? "<th>Estoque total</th>" : "") + "</tr>";
+    if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + cel(lv, true) + cel(le, true) + cel(e, true) + (comTotal ? cel(tot, true) : "") + "</tr>";
+    if (!temCx) h += "<tr><td>UN</td>" + cel(lv) + cel(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td>" + (comTotal ? cel(tot) : "") + "</tr>";   // UN só quando não tem embalagem de compra
     h += "</table>";
     if (!so && (!umaLoja || (foco && RES && RES.lojas && RES.lojas.length > 1)))
       h += '<details class="det-lojas"><summary>Ver por loja</summary>' + htmlLojas(p) + "</details>";
@@ -2884,7 +2885,7 @@ window.PedidoPDF = (function () {
         '<div class="cmp-tot" data-cpt="' + esc(x.p) + '">' + textoTotItem(c) + "</div>";
     }
     return '<div class="item' + (q > 0 ? " com-pedido" : "") + selCls(x.p) + '" data-cp="' + esc(x.p) + '"><div class="desc">' + esc(x.d) + "</div>" +
-      subItem(x.p, x.t, x.q, it && it.dep) + blocoEstoque(x.p, eCD, null, x.t, x.q) +
+      subItem(x.p, x.t, x.q, it && it.dep) + blocoEstoque(x.p, eCD, null, x.t, x.q, null, "", true) +   // compra: + Estoque total
       '<div class="info" style="margin-top:4px">' + (x.b ? "EAN " + esc(x.b) + " · " : "") + esc(x.m || "") +
       (x.f && x.f !== compra.fornecedor ? '<br><small>' + esc(x.f) + "</small>" : "") +
       (!c && x.c ? "<br>Custo CD: " + reais(x.c) + " un" : "") + "</div>" +
