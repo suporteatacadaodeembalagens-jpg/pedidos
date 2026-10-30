@@ -1468,7 +1468,7 @@ window.PedidoPDF = (function () {
       html += '<div class="ped rasc"><div class="q1"><b>' + esc(r.nome) + '</b><span>' + n + (n === 1 ? ' produto' : ' produtos') +
         ' · salvo em ' + esc(r.quando) + '<br>lista de ' + esc(r.dataLista) +
         (mesma ? '<span class="tag-lista atual">lista atual</span>' : '<span class="tag-lista antiga">lista antiga</span>') + '</span></div>' +
-        '<div class="acoes-rasc"><button class="btn excluir" data-exc="' + esc(r.id) + '">Excluir</button>' +
+        '<div class="acoes-rasc"><button class="btn excluir" data-exc="' + esc(r.id) + '">' + (nivelNum() < 2 ? "\uD83D\uDD12 Excluir" : "Excluir") + "</button>" +   // só Gerência para cima
         '<button class="btn btn-verde" data-cont="' + esc(r.id) + '">Continuar</button></div></div>';
     });
     $("lista").innerHTML = html;
@@ -1566,6 +1566,7 @@ window.PedidoPDF = (function () {
   var exclusao = null;   // {r, pos, t}
   function excluirPedido(btn) {
     var id = btn.getAttribute("data-exc");
+    if (nivelNum() < 2) { toast("\uD83D\uDD12 Só a Gerência, Administração e Diretoria podem excluir pedidos."); return; }
     var pos = -1; (rasc || []).forEach(function (x, i) { if (x.id === id) pos = i; });
     if (pos < 0) return;
     confirmarExclusao();                       // se tinha outra pendente, apaga ela agora
@@ -2210,7 +2211,7 @@ window.PedidoPDF = (function () {
     l.forEach(function (e) { if (tipos.indexOf(e.tipo || "ERP") < 0) tipos.push(e.tipo || "ERP"); });
     if (tipos.indexOf(ERR.filtro) < 0) ERR.filtro = "Todos";
     var vis = l.filter(function (e) { return ERR.filtro === "Todos" || (e.tipo || "ERP") === ERR.filtro; });
-    var cor = { "ERP": "#9b1c1c", "Login/Senha": "#8a5a00", "Pedido": "#1d4e89", "Compra": "#4b3b8f", "Sessão": "#666", "Tela": "#0b6b5a", "App": "#444" };
+    var cor = { "Pedido excluído": "#b45309", "Robô": "#6b4f2a", "ERP": "#9b1c1c", "Login/Senha": "#8a5a00", "Pedido": "#1d4e89", "Compra": "#4b3b8f", "Sessão": "#666", "Tela": "#0b6b5a", "App": "#444" };
     var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">' + tipos.map(function (t) {
         var n = t === "Todos" ? l.length : l.filter(function (e) { return (e.tipo || "ERP") === t; }).length;
         return '<button class="btn ' + (t === ERR.filtro ? "btn-verde" : "btn-cinza") + '" style="padding:6px 10px;font-size:13px" data-errfiltro="' + esc(t) + '">' + esc(t) + " (" + n + ")</button>";
