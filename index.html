@@ -963,6 +963,15 @@ window.PedidoPDF = (function () {
     "CONFEITARIA": "Confeitaria", "DOCES": "Doces", "BEBIDAS": "Bebidas", "ARTIGOS P FESTAS": "Artigos p/ Festas",
     "HIGIENE E LIMPEZA": "Higiene e Limpeza", "CONSUMO": "Consumo" };
   function nomeAba(n) { return NOMES[n] || (n.charAt(0) + n.slice(1).toLowerCase()); }
+  /** 03/11: "Lista de 03/11/2026 às 11:30" - data da lista + HORA da última atualização que chegou do robô. */
+  function txtLista() {
+    if (!dados) return "";
+    var g = String(dados.gerado || ""), m = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(g), dd, hh;
+    if (m) { dd = m[3] + "/" + m[2]; hh = m[4] + ":" + m[5]; }
+    else if (Number(g) > 1e12) { var d = new Date(Number(g)), z = function (n) { return (n < 10 ? "0" : "") + n; }; dd = z(d.getDate()) + "/" + z(d.getMonth() + 1); hh = z(d.getHours()) + ":" + z(d.getMinutes()); }
+    if (!hh) return "Lista de " + dados.data;
+    return "Lista de " + dados.data + (String(dados.data).indexOf(dd) === 0 ? " às " + hh : " · atualizada " + dd + " " + hh);
+  }
   function salvarPedido() { LS.set("pedido", pedido); atualizarRodape(); }
   function lojaAtual() { return comoLoja || cfg.loja; }
   // manager pela loja: o servidor recebe "token~Loja" e age como a loja (guardando quem é o manager)
@@ -1036,9 +1045,9 @@ window.PedidoPDF = (function () {
     if (deServidor) setTimeout(function () { LS.set("dados", dados); }, 600);   // gravar 200 KB depois de desenhar a tela
     calcularNovos();
     if (!abaAtual || (abaAtual !== HIST && !abaValida(abaAtual))) abaAtual = novosVistos() ? dados.departamentos[0].nome : NOVOS;
-    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + "Lista de " + dados.data + (lojaAtual() ? " · " + lojaAtual() + (comoLoja ? " (manager)" : "") : "");
+    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + txtLista() + (lojaAtual() ? " · " + lojaAtual() + (comoLoja ? " (manager)" : "") : "");
     desenharAbas(); desenharLista();
-    if (deServidor && mudou) toast("Lista de " + dados.data + " carregada");
+    if (deServidor && mudou) toast(txtLista() + " carregada");
     return true;
   }
 
@@ -1688,7 +1697,7 @@ window.PedidoPDF = (function () {
   function desenharManager() {
     if (tela !== "app") { desenharLista(); return; }
     renderId++;
-    $("subtitulo").textContent = nomeMgr() + " · Painel do manager" + (dados ? " · Lista de " + dados.data : "");
+    $("subtitulo").textContent = nomeMgr() + " · Painel do manager" + (dados ? " · " + txtLista() : "");
     atualizarModo();
     if (mgr.aberto) { desenharPedidoMgr(); return; }
     if (mgr.filtro === "salvos") { desenharSalvosMgr(); return; }
@@ -1779,7 +1788,7 @@ window.PedidoPDF = (function () {
     try { localStorage.removeItem("rascCache"); } catch (e) {}
     abaAtual = novosVistos() ? dados.departamentos[0].nome : NOVOS; ultimaDep = null;
     $("busca").value = "";
-    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + "Lista de " + dados.data + " · " + loja + " (manager)";
+    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + txtLista() + " · " + loja + " (manager)";
     desenharAbas(); desenharLista(); window.scrollTo(0, 0);
   }
   function sairComoLoja() {
@@ -2237,7 +2246,7 @@ window.PedidoPDF = (function () {
   function desenharInicio() {
     renderId++; atualizarModo();
     var m = ehMgrLogin(), t = [];
-    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + (dados ? "Lista de " + dados.data : "Carregando a lista…") +
+    $("subtitulo").textContent = (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + (dados ? txtLista() : "Carregando a lista…") +
       (m ? " · " + nomeMgr() : (cfg.loja ? " · " + cfg.loja : "")) + (sessao ? " · " + nomeNivel() : "");
     if (m) {
       var np = mgr.lista ? mgr.lista.pedidos.filter(function (x) { return x.status === "pendente"; }).length : null;
@@ -3601,7 +3610,7 @@ window.PedidoPDF = (function () {
     if (!loja) { toast("Preencha a loja"); return; }
     cfg = { loja: loja }; LS.set("cfg", cfg);
     $("telaConfig").classList.remove("aberta");
-    if (dados) $("subtitulo").textContent = "Lista de " + dados.data + " · " + cfg.loja;
+    if (dados) $("subtitulo").textContent = txtLista() + " · " + cfg.loja;
   });
   $("btnAtualizar").addEventListener("click", function () { toast("Atualizando…"); hist = null; if (ehManager() && !mgr.aberto) mgr.lista = null; carregar(); if (ehManager() && !dados) desenharManager(); });
 
@@ -3609,7 +3618,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.2";
+  var VERSAO_APP = "2026-11-03.3";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   function checarVersaoNova() {
     if (!/github\.io$/i.test(location.hostname) || !window.fetch || document.hidden) return;
