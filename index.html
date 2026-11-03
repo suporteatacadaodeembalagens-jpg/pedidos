@@ -3591,6 +3591,51 @@ window.PedidoPDF = (function () {
   });
   $("btnAtualizar").addEventListener("click", function () { toast("Atualizando…"); hist = null; if (ehManager() && !mgr.aberto) mgr.lista = null; carregar(); if (ehManager() && !dados) desenharManager(); });
 
+  // ---------------- VERSÃO NOVA DO APP (03/11) ----------------
+  // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
+  // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
+  // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
+  var VERSAO_APP = "2026-11-03.1";
+  try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
+  function checarVersaoNova() {
+    if (!/github\.io$/i.test(location.hostname) || !window.fetch || document.hidden) return;
+    if (checarVersaoNova.indo || Date.now() - (checarVersaoNova.ult || 0) < 45000) return;
+    checarVersaoNova.indo = true; checarVersaoNova.ult = Date.now();
+    fetch(location.pathname + "?nv=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : ""; }).then(function (t) {
+      checarVersaoNova.indo = false;
+      var m = /var VERSAO_APP = "([^"]+)"/.exec(t || "");
+      if (m && m[1] !== VERSAO_APP) versaoNova(m[1]);
+    }, function () { checarVersaoNova.indo = false; });
+  }
+  function versaoNova(v) {
+    var foco = document.activeElement, digitando = foco && /^(INPUT|TEXTAREA|SELECT)$/.test(foco.tagName);
+    var ocupado = digitando || (mgr && mgr.sujo) || !!document.querySelector(".aberta:not(#telaLogin)");
+    var ult = LS.get("trocaVersao", null);   // não fica em laço se o GitHub ainda estiver mandando o arquivo antigo
+    if (ult && ult.v === v && Date.now() - ult.t < 120000) return;
+    if (ocupado) { avisoVersao(v); return; }
+    irParaVersao(v);
+  }
+  function irParaVersao(v) {
+    LS.set("trocaVersao", { v: v, t: Date.now() });
+    try { confirmarExclusao(); } catch (e) {}     // exclusão com "Desfazer" pendente vai antes
+    try { salvarPedido(); } catch (e) {}           // o pedido aberto fica guardado no celular
+    toast("Atualizando o app para a versão nova…");
+    setTimeout(function () { location.replace(location.pathname + "?v=" + encodeURIComponent(v) + location.hash); }, 1200);
+  }
+  function avisoVersao(v) {
+    if ($("avisoVersao")) return;
+    var d = document.createElement("div");
+    d.id = "avisoVersao";
+    d.style.cssText = "position:fixed;left:10px;right:10px;bottom:84px;z-index:9999;background:#3f1f1e;color:#fff;border-radius:12px;padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.3);font-size:14px";
+    d.innerHTML = '<span style="flex:1">Tem uma <b>versão nova</b> do app.</span><button type="button" style="border:0;border-radius:9px;padding:9px 12px;font-weight:800;background:#f5c400;color:#3f1f1e">Atualizar agora</button>';
+    d.querySelector("button").addEventListener("click", function () { irParaVersao(v); });
+    document.body.appendChild(d);
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) checarVersaoNova(); });
+  window.addEventListener("focus", checarVersaoNova);
+  setInterval(checarVersaoNova, 600000);
+  setTimeout(checarVersaoNova, 2500);
+
   if (ENVIO_TICKET && EM_APPS_SCRIPT) {   // aba só de envio: não precisa de login, só mostra o pedido e o botão
     $("btnEnvioDepois").hidden = true; $("btnFecharEnvio").hidden = true;
     $("envInfo").textContent = "Carregando o pedido…"; $("telaEnvio").classList.add("aberta");
