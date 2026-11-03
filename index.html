@@ -1683,7 +1683,12 @@ window.PedidoPDF = (function () {
       salvarAtual.indo = false;
       b.disabled = false; b.textContent = "Salvar";
       meu.id = r.id; meu.ts = r.ts; if (atual === meu) LS.set("pedidoAtual", atual); rasc = null;
-      if (depois) depois(); else toast("Pedido salvo. Você pode continuar depois.");
+      if (r.juntou && r.itens && atual === meu) {   // 03/11: outro celular mexeu no mesmo pedido -> o servidor juntou as duas versões
+        pedido = {}; Object.keys(r.itens).forEach(function (k) { pedido[k] = Number(r.itens[k]); });
+        salvarPedido(); desenharLista(); atualizarRodape();
+      }
+      var junto = r.juntou ? " Juntei com o que " + (r.juntou.por || "outra pessoa") + " salvou" + (r.juntou.quando ? " às " + r.juntou.quando.slice(-5) : "") + " (nada se perdeu)." : "";
+      if (depois) { depois(); if (junto) toast("Pedido salvo." + junto); } else toast("Pedido salvo." + (junto || " Você pode continuar depois."));
     }, function (e) {
       salvarAtual.indo = false;
       b.disabled = false; b.textContent = "Salvar"; atualizarRodape();
@@ -3752,7 +3757,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.16";
+  var VERSAO_APP = "2026-11-03.17";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
