@@ -2693,14 +2693,15 @@ window.PedidoPDF = (function () {
       '<div class="campo"><input id="consBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" value="' + esc(cons.termo) + '">' +
       '<button class="btn-ler escuro" id="btnLerCons" type="button">' + ICO_EAN + "Ler código de barras</button></div>" +
       // 30/10: filtro de FORNECEDOR - escolhe o fornecedor e aparecem TODOS os produtos dele (a busca de cima filtra dentro dele)
-      '<div class="campo campo-forn' + (cons.forn ? " ativo" : "") + '"><input id="consForn" list="consFornLista" autocomplete="off" placeholder="Filtrar por fornecedor (todos os produtos dele)" value="' + esc(cons.forn) + '">' +
+      // 03/11: igual ao fornecedor do pedido de compra - toca e aparece a lista de TODOS; digitando, a lista filtra; toca no nome
+      '<div class="campo forn-wrap campo-forn' + (cons.forn ? " ativo" : "") + '"><input id="consForn" autocomplete="off" placeholder="Fornecedor: toque para ver todos" value="' + esc(cons.forn) + '">' +
       '<button class="limpar" id="consFornLimpar" type="button" aria-label="Tirar o filtro de fornecedor"' + (cons.forn ? "" : " hidden") + ">&times;</button>" +
-      '<datalist id="consFornLista">' + opcoesForn() + "</datalist></div>" +
+      '<div class="forn-lista" id="consFornLista" hidden></div></div>' +
       '<div id="consRes"></div>';
     if (m && !cons.fornNomes && !desenharConsulta.fornIndo) {   // managers: TODOS os fornecedores do cadastro
       desenharConsulta.fornIndo = true;
-      chamar("fornecedoresCompra", [], function (l) { desenharConsulta.fornIndo = false; cons.fornNomes = (l || []).map(function (x) { return x.nome; });
-        var dl = $("consFornLista"); if (dl) dl.innerHTML = opcoesForn(); }, function () { desenharConsulta.fornIndo = false; });
+      chamar("fornecedoresCompra", [], function (l) { desenharConsulta.fornIndo = false; cons.fornNomes = l || [];
+        var bx = $("consFornLista"); if (bx && !bx.hidden) mostrarFornCons(); }, function () { desenharConsulta.fornIndo = false; });
     }
     if (m && !cons.precos && !desenharConsulta.buscando) {   // preços: só managers (o servidor não manda para loja)
       desenharConsulta.buscando = true;
@@ -2710,16 +2711,26 @@ window.PedidoPDF = (function () {
     resultadosConsulta();
   }
   /** Nomes dos fornecedores do filtro: managers = cadastro inteiro (servidor); lojas = os da lista de pedido. */
-  function nomesForn() {
+  function nomesForn() {   // [{nome, n}]
     if (cons.fornNomes) return cons.fornNomes;
+    if (ehMgrLogin() && Array.isArray(cmp.forns) && cmp.forns.length) return cmp.forns;   // já carregados no pedido de compra
     var n = {};
-    if (dados) dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) { if (it.f) n[it.f] = 1; }); });
-    return Object.keys(n).sort(function (a, b) { return a.localeCompare(b, "pt-BR"); });
+    if (dados) dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) { if (it.f) n[it.f] = (n[it.f] || 0) + 1; }); });
+    return Object.keys(n).sort(function (a, b) { return a.localeCompare(b, "pt-BR"); }).map(function (f) { return { nome: f, n: n[f] }; });
   }
-  function opcoesForn() { return nomesForn().map(function (f) { return '<option value="' + esc(f) + '"></option>'; }).join(""); }
+  /** Lista de fornecedores embaixo do campo (igual à do pedido de compra). */
+  function mostrarFornCons() {
+    var box = $("consFornLista"), inp = $("consForn"); if (!box || !inp) return;
+    if (ehMgrLogin() && !cons.fornNomes && desenharConsulta.fornIndo) { box.innerHTML = '<div class="cmp-dica" style="padding:10px">Carregando fornecedores…</div>'; box.hidden = false; return; }
+    var t = semAcento(inp.value.trim()), l = nomesForn().filter(function (f) { return !t || semAcento(f.nome).indexOf(t) >= 0; });
+    box.innerHTML = l.length ? l.slice(0, 80).map(function (f) { return '<button type="button" data-fornc="' + esc(f.nome) + '">' + esc(f.nome) + "<small>" + f.n + " produtos</small></button>"; }).join("") +
+      (l.length > 80 ? '<div class="cmp-dica" style="padding:8px 12px">Digite para filtrar (' + l.length + " fornecedores)</div>" : "")
+      : '<div class="cmp-dica" style="padding:10px 12px">Nenhum fornecedor com esse nome.</div>';
+    box.hidden = false;
+  }
   function filtrarFornCons(v) {
     v = String(v || "").trim();
-    var alvo = v ? nomesForn().filter(function (f) { return semAcento(f) === semAcento(v); })[0] : "";
+    var alvo = v ? (nomesForn().filter(function (f) { return semAcento(f.nome) === semAcento(v); })[0] || {}).nome : "";
     if (v && !alvo) return;                          // ainda digitando: só filtra quando bater com um fornecedor
     if (alvo === cons.forn) return;
     cons.forn = alvo || ""; cons.limite = 60;
@@ -3360,7 +3371,10 @@ window.PedidoPDF = (function () {
       if (dono) { abrirFicha(dono.getAttribute("data-plu") || dono.getAttribute("data-mp") || dono.getAttribute("data-cp")); return; } }
     if (tela === "consulta") {
       if (e.target.closest("[data-consmais]")) { cons.limite += 60; resultadosConsulta(); return; }
-      if (e.target.closest("#consFornLimpar")) { var cf = $("consForn"); if (cf) cf.value = ""; filtrarFornCons(""); return; }
+      var fc = e.target.closest("[data-fornc]");
+      if (fc) { var nf = fc.getAttribute("data-fornc"), ci = $("consForn"); if (ci) { ci.value = nf; ci.blur(); } $("consFornLista").hidden = true; filtrarFornCons(nf); return; }
+      if (!e.target.closest(".forn-wrap") && $("consFornLista")) $("consFornLista").hidden = true;
+      if (e.target.closest("#consFornLimpar")) { var cf = $("consForn"); if (cf) cf.value = ""; if ($("consFornLista")) $("consFornLista").hidden = true; filtrarFornCons(""); return; }
       if (e.target.closest("#btnLerCons")) { abrirLeitor(function (c) { cons.termo = c; var i = $("consBusca"); if (i) i.value = c; resultadosConsulta(); }); return; }
       var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
       var fv = e.target.closest("[data-fav]"); if (fv) { favoritoClique(fv.getAttribute("data-fav")); return; }
@@ -3437,7 +3451,7 @@ window.PedidoPDF = (function () {
   var tMgr;
   var tCons;
   $("lista").addEventListener("input", function (e) {
-    if (e.target.id === "consForn") filtrarFornCons(e.target.value);
+    if (e.target.id === "consForn") { mostrarFornCons(); if (!e.target.value.trim()) filtrarFornCons(""); }
     if (e.target.id === "consBusca") { var vc = e.target.value; clearTimeout(tCons); tCons = setTimeout(function () { cons.termo = vc; resultadosConsulta(); }, 200); }
     if (e.target.id === "cmpBusca") buscarCmp(e.target.value);
     if (e.target.id === "cmpForn") { compra.fornecedor = e.target.value.trim(); salvarCompra(); mostrarForn(); desenharFornDados(); }
@@ -3466,7 +3480,7 @@ window.PedidoPDF = (function () {
   $("btnInicio").addEventListener("click", irInicio);
   $("btnFinalizarCompra").addEventListener("click", gerarCompra);
   $("btnSalvarCompra").addEventListener("click", salvarCompraServidor);
-  $("lista").addEventListener("focusin", function (e) { if (e.target.id === "cmpForn") mostrarForn(); });
+  $("lista").addEventListener("focusin", function (e) { if (e.target.id === "cmpForn") mostrarForn(); if (e.target.id === "consForn") mostrarFornCons(); });
   $("btnFecharEnvio").addEventListener("click", fecharEnvio);
   $("btnFecharFicha").addEventListener("click", function () { $("telaFicha").classList.remove("aberta"); if (checarFavoritos.resp) { var f = checarFavoritos.resp; checarFavoritos.resp = null; f(false); } });
   $("fichaCorpo").addEventListener("input", function (e) {
@@ -3595,7 +3609,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.1";
+  var VERSAO_APP = "2026-11-03.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   function checarVersaoNova() {
     if (!/github\.io$/i.test(location.hostname) || !window.fetch || document.hidden) return;
