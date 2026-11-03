@@ -397,6 +397,7 @@
     <div class="marca-app">
       <b>Atacadão De Embalagens</b>
       <span id="subtitulo">Carregando lista…</span>
+      <span id="usuarioTopo"></span>
     </div>
     <button class="icone-btn" id="btnInicio" aria-label="Início" hidden>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
@@ -970,7 +971,7 @@ window.PedidoPDF = (function () {
     var g = String(dados.gerado || ""), m = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(g), dia, hh;
     if (m) { dia = m[3] + "/" + m[2] + "/" + m[1]; hh = m[4] + ":" + m[5]; }
     else if (Number(g) > 1e12) { var d = new Date(Number(g)), z = function (n) { return (n < 10 ? "0" : "") + n; }; dia = z(d.getDate()) + "/" + z(d.getMonth() + 1) + "/" + d.getFullYear(); hh = z(d.getHours()) + ":" + z(d.getMinutes()); }
-    return "Dados atualizados em " + (dia || dados.data) + (hh ? " às " + hh : "");
+    return "Dados att. em " + (dia || dados.data) + (hh ? " às " + hh : "");   // 03/11: "att." para caber numa linha
   }
   /** Primeiro nome de quem está usando: manager = nome do cadastro; loja = nome da loja (Filial 02_Carapicuíba -> Carapicuíba). */
   function primeiroNome() {
@@ -978,9 +979,9 @@ window.PedidoPDF = (function () {
     var l = String(cfg.loja || "").trim();
     return l.replace(/^.*_/, "").trim() || l;
   }
-  function txtTopo(semDados) {
-    var n = primeiroNome();
-    return (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + (dados ? txtLista() : (semDados || "Carregando os dados…")) + (n ? " - " + n : "");
+  function txtTopo(semDados) {   // linha 1: "Dados att. em ... às ..."; linha 2 (embaixo): o nome do usuário
+    var u = $("usuarioTopo"); if (u) u.textContent = primeiroNome();
+    return (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + (dados ? txtLista() : (semDados || "Carregando os dados…"));
   }
   function salvarPedido() { LS.set("pedido", pedido); atualizarRodape(); }
   function lojaAtual() { return comoLoja || cfg.loja; }
@@ -3627,7 +3628,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.4";
+  var VERSAO_APP = "2026-11-03.5";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   function checarVersaoNova() {
     if (!/github\.io$/i.test(location.hostname) || !window.fetch || document.hidden) return;
