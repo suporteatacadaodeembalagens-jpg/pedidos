@@ -1579,7 +1579,8 @@ window.PedidoPDF = (function () {
     if (!r) return;
     if (atual && atual.id === id) { voltarAoPedido(); return; }
     var abrir = function () { abrirPedido({ id: r.id, nome: r.nome, ts: r.ts }, r.itens); };
-    if (atual && (Object.keys(pedido).length || atual.id)) salvarAtual(function () { toast("Pedido “" + atual.nome + "” salvo"); abrir(); });   // o aberto fica salvo
+    var nomeAberto = atual && atual.nome;
+    if (atual && (Object.keys(pedido).length || atual.id)) salvarAtual(function () { toast("Pedido “" + nomeAberto + "” salvo"); abrir(); });   // o aberto fica salvo
     else abrir();
   }
   function voltarAoPedido() {
@@ -1624,13 +1625,17 @@ window.PedidoPDF = (function () {
   }
   /** Salva o pedido aberto no servidor; depois = função chamada quando terminar (ok). */
   function salvarAtual(depois) {
-    if (!atual) return;
+    if (!atual || salvarAtual.indo) return;   // 03/11: toque duplo salvava 2x e o 2º caía com o pedido já fechado
+    var meu = atual;                            // (erro 'atual.id = r.id' no relatório: o pedido fechou antes da resposta)
+    salvarAtual.indo = true;
     var b = $("btnSalvarPed"); b.disabled = true; b.textContent = "Salvando…";
-    chamar("salvarRascunho", [{ id: atual.id, base: atual.ts || 0, nome: atual.nome, dataLista: dados.data, semana: dados.semana || "", itens: pedido }], function (r) {
+    chamar("salvarRascunho", [{ id: meu.id, base: meu.ts || 0, nome: meu.nome, dataLista: dados.data, semana: dados.semana || "", itens: pedido }], function (r) {
+      salvarAtual.indo = false;
       b.disabled = false; b.textContent = "Salvar";
-      atual.id = r.id; atual.ts = r.ts; LS.set("pedidoAtual", atual); rasc = null;
+      meu.id = r.id; meu.ts = r.ts; if (atual === meu) LS.set("pedidoAtual", atual); rasc = null;
       if (depois) depois(); else toast("Pedido salvo. Você pode continuar depois.");
     }, function (e) {
+      salvarAtual.indo = false;
       b.disabled = false; b.textContent = "Salvar"; atualizarRodape();
       toast("Não foi possível salvar: " + String(e && e.message || e));
     });
@@ -2274,6 +2279,56 @@ window.PedidoPDF = (function () {
     chamar("errosErp", [], function (r) { ERR.lista = (r && r.erros) || []; ERR.dias = (r && r.dias) || 120; desenharErros(); },
       function (e) { $("fichaCorpo").innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
+  /** 03/11 (Marcelo): cada erro do relatório explicado em português simples: o que aconteceu e como resolver. */
+  function explicarErro(e) {
+    var t = e.tipo || "ERP", m = String(e.motivo || "");
+    var qual = e.bloco ? " nº " + e.bloco.replace(/^Pedido\s*(de Transferência)?\s*/i, "") : (e.nome ? " “" + e.nome + "”" : "");
+    var ped = "o pedido" + qual, pedNo = "no pedido" + qual, pedDo = "do pedido" + qual;
+    var prod = e.p ? "o produto PLU " + e.p + (e.d ? " (" + e.d + ")" : "") : "o produto";
+    var R = function (o, r) { return [o, r]; };
+    if (t === "ERP") {
+      if (/não existe no ERP - digitado/i.test(m))
+        return R("A loja pediu " + prod + " em unidade (UN), mas no ERP ele só tem código de barras de caixa/fardo. O robô digitou a quantidade pedida na embalagem 1 (unidade) " + pedNo + ".",
+          "Confira no ERP se a quantidade em unidade está certa nesse pedido. Para não repetir: cadastre no ERP o código de barras da unidade (Emb. 1) desse produto.");
+      if (/a Emb\. na tela é|não existe entre os códigos/i.test(m))
+        return R("A embalagem que a loja pediu não bate com as embalagens cadastradas no ERP para " + prod + ". O robô NÃO digitou esse item.",
+          "Digite esse item à mão " + pedNo + " no ERP (Pedido de Transferência) e confira os códigos de barras/embalagens do produto no cadastro.");
+      if (/acima do estoque|maior do que o estoque/i.test(m))
+        return R(prod.charAt(0).toUpperCase() + prod.slice(1) + " foi digitado, mas o ERP avisou que a quantidade é maior que o estoque do CD.",
+          "Confira o estoque do CD antes de faturar " + ped + ".");
+      if (/vendedor/i.test(m))
+        return R("O ERP não aceitou salvar " + ped + " porque o campo Vendedor ficou vazio ou errado.",
+          "Abra o pedido no ERP, coloque o Vendedor 1 e salve. O robô novo já preenche sozinho.");
+      if (/Observa/i.test(m))
+        return R("O robô digitou os itens, mas a tela final (Observações) não fechou. " + ped.charAt(0).toUpperCase() + ped.slice(1) + " pode NÃO ter sido salvo.",
+          "Abra o ERP > Pedido de Transferência e procure o pedido. Se não estiver lá, no app vá em Aprovados > abra o pedido > “Digitar de novo no ERP”.");
+      if (/Pedido não terminou|não terminou|parou na etapa|confira no ERP/i.test(m))
+        return R("O robô parou no meio " + pedDo + " (" + m.replace(/^Pedido não terminou:\s*/i, "") + ").",
+          "Abra o ERP > Pedido de Transferência e veja se o pedido ficou salvo e completo. Se não, no app vá em Aprovados > abra o pedido > “Digitar de novo no ERP”.");
+      if (e.p)
+        return R("O robô não conseguiu digitar " + prod + " " + pedNo + " (a tela do ERP não respondeu como esperado). Esse item NÃO entrou no pedido.",
+          "Digite esse item à mão no ERP, " + pedNo + ". Se acontecer muito com o mesmo produto, mande a pasta logs para análise.");
+      return R("Problema do robô no ERP: " + m, "Confira o pedido no ERP. Se repetir, mande a pasta logs para análise.");
+    }
+    if (t === "Robô") {
+      if (/Não rodou/i.test(m))
+        return R("O robô (" + (e.fn || "") + ") não trabalhou no horário marcado." + (/bloquead/i.test(m) ? " O Windows do PC estava bloqueado (tela de senha)." : ""),
+          /bloquead/i.test(m) ? "Desbloqueie o PC do robô e deixe sem bloqueio de tela e sem descanso (Configurações > Energia: nunca)."
+            : "Veja se o PC do robô está ligado, com internet e sem tela de bloqueio. Se “Voltou a rodar” aparecer, já se resolveu sozinho.");
+      if (/ocupado/i.test(m))
+        return R("O robô esperou muito o outro robô liberar o ERP e desistiu desta vez.", "Normalmente se resolve na próxima rodada. Se repetir o dia todo, um dos robôs pode estar travado: feche e abra de novo.");
+      if (/could not convert|formato|consolidad/i.test(m))
+        return R("O arquivo do estoque veio diferente do esperado e a lista não foi atualizada nessa rodada.", "O robô novo tira o arquivo de novo sozinho. Se continuar, mande a pasta logs.");
+      return R("O robô (" + (e.fn || "") + ") deu este erro: " + m, "Se aparecer só uma vez, normalmente se resolve na próxima rodada. Se repetir, mande a pasta logs para análise.");
+    }
+    if (t === "Pedido excluído") return R("Um pedido salvo foi excluído. " + m, "Só informação. Se ninguém combinou essa exclusão, fale com quem excluiu (está escrito acima).");
+    if (t === "Sessão") return R("O login dessa pessoa venceu (fica ativo por alguns dias).", "Nada a fazer: é só entrar de novo com e-mail e senha.");
+    if (t === "Login/Senha") return R("Tentativa de entrar com e-mail, cargo ou senha errados. " + m,
+      /tentativas/i.test(m) ? "Depois de 5 erros o login fica bloqueado 15 minutos. Se a pessoa esqueceu a senha, use “Esqueci a senha”." : "Se a pessoa esqueceu a senha, use “Esqueci a senha” na tela de entrada.");
+    if (t === "Tela") return R("O app travou no celular dessa pessoa em uma ação (" + (e.fn || "tela") + "): " + m,
+      /atual\.id = r\.id/.test(m) ? "Já corrigido em 03/11 (salvar duas vezes seguidas). Pode apagar." : "Se a pessoa reclamar ou o erro repetir, mande o print para ajuste. Atualizar o app (fechar e abrir) costuma resolver.");
+    return R("Erro no app (" + (e.fn || t) + "): " + m, "Se repetir, mande o print para ajuste.");
+  }
   function desenharErros() {
     var l = ERR.lista, tipos = ["Todos"];
     l.forEach(function (e) { if (tipos.indexOf(e.tipo || "ERP") < 0) tipos.push(e.tipo || "ERP"); });
@@ -2294,7 +2349,12 @@ window.PedidoPDF = (function () {
         : (e.fn ? "Onde: " + esc(e.fn) + "<br>" : "");
       return '<div style="border:1px solid #e6dccd;border-radius:10px;padding:8px 10px;margin:0 0 8px;display:flex;gap:8px;align-items:flex-start">' +
         '<div style="flex:1;min-width:0"><span style="display:inline-block;font-size:11px;font-weight:700;color:#fff;background:' + (cor[t] || "#444") + ';border-radius:5px;padding:1px 6px">' + esc(t) + "</span> " +
-        "<small>" + esc(e.quando || "") + "</small>" + (quem ? "<br><b>" + esc(quem) + "</b>" : "") + "<br><small>" + det + '</small><span style="color:#9b1c1c">' + esc(e.motivo || "") + "</span></div>" +
+        "<small>" + esc(e.quando || "") + "</small>" + (quem ? "<br><b>" + esc(quem) + "</b>" : "") + "<br><small>" + det + "</small>" + (function () {
+          var x = explicarErro(e);
+          return '<div style="margin:6px 0 0;font-size:14px;line-height:1.35"><b style="color:#9b1c1c">O que aconteceu:</b> ' + esc(x[0]) + "</div>" +
+            '<div style="margin:4px 0 0;font-size:14px;line-height:1.35;background:#eef6ee;border-radius:8px;padding:6px 8px"><b style="color:#1d6b2e">Como resolver:</b> ' + esc(x[1]) + "</div>" +
+            '<div style="margin:4px 0 0;font-size:11px;color:#8a7f72">Detalhe técnico: ' + esc(e.motivo || "") + "</div>";
+        })() + "</div>" +
         '<button class="btn btn-cinza" style="padding:6px 9px;font-size:12px" data-errapagar="' + esc(e.id || "") + '">Apagar</button></div>';
     }).join("");
     $("fichaCorpo").innerHTML = h;
