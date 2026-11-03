@@ -1494,7 +1494,7 @@ window.PedidoPDF = (function () {
       $("lista").innerHTML = html + '<div class="vazio" style="padding:14px">Para continuar um pedido salvo, toque em <b>Pedidos salvos</b> lá em cima.</div>';
       return;
     }
-    html += '<div class="grupo">Pedidos salvos da loja (todos os cargos continuam)</div>';
+    html += '<div class="aviso">Pedidos que a loja salvou e ainda não enviou. <b>Continuar</b> abre o pedido para terminar e enviar.</div>';   // 03/11: mesmo layout do painel
     if (!rasc) {
       var guardado = LS.get("rascCache", null);   // mostra na hora o que já tinha; atualiza em seguida
       buscarRasc();
@@ -1504,13 +1504,10 @@ window.PedidoPDF = (function () {
     }
     if (!rasc.length) html += '<div class="vazio" style="padding:18px">Nenhum pedido salvo. ' + (abaAtual === SALVOS ? "Para começar um, toque em “Fazer pedido”." : "Comece um novo acima.") + "</div>";
     rasc.forEach(function (r) {
-      var n = Object.keys(r.itens || {}).length, mesma = r.dataLista === dados.data || (!!r.semana && r.semana === dados.semana);   // mesma semana = mesma lista
-      html += '<div class="ped rasc"><div class="q1"><b>' + esc(r.nome) + '</b><span>' + n + (n === 1 ? ' produto' : ' produtos') +
-        ' · salvo em ' + esc(r.quando) + (r.por ? " por " + esc(r.por) : "") + '<br>lista de ' + esc(r.dataLista) +
-        (mesma ? '<span class="tag-lista atual">lista atual</span>' : '<span class="tag-lista antiga">lista antiga</span>') + '</span></div>' +
-        (atual && atual.id === r.id ? '<div class="acoes-rasc"><button class="btn btn-verde" data-voltar-ped="1">Aberto agora: voltar</button></div></div>'
-        : '<div class="acoes-rasc"><button class="btn excluir" data-exc="' + esc(r.id) + '">' + (nivelNum() < 2 ? "\uD83D\uDD12 Excluir" : "Excluir") + "</button>" +   // só Gerência para cima
-        '<button class="btn btn-verde" data-cont="' + esc(r.id) + '">Continuar</button></div></div>');
+      var n = Object.keys(r.itens || {}).length;
+      html += cardSalvo(lojaAtual() || r.loja || "", r, n, atual && atual.id === r.id
+        ? '<button class="ver" data-voltar-ped="1">Aberto agora</button>'
+        : '<button class="ver" data-cont="' + esc(r.id) + '">Continuar</button>' + btnExcluirSalvo('data-exc="' + esc(r.id) + '"'));   // só Gerência para cima
     });
     $("lista").innerHTML = html;
   }
@@ -1764,6 +1761,18 @@ window.PedidoPDF = (function () {
   }
   // ---- "Pedidos salvos" (30/10): os pedidos salvos de TODAS as lojas; Continuar = entra pela loja e abre o pedido ----
   var salvosMgr = null, salvosLoja = "";
+  /** 03/11: o MESMO cartão de pedido salvo para todos (loja e painel): loja · nome do pedido (lista atual/antiga) ·
+   *  produtos, quando e quem salvou · botões Continuar e Excluir à direita. */
+  function cardSalvo(loja, r, n, botoes) {
+    var mesma = !!dados && (r.dataLista === dados.data || (!!r.semana && r.semana === dados.semana));
+    return '<div class="ped"><div class="topo-ped"><div class="q1"><b>' + esc(loja) + "</b><span>" + esc(r.nome || "") +
+      (r.dataLista ? (mesma ? '<span class="tag-lista atual">lista atual</span>' : '<span class="tag-lista antiga">lista antiga</span>') : "") +
+      "<br>" + n + (n === 1 ? " produto" : " produtos") + " · salvo em " + esc(r.quando || "") + (r.por ? " por " + esc(r.por) : "") + "</span></div>" +
+      '<div style="display:flex;flex-direction:column;gap:6px">' + botoes + "</div></div></div>";
+  }
+  function btnExcluirSalvo(attrs) {
+    return '<button class="ver" style="background:#fdeceb;color:#9b1c1c" ' + attrs + ">" + (nivelNum() < 2 ? "\uD83D\uDD12 Excluir" : "Excluir") + "</button>";
+  }
   function desenharSalvosMgr() {
     if (!salvosMgr) {
       $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando os pedidos salvos das lojas…</div>';
@@ -1781,12 +1790,8 @@ window.PedidoPDF = (function () {
       lojas.map(function (l) { return "<option" + (l === salvosLoja ? " selected" : "") + ' value="' + esc(l) + '">' + esc(l) + " (" + nPor[l] + ")</option>"; }).join("") + "</select>";
     if (!lista.length) html += '<div class="vazio">Nenhum pedido salvo' + (salvosLoja ? " nesta loja." : " nas lojas.") + "</div>";
     lista.forEach(function (x) {
-      html += '<div class="ped"><div class="topo-ped"><div class="q1"><b>' + esc(x.loja) + "</b><span>" + esc(x.nome) + "<br>" + x.n + (x.n === 1 ? " produto" : " produtos") +
-        " · salvo em " + esc(x.quando || "") + (x.por ? " por " + esc(x.por) : "") + "</span></div>" +
-        '<div style="display:flex;flex-direction:column;gap:6px">' +
-        '<button class="ver" data-rascmgr="' + esc(x.id) + '" data-loja="' + esc(x.loja) + '">Continuar</button>' +
-        (nivelNum() >= 2 ? '<button class="ver" style="background:#fdeceb;color:#9b1c1c" data-excmgr="' + esc(x.id) + '" data-loja="' + esc(x.loja) + '">Excluir</button>' : "") +
-        "</div></div></div>";
+      html += cardSalvo(x.loja, x, x.n, '<button class="ver" data-rascmgr="' + esc(x.id) + '" data-loja="' + esc(x.loja) + '">Continuar</button>' +
+        btnExcluirSalvo('data-excmgr="' + esc(x.id) + '" data-loja="' + esc(x.loja) + '"'));
     });
     $("lista").innerHTML = html;
   }
@@ -3652,7 +3657,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.7";
+  var VERSAO_APP = "2026-11-03.8";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   function checarVersaoNova() {
     if (!/github\.io$/i.test(location.hostname) || !window.fetch || document.hidden) return;
