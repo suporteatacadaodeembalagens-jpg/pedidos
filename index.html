@@ -452,10 +452,10 @@
     <button id="btnTrocarPedido">Trocar pedido</button>
   </div>
   <div class="modos modos-mgr" id="modosMgr">
+    <button class="modo" data-mg="lojas">Novo pedido</button>
+    <button class="modo" data-mg="salvos">Pedidos salvos</button>
     <button class="modo ativo" data-mg="pendente">Aguardando aprovação</button>
     <button class="modo" data-mg="aprovado">Aprovados</button>
-    <button class="modo" data-mg="salvos">Pedidos salvos</button>
-    <button class="modo" data-mg="lojas">Pedidos lojas</button>
   </div>
   <div class="busca"><input id="busca" type="search" placeholder="Buscar produto, PLU, marca ou EAN" autocomplete="off">
     <button class="btn-ler" id="btnLer" type="button"><svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><rect width="2" height="16"/><rect x="3" width="1" height="16"/><rect x="5" width="2" height="16"/><rect x="8" width="1" height="16"/><rect x="10" width="3" height="16"/><rect x="14" width="1" height="16"/><rect x="16" width="2" height="16"/><rect x="19" width="1" height="16"/><rect x="21" width="1" height="16"/></svg>Ler código de barras</button></div>
@@ -1763,7 +1763,7 @@ window.PedidoPDF = (function () {
     }
     var todos = mgr.lista.pedidos;
     var nPend = todos.filter(function (x) { return x.status === "pendente"; }).length;
-    $("modosMgr").children[0].textContent = "Aguardando aprovação" + (nPend ? " (" + nPend + ")" : "");
+    $("modosMgr").querySelector('[data-mg="pendente"]').textContent = "Aguardando aprovação" + (nPend ? " (" + nPend + ")" : "");
     if (mgr.filtro === "lojas") { desenharEscolhaLoja(); return; }
     var fatAba = mgr.sub === "faturados";   // 03/11: Aprovados tem 2 abas: A faturar | Faturados (com o nº da NF)
     var naAba = function (x) { return (mgr.filtro === "pendente") === (x.status === "pendente") && (mgr.filtro !== "aprovado" || !!x.fat === fatAba); };
@@ -2345,9 +2345,11 @@ window.PedidoPDF = (function () {
     if (m) {
       var np = mgr.lista ? mgr.lista.pedidos.filter(function (x) { return x.status === "pendente"; }).length : null;
       var nc = Object.keys(compra.itens).length;
+      // 03/11 (Marcelo): ordem Novo pedido, Pedidos salvos, Aguardando aprovação, Aprovados
+      t.push(tile("mg:lojas", "Novo pedido", "Fazer pedido por uma loja", ICO.loja));
+      t.push(tile("mg:salvos", "Pedidos salvos", "Pedidos das lojas ainda não enviados", ICO.lista));
       t.push(tile("mg:pendente", "Aguardando aprovação", np == null ? "Pedidos das lojas para conferir" : np + (np === 1 ? " pedido para conferir" : " pedidos para conferir"), ICO.relogio, np ? "destaque" : ""));
-      t.push(tile("mg:aprovado", "Aprovados", "Pedidos já enviados ao CD", ICO.ok));
-      t.push(tile("mg:lojas", "Pedidos lojas", "Fazer pedido por uma loja", ICO.loja));
+      t.push(tile("mg:aprovado", "Aprovados", "A faturar e faturados (com o nº da NF)", ICO.ok));
       t.push(tile("consulta", "Consulta de produtos", "Estoque, preço, fornecedor e EAN", ICO.lupa));
       t.push(tile("compra", "Pedido de compra", nc ? nc + (nc === 1 ? " item em andamento" : " itens em andamento") : "Montar o PDF e mandar pelo WhatsApp", ICO.caminhao));
       t.push(tile("analise", "Análise de vendas", "Vendas mês a mês de cada produto, por loja", ICO.grafico));
@@ -3757,7 +3759,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.17";
+  var VERSAO_APP = "2026-11-03.18";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
