@@ -3651,13 +3651,33 @@ window.PedidoPDF = (function () {
     $("telaConfig").classList.remove("aberta");
     if (dados) $("subtitulo").textContent = txtTopo();
   });
-  $("btnAtualizar").addEventListener("click", function () { toast("Atualizando…"); hist = null; if (ehManager() && !mgr.aberto) mgr.lista = null; carregar(); if (ehManager() && !dados) desenharManager(); });
+  // 03/11 (Marcelo): o botão ATUALIZAR recarrega o app INTEIRO na última versão (tela de carregamento) e busca os dados de novo.
+  $("btnAtualizar").addEventListener("click", function () {
+    if (mgr && mgr.sujo && !confirm("Você tem alterações não salvas neste pedido. Atualizar mesmo assim?")) return;
+    var tela = document.createElement("div");
+    tela.id = "telaAtualizando";
+    tela.style.cssText = "position:fixed;inset:0;z-index:99999;background:#3f1f1e;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-size:16px;text-align:center;padding:24px";
+    tela.innerHTML = '<div class="giro" style="width:46px;height:46px;border-width:5px"></div><b style="font-size:18px">Atualizando para a última versão…</b><span style="opacity:.8">O app e os dados estão sendo carregados de novo.</span>';
+    document.body.appendChild(tela);
+    try { confirmarExclusao(); } catch (e) {}     // exclusão com "Desfazer" pendente vai antes
+    try { salvarPedido(); } catch (e) {}           // o pedido aberto fica guardado no celular
+    var foi = false, ir = function (v) {
+      if (foi) return; foi = true;
+      LS.set("trocaVersao", { v: v || "", t: Date.now() });
+      location.replace(location.pathname + "?v=" + encodeURIComponent(v || "atual") + "&t=" + Date.now() + location.hash);   // endereço novo = arquivo novo
+    };
+    if (/github\.io$/i.test(location.hostname) && window.fetch) {
+      fetch(location.pathname + "?nv=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : ""; })
+        .then(function (t) { var m = /var VERSAO_APP = "([^"]+)"/.exec(t || ""); ir(m && m[1]); }, function () { ir(); });
+      setTimeout(function () { ir(); }, 8000);       // internet lenta: recarrega mesmo assim
+    } else setTimeout(function () { location.reload(); }, 300);
+  });
 
   // ---------------- VERSÃO NOVA DO APP (03/11) ----------------
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.8";
+  var VERSAO_APP = "2026-11-03.9";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   function checarVersaoNova() {
     if (!/github\.io$/i.test(location.hostname) || !window.fetch || document.hidden) return;
