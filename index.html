@@ -979,8 +979,13 @@ window.PedidoPDF = (function () {
     var l = String(cfg.loja || "").trim();
     return l.replace(/^.*_/, "").trim() || l;
   }
+  function cargoTopo() {   // cargo de quem está usando (Administração aparece como "Administrativo", como o Marcelo pediu)
+    var c = nomeNivel();
+    return c === "Administração" ? "Administrativo" : c;
+  }
   function txtTopo(semDados) {   // linha 1: "Dados att. em ... às ..."; linha 2 (embaixo): o nome do usuário
-    var u = $("usuarioTopo"); if (u) u.textContent = primeiroNome();
+    var u = $("usuarioTopo"), nm = primeiroNome(), cg = sessao ? cargoTopo() : "";
+    if (u) u.textContent = nm + (nm && cg ? " - " : "") + cg;   // 03/11: "Marcelo - Administrativo"
     return (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + (dados ? txtLista() : (semDados || "Carregando os dados…"));
   }
   function salvarPedido() { LS.set("pedido", pedido); atualizarRodape(); }
@@ -3628,7 +3633,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.5";
+  var VERSAO_APP = "2026-11-03.6";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   function checarVersaoNova() {
     if (!/github\.io$/i.test(location.hostname) || !window.fetch || document.hidden) return;
