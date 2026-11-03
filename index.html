@@ -1494,7 +1494,7 @@ window.PedidoPDF = (function () {
       $("lista").innerHTML = html + '<div class="vazio" style="padding:14px">Para continuar um pedido salvo, toque em <b>Pedidos salvos</b> lá em cima.</div>';
       return;
     }
-    html += '<div class="aviso">Pedidos que a loja salvou e ainda não enviou. <b>Continuar</b> abre o pedido para terminar e enviar.</div>';   // 03/11: mesmo layout do painel
+    html += '<div class="aviso">Pedidos que a loja salvou e ainda não enviou. <b>Continuar</b> abre o pedido para terminar e enviar.<br><small>Cada pedido salvo fica aqui por 30 dias (contados do último salvamento) e depois é apagado.</small></div>';   // 03/11: mesmo layout do painel
     if (!rasc) {
       var guardado = LS.get("rascCache", null);   // mostra na hora o que já tinha; atualiza em seguida
       buscarRasc();
@@ -1738,6 +1738,7 @@ window.PedidoPDF = (function () {
     html += '<select class="filtro-loja" id="mgrLoja"><option value="">Todas as lojas</option>' +
       lojas.map(function (l) { var n = nPorLoja[l] || 0;
         return "<option" + (l === mgr.loja ? " selected" : "") + ' value="' + esc(l) + '">' + esc(l) + (n ? " (" + n + ")" : " · sem pedidos") + "</option>"; }).join("") + "</select>";
+    if (mgr.filtro === "aprovado") html += '<div class="aviso" style="margin-top:8px"><small>Os pedidos aprovados ficam aqui por ' + mgr.lista.dias + " dias e depois são apagados.</small></div>";
     if (!lista.length) html += '<div class="vazio">' + (mgr.loja ? "<b>" + esc(mgr.loja) + "</b><br>Sem pedidos " + (mgr.filtro === "pendente" ? "aguardando aprovação." : "aprovados nos últimos " + mgr.lista.dias + " dias.")
       : (mgr.filtro === "pendente" ? "Nenhum pedido aguardando aprovação." : "Nenhum pedido aprovado nos últimos " + mgr.lista.dias + " dias.")) + "</div>";
     lista.forEach(function (x) {
@@ -1785,7 +1786,7 @@ window.PedidoPDF = (function () {
     lojas.sort(function (a, b) { return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" }); });
     if (salvosLoja && lojas.indexOf(salvosLoja) < 0) salvosLoja = "";
     var lista = salvosMgr.filter(function (x) { return !salvosLoja || x.loja === salvosLoja; });
-    var html = '<div class="aviso">Pedidos que as lojas salvaram e ainda não enviaram. <b>Continuar</b> abre o pedido pela loja para terminar e enviar.</div>' +
+    var html = '<div class="aviso">Pedidos que as lojas salvaram e ainda não enviaram. <b>Continuar</b> abre o pedido pela loja para terminar e enviar.<br><small>Cada pedido salvo fica aqui por 30 dias (contados do último salvamento) e depois é apagado.</small></div>' +
       '<select class="filtro-loja" id="salvosLoja"><option value="">Todas as lojas (' + salvosMgr.length + ")</option>" +
       lojas.map(function (l) { return "<option" + (l === salvosLoja ? " selected" : "") + ' value="' + esc(l) + '">' + esc(l) + " (" + nPor[l] + ")</option>"; }).join("") + "</select>";
     if (!lista.length) html += '<div class="vazio">Nenhum pedido salvo' + (salvosLoja ? " nesta loja." : " nas lojas.") + "</div>";
@@ -3684,7 +3685,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.10";
+  var VERSAO_APP = "2026-11-03.11";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
