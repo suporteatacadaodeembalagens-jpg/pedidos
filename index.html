@@ -353,6 +353,8 @@
   .campo label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
   .campo input{width:100%;border:1px solid #d8c9ae;border-radius:10px;padding:12px;font-size:16px;background:#fff}
   .campo input:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
+  .campo-forn{position:relative;margin-top:-2px}.campo-forn input{padding-right:46px}.campo-forn.ativo input{border:2px solid var(--ouro);background:#fffbe9;font-weight:700}
+  .campo-forn .limpar{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:#efe6d8;color:var(--marrom);border-radius:50%;width:30px;height:30px;font-size:17px;font-weight:700}
   .rev{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--linha);font-size:14px}
   .rev .q{min-width:64px;text-align:right;font-weight:700}
   .rev .d{flex:1}
@@ -935,7 +937,7 @@ window.PedidoPDF = (function () {
   if (!(sessao && sessao.perfil === "MANAGER")) comoLoja = null;
   var tela = comoLoja ? "app" : "inicio";   // "inicio" | "app" (pedidos/painel) | "consulta" | "compra"
   var pendenteConsulta = null;             // produto escolhido na consulta, entra no próximo pedido aberto
-  var cons = { termo: "", precos: null, extra: null };   // extra = {termo, lista}: produtos fora da lista de pedido (estoque 0 ou negativo no CD)
+  var cons = { termo: "", precos: null, extra: null, forn: "", fornProd: null, fornNomes: null, limite: 60 };   // forn = filtro de fornecedor (30/10)   // extra = {termo, lista}: produtos fora da lista de pedido (estoque 0 ou negativo no CD)
   function compraVazia(base) {   // novo pedido de compra: mantém entrega/frete/pagamento do anterior (costumam se repetir)
     base = base || {};
     return { fornecedor: base.fornecedor || "", obs: "", itens: {}, cobertura: base.cobertura || "", pagamento: base.pagamento || "",
@@ -2065,7 +2067,7 @@ window.PedidoPDF = (function () {
       atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {}); LS.set("pedidoDono", null);
       compra = compraVazia(); try { localStorage.removeItem("compra"); } catch (e) {}   // custos/preços não ficam no celular
       cmp.forn = null; cmp.fornNome = ""; cmp.busca = null; cmp.termo = ""; cmp.recentes = null; cmp.fornDados = {};
-      cons.termo = ""; cons.precos = null; cons.extra = null; mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
+      cons.termo = ""; cons.precos = null; cons.extra = null; cons.forn = ""; cons.fornProd = null; cons.fornNomes = null; mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
     }
     try { localStorage.removeItem("rascCache"); } catch (e) {}   // a lista de estoque fica guardada (é igual para todas as lojas)
     renderId++; dados = null; RES = null; $("lista").innerHTML = ""; $("abas").innerHTML = "";
@@ -2630,7 +2632,16 @@ window.PedidoPDF = (function () {
     $("lista").innerHTML = '<div class="titulo-tela">Consulta de produtos</div>' +
       '<div class="campo"><input id="consBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" value="' + esc(cons.termo) + '">' +
       '<button class="btn-ler escuro" id="btnLerCons" type="button">' + ICO_EAN + "Ler código de barras</button></div>" +
+      // 30/10: filtro de FORNECEDOR - escolhe o fornecedor e aparecem TODOS os produtos dele (a busca de cima filtra dentro dele)
+      '<div class="campo campo-forn' + (cons.forn ? " ativo" : "") + '"><input id="consForn" list="consFornLista" autocomplete="off" placeholder="Filtrar por fornecedor (todos os produtos dele)" value="' + esc(cons.forn) + '">' +
+      '<button class="limpar" id="consFornLimpar" type="button" aria-label="Tirar o filtro de fornecedor"' + (cons.forn ? "" : " hidden") + ">&times;</button>" +
+      '<datalist id="consFornLista">' + opcoesForn() + "</datalist></div>" +
       '<div id="consRes"></div>';
+    if (m && !cons.fornNomes && !desenharConsulta.fornIndo) {   // managers: TODOS os fornecedores do cadastro
+      desenharConsulta.fornIndo = true;
+      chamar("fornecedoresCompra", [], function (l) { desenharConsulta.fornIndo = false; cons.fornNomes = (l || []).map(function (x) { return x.nome; });
+        var dl = $("consFornLista"); if (dl) dl.innerHTML = opcoesForn(); }, function () { desenharConsulta.fornIndo = false; });
+    }
     if (m && !cons.precos && !desenharConsulta.buscando) {   // preços: só managers (o servidor não manda para loja)
       desenharConsulta.buscando = true;
       chamar("precosManager", [], function (p) { desenharConsulta.buscando = false; cons.precos = p || {}; if (tela === "consulta") resultadosConsulta(); },
@@ -2638,9 +2649,57 @@ window.PedidoPDF = (function () {
     }
     resultadosConsulta();
   }
+  /** Nomes dos fornecedores do filtro: managers = cadastro inteiro (servidor); lojas = os da lista de pedido. */
+  function nomesForn() {
+    if (cons.fornNomes) return cons.fornNomes;
+    var n = {};
+    if (dados) dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) { if (it.f) n[it.f] = 1; }); });
+    return Object.keys(n).sort(function (a, b) { return a.localeCompare(b, "pt-BR"); });
+  }
+  function opcoesForn() { return nomesForn().map(function (f) { return '<option value="' + esc(f) + '"></option>'; }).join(""); }
+  function filtrarFornCons(v) {
+    v = String(v || "").trim();
+    var alvo = v ? nomesForn().filter(function (f) { return semAcento(f) === semAcento(v); })[0] : "";
+    if (v && !alvo) return;                          // ainda digitando: só filtra quando bater com um fornecedor
+    if (alvo === cons.forn) return;
+    cons.forn = alvo || ""; cons.limite = 60;
+    var c = document.querySelector(".campo-forn"); if (c) c.classList.toggle("ativo", !!cons.forn);
+    var l = $("consFornLimpar"); if (l) l.hidden = !cons.forn;
+    resultadosConsulta();
+  }
+  function produtosDoFornLocal(f) {
+    var l = [];
+    dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) { if (it.f === f) l.push(it); }); });
+    return l;
+  }
+  function resultadosFornecedor(box) {
+    var f = cons.forn, termo = semAcento(cons.termo.trim()), termoNum = numBusca(termo), lista;
+    if (ehMgrLogin()) {   // managers: TODOS os produtos do fornecedor (também os fora da lista / sem estoque)
+      if (!cons.fornProd || cons.fornProd.nome !== f) {
+        box.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando os produtos de ' + esc(f) + "…</div>";
+        if (resultadosFornecedor.indo === f) return;
+        resultadosFornecedor.indo = f;
+        chamar("produtosFornecedor", [f], function (l) {
+          resultadosFornecedor.indo = null;
+          cons.fornProd = { nome: f, lista: (l || []).map(function (x) { return porPlu[x.p] ||
+            { p: x.p, d: x.d, m: x.m, f: x.f, b: x.b, t: x.t, q: x.q, e: Number(x.e) || 0, cu: x.c, dep: "", fora: 1 }; }) };
+          if (tela === "consulta" && cons.forn === f) resultadosConsulta();
+        }, function () { resultadosFornecedor.indo = null; cons.fornProd = { nome: f, lista: produtosDoFornLocal(f) }; if (tela === "consulta" && cons.forn === f) resultadosConsulta(); });
+        return;
+      }
+      lista = cons.fornProd.lista;
+    } else lista = produtosDoFornLocal(f);
+    if (termo.length >= 2) lista = lista.filter(function (it) { return casaBusca(it, termo, termoNum); });
+    lista = lista.slice().sort(function (a, b) { return (a.fora ? 1 : 0) - (b.fora ? 1 : 0) || String(a.d).localeCompare(String(b.d), "pt-BR"); });
+    var mostra = lista.slice(0, cons.limite);
+    box.innerHTML = '<div class="grupo">' + lista.length + (lista.length === 1 ? " produto" : " produtos") + " de " + esc(f) + (termo.length >= 2 ? " com “" + esc(cons.termo.trim()) + "”" : "") + "</div>" +
+      (lista.length ? mostra.map(htmlConsulta).join("") : '<div class="vazio">Nenhum produto desse fornecedor' + (termo.length >= 2 ? " com essa busca." : ".") + "</div>") +
+      (lista.length > mostra.length ? '<button class="btn btn-cinza" style="width:100%;margin:6px 0 14px" data-consmais="1">Mostrar mais ' + Math.min(60, lista.length - mostra.length) + " (faltam " + (lista.length - mostra.length) + ")</button>" : "");
+  }
   function resultadosConsulta() {
     var box = $("consRes"); if (!box) return;
     if (!dados) { box.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando a lista de estoque…</div>'; return; }
+    if (cons.forn) { resultadosFornecedor(box); return; }
     var termo = semAcento(cons.termo.trim()), termoNum = numBusca(termo);
     if (termo.length < 2) { box.innerHTML = '<div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
     var achados = [];
@@ -3240,6 +3299,8 @@ window.PedidoPDF = (function () {
     if (dsc) { var dono = dsc.closest("[data-plu],[data-mp],[data-cp]");
       if (dono) { abrirFicha(dono.getAttribute("data-plu") || dono.getAttribute("data-mp") || dono.getAttribute("data-cp")); return; } }
     if (tela === "consulta") {
+      if (e.target.closest("[data-consmais]")) { cons.limite += 60; resultadosConsulta(); return; }
+      if (e.target.closest("#consFornLimpar")) { var cf = $("consForn"); if (cf) cf.value = ""; filtrarFornCons(""); return; }
       if (e.target.closest("#btnLerCons")) { abrirLeitor(function (c) { cons.termo = c; var i = $("consBusca"); if (i) i.value = c; resultadosConsulta(); }); return; }
       var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
       var fv = e.target.closest("[data-fav]"); if (fv) { favoritoClique(fv.getAttribute("data-fav")); return; }
@@ -3316,6 +3377,7 @@ window.PedidoPDF = (function () {
   var tMgr;
   var tCons;
   $("lista").addEventListener("input", function (e) {
+    if (e.target.id === "consForn") filtrarFornCons(e.target.value);
     if (e.target.id === "consBusca") { var vc = e.target.value; clearTimeout(tCons); tCons = setTimeout(function () { cons.termo = vc; resultadosConsulta(); }, 200); }
     if (e.target.id === "cmpBusca") buscarCmp(e.target.value);
     if (e.target.id === "cmpForn") { compra.fornecedor = e.target.value.trim(); salvarCompra(); mostrarForn(); desenharFornDados(); }
