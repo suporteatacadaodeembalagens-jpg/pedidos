@@ -1783,9 +1783,27 @@ window.PedidoPDF = (function () {
     lista.forEach(function (x) {
       html += '<div class="ped"><div class="topo-ped"><div class="q1"><b>' + esc(x.loja) + "</b><span>" + esc(x.nome) + "<br>" + x.n + (x.n === 1 ? " produto" : " produtos") +
         " · salvo em " + esc(x.quando || "") + (x.por ? " por " + esc(x.por) : "") + "</span></div>" +
-        '<button class="ver" data-rascmgr="' + esc(x.id) + '" data-loja="' + esc(x.loja) + '">Continuar</button></div></div>';
+        '<div style="display:flex;flex-direction:column;gap:6px">' +
+        '<button class="ver" data-rascmgr="' + esc(x.id) + '" data-loja="' + esc(x.loja) + '">Continuar</button>' +
+        (nivelNum() >= 2 ? '<button class="ver" style="background:#fdeceb;color:#9b1c1c" data-excmgr="' + esc(x.id) + '" data-loja="' + esc(x.loja) + '">Excluir</button>' : "") +
+        "</div></div></div>";
     });
     $("lista").innerHTML = html;
+  }
+  /** 03/11: excluir um pedido salvo de uma loja pelo painel (Gerência para cima). Toque 2x para confirmar.
+   *  O servidor recebe como "a loja pelo manager" e grava no Relatório de erros quem excluiu. */
+  function excluirSalvoMgr(btn) {
+    if (nivelNum() < 2) { toast("\uD83D\uDD12 Só a Gerência, Administração e Diretoria podem excluir pedidos."); return; }
+    if (!btn._conf) { btn._conf = true; btn.textContent = "Toque de novo"; setTimeout(function () { btn._conf = false; btn.textContent = "Excluir"; }, 3000); return; }
+    var id = btn.getAttribute("data-excmgr"), loja = btn.getAttribute("data-loja");
+    btn.disabled = true; btn.textContent = "Excluindo…";
+    var ok = function () {
+      salvosMgr = (salvosMgr || []).filter(function (x) { return x.id !== id; });
+      toast("Pedido salvo excluído (fica registrado no relatório)"); desenharSalvosMgr();
+    }, falha = function (e) { btn.disabled = false; btn._conf = false; btn.textContent = "Excluir"; toast("Não foi possível excluir: " + String(e && e.message || e)); };
+    if (!EM_APPS_SCRIPT) { ok(); return; }
+    google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { if (erroLogin(e)) return; falha(e); })
+      .excluirRascunho(sessao.token + "~" + encodeURIComponent(loja), id);
   }
   function continuarSalvoMgr(loja, id) {
     entrarComoLoja(loja);
@@ -3425,6 +3443,7 @@ window.PedidoPDF = (function () {
     if (ehManager()) {
       var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
       var cl = e.target.closest("[data-comoloja]"); if (cl) { entrarComoLoja(cl.getAttribute("data-comoloja")); return; }
+      var xm = e.target.closest("[data-excmgr]"); if (xm) { excluirSalvoMgr(xm); return; }
       var rm = e.target.closest("[data-rascmgr]"); if (rm) { continuarSalvoMgr(rm.getAttribute("data-loja"), rm.getAttribute("data-rascmgr")); return; }
       if (e.target.closest("#mgrVoltar")) { voltarMgr(); return; }
       if (e.target.closest("#btnErpDeNovo")) { erpDeNovo(); return; }
@@ -3633,7 +3652,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.6";
+  var VERSAO_APP = "2026-11-03.7";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   function checarVersaoNova() {
     if (!/github\.io$/i.test(location.hostname) || !window.fetch || document.hidden) return;
