@@ -233,6 +233,10 @@
   .chip.erp{margin-left:4px;background:#eef1f5;color:#44505e}
   .chip.erp.ok{background:#e3f4e8;color:#1d6b35}
   .chip.erp.mal{background:#fde8e8;color:#9b1c1c;border:1px solid #f3b4b4}
+  .chip.dir{background:#fff1d6;color:#8a4b00;border:1px solid #f0c27a}
+  .chip.fat{margin-left:4px;background:#e0ecff;color:#1d4e89;border:1px solid #b8cff5}
+  .subabas{display:flex;gap:6px;margin:0 0 8px}
+  .subabas .btn{flex:1;padding:8px 6px;font-size:13.5px}
   .mgr-item{background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;box-shadow:0 1px 2px rgba(63,31,30,.08)}
   .mgr-item .d{flex:1;min-width:0;font-weight:600;font-size:14.5px;line-height:1.25}
   .mgr-item .d small{display:block;color:var(--sub);font-weight:400;font-size:12px;margin-top:3px}
@@ -1699,11 +1703,16 @@ window.PedidoPDF = (function () {
   // Managers veem os pedidos de todas as lojas e todos editam e aprovam.
   // Aprovado -> o servidor manda o Excel (.xlsx) para o e-mail de pedidos.
   function ehManager() { return !!(sessao && sessao.perfil === "MANAGER") && !comoLoja; }   // fazendo pedido pela loja = tela da loja
-  var mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
+  var mgr = { filtro: "pendente", sub: "afaturar", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
   function chipStatus(x) {
     return x.status === "pendente" ? '<span class="chip pend">Aguardando aprovação</span>'
-      : '<span class="chip ok">Aprovado' + (x.aprovadoEm ? " em " + esc(x.aprovadoEm) : "") + "</span>" + (x.editado ? '<span class="chip ed">com alterações</span>' : "") + chipErp(x.erp);
+      : (x.direto || (x.erp && x.erp.direto) ? '<span class="chip dir">Direto do ERP</span>'
+        : '<span class="chip ok">Aprovado' + (x.aprovadoEm ? " em " + esc(x.aprovadoEm) : "") + "</span>") +
+        (x.editado ? '<span class="chip ed">com alterações</span>' : "") + chipErp(x.erp) + chipFat(x);
   }
+  /** 03/11: pedido já FATURADO no ERP (a revisão do robô achou a Nota Fiscal de transferência). */
+  function notaDe(x) { return x && x.fat && x.fat.nf ? x.fat : (x && x.erp && x.erp.nf ? { nf: x.erp.nf, data: x.erp.nfData } : null); }
+  function chipFat(x) { var f = notaDe(x); return f ? '<span class="chip fat">Faturado · NF nº ' + esc(f.nf) + (f.data ? " em " + esc(f.data) : "") + "</span>" : ""; }
   var ERP_TXT = { fila: "ERP: na fila do robô", digitando: "ERP: robô digitando…", digitado: "ERP: digitado", erro: "ERP: erro", verificar: "ERP: conferir" };
   function chipErp(e) {
     if (!e || !ERP_TXT[e.st]) return "";
@@ -1714,11 +1723,13 @@ window.PedidoPDF = (function () {
   function blocoErp(x) {
     var e = x.erp;
     if (!e || x.status !== "aprovado") return "";
+    var f = notaDe(x);
     var h = '<div class="aviso">' + chipErp({ st: e.st, falhas: (e.falhas || []).length }) +
+      (f ? "<br>Faturado: <b>NF nº " + esc(f.nf) + "</b>" + (f.data ? " em " + esc(f.data) : "") + (f.valor ? " · " + reais(f.valor) : "") : "") +
       (e.bloco ? "<br>Bloco no ERP: <b>" + esc(e.bloco) + "</b>" : "") + (e.quando ? "<br><small>" + esc(e.quando) + "</small>" : "") +
       (e.msg ? "<br>" + esc(e.msg) : "");
     if ((e.falhas || []).length) h += "<br><small>Não digitados: " + e.falhas.map(function (f) { return esc(f.p) + " (" + esc(f.motivo) + ")"; }).join(", ") + "</small>";
-    if (sessao && sessao.aprova && e.st !== "fila" && e.st !== "digitando")
+    if (sessao && sessao.aprova && e.st !== "fila" && e.st !== "digitando" && !x.direto && !f)
       h += '<br><button class="btn btn-cinza" style="margin-top:8px;padding:9px 14px" id="btnErpDeNovo" type="button">Digitar de novo no ERP</button>';
     return h + "</div>";
   }
@@ -1749,12 +1760,20 @@ window.PedidoPDF = (function () {
     var nPend = todos.filter(function (x) { return x.status === "pendente"; }).length;
     $("modosMgr").children[0].textContent = "Aguardando aprovação" + (nPend ? " (" + nPend + ")" : "");
     if (mgr.filtro === "lojas") { desenharEscolhaLoja(); return; }
-    var lista = todos.filter(function (x) { return (mgr.filtro === "pendente") === (x.status === "pendente") && (!mgr.loja || x.loja === mgr.loja); });
+    var fatAba = mgr.sub === "faturados";   // 03/11: Aprovados tem 2 abas: A faturar | Faturados (com o nº da NF)
+    var naAba = function (x) { return (mgr.filtro === "pendente") === (x.status === "pendente") && (mgr.filtro !== "aprovado" || !!x.fat === fatAba); };
+    var lista = todos.filter(function (x) { return naAba(x) && (!mgr.loja || x.loja === mgr.loja); });
     var html = "";
+    if (mgr.filtro === "aprovado") {
+      var apr = todos.filter(function (x) { return x.status !== "pendente" && (!mgr.loja || x.loja === mgr.loja); });
+      var nFat = apr.filter(function (x) { return !!x.fat; }).length;
+      html += '<div class="subabas"><button class="btn ' + (fatAba ? "btn-cinza" : "btn-verde") + '" data-subfat="afaturar">A faturar (' + (apr.length - nFat) + ")</button>" +
+        '<button class="btn ' + (fatAba ? "btn-verde" : "btn-cinza") + '" data-subfat="faturados">Faturados (' + nFat + ")</button></div>";
+    }
     // filtro com TODAS as lojas cadastradas (mesmo sem pedido) + as que aparecem nos pedidos
     var lojas = (mgr.lista.lojas || []).slice(), nPorLoja = {};
     todos.forEach(function (x) {   // loja fora da lista (ex.: Matriz) só aparece se tiver pedido nesta aba
-      if ((mgr.filtro === "pendente") !== (x.status === "pendente")) return;
+      if (!naAba(x)) return;
       nPorLoja[x.loja] = (nPorLoja[x.loja] || 0) + 1;
       if (lojas.indexOf(x.loja) < 0) lojas.push(x.loja);
     });
@@ -1764,12 +1783,14 @@ window.PedidoPDF = (function () {
       lojas.map(function (l) { var n = nPorLoja[l] || 0;
         return "<option" + (l === mgr.loja ? " selected" : "") + ' value="' + esc(l) + '">' + esc(l) + (n ? " (" + n + ")" : " · sem pedidos") + "</option>"; }).join("") + "</select>";
     if (mgr.filtro === "aprovado") html += '<div class="aviso" style="margin-top:8px"><small>Os pedidos aprovados ficam aqui por ' + mgr.lista.dias + " dias e depois são apagados.</small></div>";
-    if (!lista.length) html += '<div class="vazio">' + (mgr.loja ? "<b>" + esc(mgr.loja) + "</b><br>Sem pedidos " + (mgr.filtro === "pendente" ? "aguardando aprovação." : "aprovados nos últimos " + mgr.lista.dias + " dias.")
-      : (mgr.filtro === "pendente" ? "Nenhum pedido aguardando aprovação." : "Nenhum pedido aprovado nos últimos " + mgr.lista.dias + " dias.")) + "</div>";
+    var oque = mgr.filtro === "pendente" ? "aguardando aprovação" : fatAba ? "faturado nos últimos " + mgr.lista.dias + " dias" : "aprovado a faturar";
+    if (!lista.length) html += '<div class="vazio">' + (mgr.loja ? "<b>" + esc(mgr.loja) + "</b><br>Sem pedido " + oque + "."
+      : "Nenhum pedido " + oque + ".") + "</div>";
     lista.forEach(function (x) {
       html += '<div class="ped"><div class="topo-ped"><div class="q1"><b>' + esc(x.loja) + "</b><span>" + esc(x.nome) + " · " + esc(x.quando) +
-        "<br>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · " + (x.feitoPor ? "feito pelo manager " + esc(x.feitoPor) : esc(x.email)) + "<br>" + chipStatus(x) +
-        (typeof x.valor === "number" ? '<br><b style="color:var(--texto);font-size:14px">Valor total: ' + reais(x.valor) + "</b> <small>(custo CD)" + (x.semCusto ? " · " + x.semCusto + " sem custo" : "") + "</small>" : "") +   // 03/11
+        "<br>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · " + (x.direto ? "feito direto no ERP" : x.feitoPor ? "feito pelo manager " + esc(x.feitoPor) : esc(x.email)) + "<br>" + chipStatus(x) +
+        (typeof x.valor === "number" ? '<br><b style="color:var(--texto);font-size:14px">Valor total: ' + reais(x.valor) + "</b> <small>(" + (x.direto && !x.n ? "valor no ERP" : "custo CD") + (x.semCusto ? " · " + x.semCusto + " sem custo" : "") + ")</small>" : "") +   // 03/11
+        (x.fat && x.fat.valor ? '<br><small>Valor da NF: <b>' + reais(x.fat.valor) + "</b></small>" : "") +
         "</span></div>" +
         '<button class="ver" data-abrir="' + esc(x.id) + '">Abrir</button></div></div>';
     });
@@ -1881,8 +1902,10 @@ window.PedidoPDF = (function () {
     var x = mgr.aberto, pode = podeEditarMgr(), origem = {};
     (x.itensLoja || []).forEach(function (i) { origem[i.p] = i.qtd; });
     var html = '<button class="voltar" id="mgrVoltar">← Voltar para a lista</button>' +
-      '<div class="aviso">Loja: <b>' + esc(x.loja) + "</b><br>Pedido: <b>" + esc(x.nome) + "</b><br>Feito por " + (x.feitoPor ? "manager " + esc(x.feitoPor) : esc(x.email)) + " em " + esc(x.quando) +
-      "<br>Lista de estoque de " + esc(x.dataLista) + "<br>" + chipStatus({ status: x.status, aprovadoEm: x.aprovadoEm, editado: !!x.editadoPor }) +
+      '<div class="aviso">Loja: <b>' + esc(x.loja) + "</b><br>Pedido: <b>" + esc(x.nome) + "</b><br>" +
+      (x.direto ? "Feito <b>direto no ERP</b> em " + esc(x.quando) + " (o robô achou na revisão)" + (x.valorErp ? "<br>Valor no ERP: <b>" + reais(x.valorErp) + "</b>" : "")
+        : "Feito por " + (x.feitoPor ? "manager " + esc(x.feitoPor) : esc(x.email)) + " em " + esc(x.quando) + "<br>Lista de estoque de " + esc(x.dataLista)) +
+      "<br>" + chipStatus({ status: x.status, aprovadoEm: x.aprovadoEm, editado: !!x.editadoPor, direto: x.direto }) +
       (x.aprovadoPor ? "<br><small>Aprovado por " + esc(x.aprovadoPor) + "</small>" : "") + "</div>" + blocoErp(x);
     if (pode) {
       html += '<div class="campo"><label for="mgrBusca">Adicionar produto ao pedido</label>' +
@@ -2396,6 +2419,8 @@ window.PedidoPDF = (function () {
         return R("O arquivo do estoque veio diferente do esperado e a lista não foi atualizada nessa rodada.", "O robô novo tira o arquivo de novo sozinho. Se continuar, mande a pasta logs.");
       return R("O robô (" + (e.fn || "") + ") deu este erro: " + m, "Se aparecer só uma vez, normalmente se resolve na próxima rodada. Se repetir, mande a pasta logs para análise.");
     }
+    if (t === "Revisão ERP") return R("O robô conferiu o app com o ERP e o pedido" + qual + (e.loja ? " da loja " + e.loja : "") + " NÃO existe no ERP (nem pendente nem faturado). Ele foi apagado do app. " + m,
+      "Se esse pedido devia existir (alguém apagou no ERP por engano?), peça para a loja fazer de novo. Uma cópia fica guardada no Drive (app_pedidos_removidos_revisao.json).");
     if (t === "Pedido excluído") return R("Um pedido salvo foi excluído. " + m, "Só informação. Se ninguém combinou essa exclusão, fale com quem excluiu (está escrito acima).");
     if (t === "Sessão") return R("O login dessa pessoa venceu (fica ativo por alguns dias).", "Nada a fazer: é só entrar de novo com e-mail e senha.");
     if (t === "Login/Senha") return R("Tentativa de entrar com e-mail, cargo ou senha errados. " + m,
@@ -2409,7 +2434,7 @@ window.PedidoPDF = (function () {
     l.forEach(function (e) { if (tipos.indexOf(e.tipo || "ERP") < 0) tipos.push(e.tipo || "ERP"); });
     if (tipos.indexOf(ERR.filtro) < 0) ERR.filtro = "Todos";
     var vis = l.filter(function (e) { return ERR.filtro === "Todos" || (e.tipo || "ERP") === ERR.filtro; });
-    var cor = { "Pedido excluído": "#b45309", "Robô": "#6b4f2a", "ERP": "#9b1c1c", "Login/Senha": "#8a5a00", "Pedido": "#1d4e89", "Compra": "#4b3b8f", "Sessão": "#666", "Tela": "#0b6b5a", "App": "#444" };
+    var cor = { "Revisão ERP": "#7a2e8a", "Pedido excluído": "#b45309", "Robô": "#6b4f2a", "ERP": "#9b1c1c", "Login/Senha": "#8a5a00", "Pedido": "#1d4e89", "Compra": "#4b3b8f", "Sessão": "#666", "Tela": "#0b6b5a", "App": "#444" };
     var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">' + tipos.map(function (t) {
         var n = t === "Todos" ? l.length : l.filter(function (e) { return (e.tipo || "ERP") === t; }).length;
         return '<button class="btn ' + (t === ERR.filtro ? "btn-verde" : "btn-cinza") + '" style="padding:6px 10px;font-size:13px" data-errfiltro="' + esc(t) + '">' + esc(t) + " (" + n + ")</button>";
@@ -3474,6 +3499,7 @@ window.PedidoPDF = (function () {
       return;
     }
     if (ehManager()) {
+      var sf = e.target.closest("[data-subfat]"); if (sf) { mgr.sub = sf.getAttribute("data-subfat"); desenharManager(); window.scrollTo(0, 0); return; }
       var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
       var cl = e.target.closest("[data-comoloja]"); if (cl) { entrarComoLoja(cl.getAttribute("data-comoloja")); return; }
       var xm = e.target.closest("[data-excmgr]"); if (xm) { excluirSalvoMgr(xm); return; }
@@ -3726,7 +3752,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.15";
+  var VERSAO_APP = "2026-11-03.16";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
