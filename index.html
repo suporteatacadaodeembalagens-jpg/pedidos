@@ -402,6 +402,9 @@
     <button class="icone-btn" id="btnInicio" aria-label="Início" hidden>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
     </button>
+    <button class="icone-btn" id="btnCompartilhar" aria-label="Compartilhar o link do app">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+    </button>
     <button class="icone-btn" id="btnAtualizar" aria-label="Atualizar lista">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>
     </button>
@@ -3655,6 +3658,20 @@ window.PedidoPDF = (function () {
     $("telaConfig").classList.remove("aberta");
     if (dados) $("subtitulo").textContent = txtTopo();
   });
+  // 03/11 (Marcelo): botão COMPARTILHAR - manda o link do app (WhatsApp, e-mail...). Sem o menu do celular: WhatsApp ou copiar.
+  $("btnCompartilhar").addEventListener("click", function () {
+    var url = "https://suporteatacadaodeembalagens-jpg.github.io/pedidos/", txt = "App de pedidos do Atacadão de Embalagens";
+    if (navigator.share) { navigator.share({ title: "Atacadão De Embalagens", text: txt, url: url }).catch(function () {}); return; }
+    modal("Compartilhar o app", '<p style="margin:0 0 8px">Link do app:</p><div style="background:#f6f0e6;border-radius:8px;padding:10px;word-break:break-all;margin:0 0 12px"><b>' + esc(url) + "</b></div>" +
+      '<div style="display:flex;gap:8px"><a class="btn btn-verde" style="flex:1;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(txt + ": " + url) + '">WhatsApp</a>' +
+      '<button class="btn btn-cinza" style="flex:1" type="button" id="btnCopiarLink">Copiar link</button></div>');
+    var cp = $("btnCopiarLink");
+    if (cp) cp.addEventListener("click", function () {
+      var feito = function () { toast("Link copiado"); fecharModal(); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(feito, function () { prompt("Copie o link:", url); });
+      else prompt("Copie o link:", url);
+    });
+  });
   // 03/11 (Marcelo): o botão ATUALIZAR recarrega o app INTEIRO na última versão (tela de carregamento) e busca os dados de novo.
   $("btnAtualizar").addEventListener("click", function () {
     if (mgr && mgr.sujo && !confirm("Você tem alterações não salvas neste pedido. Atualizar mesmo assim?")) return;
@@ -3688,7 +3705,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.12";
+  var VERSAO_APP = "2026-11-03.13";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
