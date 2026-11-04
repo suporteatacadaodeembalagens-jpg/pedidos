@@ -327,6 +327,8 @@
   main{padding:8px max(12px, env(safe-area-inset-right, 0px)) calc(150px + var(--corte, 0px)) max(12px, env(safe-area-inset-left, 0px))}
   .grupo{font-size:12px;font-weight:700;color:var(--azul);text-transform:uppercase;letter-spacing:.5px;
     padding:12px 4px 6px}
+  /* 04/11 (Marcelo): quebra de MARCA em destaque: nome escuro e uma linha escura embaixo */
+  .grupo.marca{color:var(--marrom-esc);font-size:13.5px;font-weight:800;padding:18px 2px 5px;margin-bottom:8px;border-bottom:3px solid var(--marrom)}
   .item{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;
     box-shadow:0 1px 2px rgba(63,31,30,.08);border:2px solid transparent}
   .item.com-pedido{background:#eaf7ea;border-color:#b9dfb9}   /* com quantidade: verde bem claro */
@@ -1362,7 +1364,7 @@ window.PedidoPDF = (function () {
   function partesPorMarca(itens, mostrarDep) {
     var partes = [], marca = null;
     itens.forEach(function (it) {
-      if (it.m !== marca) { marca = it.m; partes.push('<div class="grupo">' + esc(marca) + "</div>"); }
+      if (it.m !== marca) { marca = it.m; partes.push('<div class="grupo marca">' + esc(marca) + "</div>"); }
       partes.push(htmlItem(it, mostrarDep));
     });
     return partes;
@@ -2082,7 +2084,7 @@ window.PedidoPDF = (function () {
         '<div class="setor-corpo"' + (fechado ? " hidden" : "") + ">";
       var marca = null;
       l.forEach(function (i) {
-        if ((i.m || "") !== marca) { marca = i.m || ""; html += '<div class="grupo">' + esc(marca || "Sem marca") + "</div>"; }
+        if ((i.m || "") !== marca) { marca = i.m || ""; html += '<div class="grupo marca">' + esc(marca || "Sem marca") + "</div>"; }
         html += htmlItemMgr(i, pode, origem[i.p]);
       });
       html += "</div>";
@@ -4092,7 +4094,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.16";
+  var VERSAO_APP = "2026-11-04.17";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
