@@ -159,6 +159,7 @@
   .btn-zap:disabled{background:#9db8a7}
   .item .desc{cursor:pointer}
   .item .desc::after{content:" \203A";color:var(--sub);font-weight:400}
+  .item .desc .mini-foto{float:right;width:48px;height:48px;object-fit:contain;margin:-2px 0 4px 10px;border-radius:8px;background:#fff;border:1px solid #eee3d3}
   #fichaTitulo{padding-right:44px;font-size:17px;line-height:1.25}
   .tab-lojas{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
   .tab-lojas th{text-align:right;color:var(--sub);font-weight:700;padding:6px 4px;border-bottom:2px solid var(--ouro);font-size:12px}
@@ -1290,7 +1291,7 @@ window.PedidoPDF = (function () {
     var q = pedido[it.p] || 0;
     var emb = it.t ? esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "";
     return '<div class="item' + (q > 0 ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '">' +
-      '<div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
+      '<div class="desc">' + miniFoto(it.p) + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep, emUnidade(it) ? ' <span class="tag-un">pedido em UN</span>' : "") +
       blocoEstoque(it.p, it.e, it.c, it.t, it.q, null, comoLoja ? codLoja(comoLoja) : "") +   // pedido de UMA loja: só ela
       '<div class="rodape-item"><div class="stepper">' +
@@ -1324,7 +1325,30 @@ window.PedidoPDF = (function () {
     });
     return partes;
   }
+  // 04/11 (Marcelo): foto PEQUENA ao lado da descrição (fotos que o robô achou na web pelo código de barras)
+  var FOTOS = null, PREF_FOTO = "https://images.openfoodfacts.org/images/products/";
+  function fotoUrl(p, mini) {
+    var u = FOTOS && FOTOS[p]; if (!u) return "";
+    if (u.charAt(0) === "~") u = PREF_FOTO + u.slice(1);
+    return mini ? u.replace(/\.(200|400|full)\.jpg$/, ".100.jpg") : u;
+  }
+  function miniFoto(p) {
+    var u = fotoUrl(p, true);
+    return u ? '<img class="mini-foto" src="' + esc(u) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : "";
+  }
+  function carregarFotos() {
+    if (FOTOS !== null || !sessao) return;
+    FOTOS = {};
+    chamar("fotosProdutos", [], function (r) {
+      FOTOS = r || {};
+      // põe as fotos nos cartões que já estão na tela (sem redesenhar a lista: não mexe na rolagem)
+      Array.prototype.forEach.call(document.querySelectorAll(".item[data-plu] > .desc"), function (d) {
+        if (!d.querySelector(".mini-foto")) d.insertAdjacentHTML("afterbegin", miniFoto(d.parentNode.getAttribute("data-plu")));
+      });
+    }, function () {});
+  }
   function desenharLista() {
+    carregarFotos();
     if (tela === "inicio") { desenharInicio(); return; }
     if (tela === "consulta") { desenharConsulta(); return; }
     if (tela === "compra") { desenharCompra(); return; }
@@ -2196,7 +2220,7 @@ window.PedidoPDF = (function () {
   function sair(msg, expirou) {
     try { confirmarExclusao(); } catch (e) {}   // exclusão de rascunho pendente ("Desfazer") vai antes de perder o login
     if (expirou && sessao) LS.set("pedidoDono", sessao.email);
-    sessao = null; LS.set("sessao", null); hist = null; filtroLoja = ""; rasc = null; comoLoja = null; LS.set("comoLoja", null);
+    sessao = null; LS.set("sessao", null); FOTOS = null; hist = null; filtroLoja = ""; rasc = null; comoLoja = null; LS.set("comoLoja", null);
     if (!expirou) {
       atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {}); LS.set("pedidoDono", null);
       compra = compraVazia(); try { localStorage.removeItem("compra"); } catch (e) {}   // custos/preços não ficam no celular
@@ -2965,7 +2989,7 @@ window.PedidoPDF = (function () {
       // 04/11 (Marcelo): ao lado, a Análise de vendas DESTE produto (Gerência, Administração e Diretoria; Operacional vê com cadeado)
       (m || nivelNum() >= 2 ? '<button class="btn btn-ana" data-anacons="' + esc(it.p) + '" data-anad="' + esc(it.d) + '">&#128200; Análise de vendas</button>'
         : '<button class="btn btn-ana bloq" data-anabloq="1" title="Gerência, Administração e Diretoria">\uD83D\uDD12 Análise de vendas</button>') + "</div>";
-    return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
+    return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"><div class="desc">' + miniFoto(it.p) + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
       '<div class="acao-cons">' + acao + "</div></div>";
   }
@@ -3830,7 +3854,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.5";
+  var VERSAO_APP = "2026-11-04.6";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
