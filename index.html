@@ -329,7 +329,7 @@
     padding:12px 4px 6px}
   /* 04/11 (Marcelo): quebra de MARCA em destaque: faixa amarela cheia com o nome em branco, centralizado
      (sombra escura no texto para dar leitura no amarelo). Publicado de novo (2): deploy anterior do GitHub travou. */
-  .grupo.marca{background:var(--ouro);color:#fff;font-size:14px;font-weight:800;letter-spacing:.6px;padding:8px 12px;margin:16px 0 8px;text-align:center;
+  .grupo.marca{background:var(--ouro);color:#fff;font-size:21px;line-height:1.15;font-weight:900;letter-spacing:.8px;padding:6px 12px;margin:16px 0 8px;text-align:center;
     border-radius:8px;text-shadow:0 1px 2px rgba(63,31,30,.75),0 0 1px rgba(63,31,30,.9)}
   .item{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;
     box-shadow:0 1px 2px rgba(63,31,30,.08);border:2px solid transparent}
@@ -2252,8 +2252,9 @@ window.PedidoPDF = (function () {
   function incluirMgr(plu) {
     var it = porPlu[plu]; if (!it) return;
     mgr.itens.push({ p: it.p, d: it.d, m: it.m, dep: it.dep, t: unPedido(it), qtd: 1 });
-    mgr.abertos = mgr.abertos || {}; mgr.abertos[it.dep] = true;   // abre o setor do produto incluído
-    mgr.sujo = true; mgr.busca = ""; desenharPedidoMgr(); toast("Produto incluído");
+    mgr.sujo = true;
+    // 04/11 (Marcelo): + Incluir já leva até o produto, igual ao "Ver no pedido" (abre o setor, fecha o teclado, rola e deixa amarelo)
+    verNoPedidoMgr(it.p); toast("Produto incluído");
   }
   function voltarMgr() {
     var b = $("mgrVoltar");
@@ -4096,7 +4097,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.18";
+  var VERSAO_APP = "2026-11-04.19";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
