@@ -1407,9 +1407,12 @@ window.PedidoPDF = (function () {
       var achados = [];
       dados.departamentos.forEach(function (d) {
         d.itens.forEach(function (it) {
-          if (casaBusca(it, termo, termoNum)) achados.push(it);
+          // 04/11 (Marcelo): igual à Consulta de produtos (nome, PLU, marca, EAN e também FORNECEDOR), mas só a lista
+          // de estoque do CD (produto com estoque 0 ou negativo no CD não vem aqui)
+          if ((Number(it.e) || 0) > 0 && (casaBusca(it, termo, termoNum) || (it.f && semAcento(it.f).indexOf(termo) >= 0))) achados.push(it);
         });
       });
+      achados.sort(ordemAlfa);   // 04/11: em ordem alfabética, igual à Consulta
       if (!achados.length) { renderId++; $("lista").innerHTML = '<div class="vazio">' + (termoNum.length >= 8
           ? "Nenhum produto com o código de barras “" + esc($("busca").value.trim()) + "” na lista de estoque atual."
           : "Nada encontrado para “" + esc($("busca").value) + "”.") + "</div>"; return; }
@@ -4101,7 +4104,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.20";
+  var VERSAO_APP = "2026-11-04.21";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
