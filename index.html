@@ -1141,6 +1141,7 @@ window.PedidoPDF = (function () {
         .withFailureHandler(function (e) { if (erroLogin(e)) return; if (!cache) $("lista").innerHTML = '<div class="vazio">Sem conexão. Tente de novo.</div>'; else toast("Sem conexão: mostrando a última lista"); })
         .getDados(sessao.token, cache && cache.gerado ? String(cache.gerado) : "");
       carregarResumoLojas();
+      setTimeout(preCarregar, 1200);   // 04/11: depois da lista, já busca por trás o que as abas vão precisar
     } else if (window.DEMO_DADOS) {
       aplicarDados(window.DEMO_DADOS, true);
     }
@@ -1800,6 +1801,55 @@ window.PedidoPDF = (function () {
       toast("Na fila: o robô digita em até 10 minutos."); mgr.lista = null; desenharManager();
     }, function (err) { toast(String(err && err.message || err)); });
   }
+  // 04/11 (app mais rápido): cada chamada ao servidor leva ~1,2 s. As listas são buscadas UMA vez por vez, em segundo
+  // plano, e a tela mostra na hora o que já tem (atualiza sozinha quando a resposta chega).
+  function buscarMgrLista(falha) {
+    if (buscarMgrLista.indo) return; buscarMgrLista.indo = true;
+    chamar("pedidosManager", [], function (r) {
+      buscarMgrLista.indo = false; mgr.lista = r;
+      if (ehManager() && tela === "app" && !mgr.aberto && mgr.filtro !== "salvos" && mgr.filtro !== "lojas") desenharManager();
+    }, function (e) { buscarMgrLista.indo = false; if (falha) falha(e); });
+  }
+  function buscarSalvosMgr(falha) {
+    if (buscarSalvosMgr.indo) return; buscarSalvosMgr.indo = true;
+    chamar("rascunhosManager", [], function (l) {
+      buscarSalvosMgr.indo = false; salvosMgr = l || [];
+      if (ehManager() && tela === "app" && mgr.filtro === "salvos" && !mgr.aberto) desenharSalvosMgr();
+    }, function (e) { buscarSalvosMgr.indo = false; if (falha) falha(e); });
+  }
+  function buscarHist() {
+    if (buscarHist.indo || !sessao) return; buscarHist.indo = true;
+    chamar("historico", [], function (r) {
+      buscarHist.indo = false; hist = r;
+      if (tela === "app" && abaAtual === HIST && !$("busca").value.trim() && !ehManager()) desenharHistorico();
+    }, function () { buscarHist.indo = false; });
+  }
+  /** Logo depois de abrir o app: já busca (em segundo plano) o que a pessoa mais usa, para as abas abrirem na hora. */
+  function preCarregar() {
+    if (!sessao || !EM_APPS_SCRIPT) return;
+    carregarFotos();
+    if (ehMgrLogin()) {
+      if (!mgr.lista) buscarMgrLista();
+      if (!salvosMgr) buscarSalvosMgr();
+      if (!cons.precos && !desenharConsulta.buscando) {
+        desenharConsulta.buscando = true;
+        chamar("precosManager", [], function (p) { desenharConsulta.buscando = false; cons.precos = p || {}; if (tela === "consulta") resultadosConsulta(); },
+          function () { desenharConsulta.buscando = false; });
+      }
+      if (!cons.fornNomes && !desenharConsulta.fornIndo) {
+        desenharConsulta.fornIndo = true;
+        chamar("fornecedoresCompra", [], function (l) { desenharConsulta.fornIndo = false; cons.fornNomes = l || []; }, function () { desenharConsulta.fornIndo = false; });
+      }
+    } else {
+      if (!hist) buscarHist();
+      if (!rasc) buscarRasc();
+      if (nivelNum() >= 2 && !cons.custoLoja && !desenharConsulta.custoIndo) {
+        desenharConsulta.custoIndo = true;
+        chamar("custosMinhaLoja", [], function (c) { desenharConsulta.custoIndo = false; cons.custoLoja = c || {}; if (tela === "consulta") resultadosConsulta(); },
+          function () { desenharConsulta.custoIndo = false; });
+      }
+    }
+  }
   function desenharManager() {
     if (tela !== "app") { desenharLista(); return; }
     renderId++;
@@ -1809,8 +1859,7 @@ window.PedidoPDF = (function () {
     if (mgr.filtro === "salvos") { desenharSalvosMgr(); return; }
     if (!mgr.lista) {
       $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando pedidos das lojas…</div>';
-      chamar("pedidosManager", [], function (r) { mgr.lista = r; if (ehManager() && !mgr.aberto) desenharManager(); },
-        function (e) { $("lista").innerHTML = '<div class="vazio">Não foi possível carregar: ' + esc(e && e.message || e) + "</div>"; });
+      buscarMgrLista(function (e) { $("lista").innerHTML = '<div class="vazio">Não foi possível carregar: ' + esc(e && e.message || e) + "</div>"; });
       return;
     }
     var todos = mgr.lista.pedidos;
@@ -1883,8 +1932,7 @@ window.PedidoPDF = (function () {
   function desenharSalvosMgr() {
     if (!salvosMgr) {
       $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando os pedidos salvos das lojas…</div>';
-      chamar("rascunhosManager", [], function (l) { salvosMgr = l || []; if (ehManager() && mgr.filtro === "salvos" && !mgr.aberto) desenharSalvosMgr(); },
-        function (e) { $("lista").innerHTML = '<div class="vazio">Não foi possível carregar: ' + esc(e && e.message || e) + "</div>"; });
+      buscarSalvosMgr(function (e) { $("lista").innerHTML = '<div class="vazio">Não foi possível carregar: ' + esc(e && e.message || e) + "</div>"; });
       return;
     }
     var lojas = [], nPor = {};
@@ -2103,9 +2151,13 @@ window.PedidoPDF = (function () {
     if (!hist) {
       $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando pedidos anteriores…</div>';
       var ok = function (r) { hist = r; if (abaAtual === HIST && !$("busca").value.trim()) desenharHistorico(); };
-      if (EM_APPS_SCRIPT) google.script.run.withSuccessHandler(ok)
-        .withFailureHandler(function (e) { if (erroLogin(e)) return; $("lista").innerHTML = '<div class="vazio">Não foi possível carregar. ' + esc(e && e.message || e) + '</div>'; })
-        .historico(tk());
+      if (EM_APPS_SCRIPT) {
+        if (buscarHist.indo) return;   // a busca de segundo plano já está a caminho
+        buscarHist.indo = true;
+        google.script.run.withSuccessHandler(function (r) { buscarHist.indo = false; ok(r); })
+          .withFailureHandler(function (e) { buscarHist.indo = false; if (erroLogin(e)) return; $("lista").innerHTML = '<div class="vazio">Não foi possível carregar. ' + esc(e && e.message || e) + '</div>'; })
+          .historico(tk());
+      }
       else ok({ mestre: true, dias: 30, pedidos: [{ id: "demo1", quando: "19/10/2026 17:40", loja: "Filial 02_Carapicuíba", email: "carapicuiba@atacadaodeembalagens.com.br", dataLista: "19/10/2026", n: 2 }] });
       return;
     }
@@ -3771,7 +3823,9 @@ window.PedidoPDF = (function () {
   $("modosMgr").addEventListener("click", function (e) {
     var b = e.target.closest("[data-mg]"); if (!b) return;
     mgr.filtro = b.getAttribute("data-mg"); mgr.aberto = null; mgr.itens = null; mgr.sujo = false;
-    if (mgr.filtro === "salvos") salvosMgr = null;   // sempre a lista mais nova
+    // 04/11: mostra NA HORA o que já tem e busca a lista mais nova por trás (redesenha quando chegar)
+    if (mgr.filtro === "salvos") { if (salvosMgr) buscarSalvosMgr(); }
+    else if ((mgr.filtro === "pendente" || mgr.filtro === "aprovado") && mgr.lista) buscarMgrLista();
     desenharManager(); window.scrollTo(0, 0);
   });
   $("btnMgrSalvar").addEventListener("click", salvarMgr);
@@ -3804,7 +3858,7 @@ window.PedidoPDF = (function () {
     var st = md === "histp" ? "pendente" : md === "hista" ? "aprovado" : "";
     var nova = st ? HIST : md === "salvos" ? SALVOS : md === "atual" ? ATUAL : (ultimaDep || dados.departamentos[0].nome);
     if ((nova === abaAtual && (!st || st === histSt)) || (md === "lista" && abaAtual !== HIST && abaAtual !== ATUAL && abaAtual !== SALVOS)) return;
-    if (st) histSt = st;
+    if (st) { histSt = st; if (hist) buscarHist(); }   // 04/11: mostra o que já tem e atualiza por trás
     abaAtual = nova;
     if (nova === SALVOS) rasc = null;   // pedidos salvos são da loja toda: busca a lista mais nova
     if (nova === ATUAL) abertosAtual = {};   // toda vez que entra no "Pedido atual", os setores vêm fechados
@@ -3902,7 +3956,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.8";
+  var VERSAO_APP = "2026-11-04.9";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
