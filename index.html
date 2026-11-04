@@ -2177,9 +2177,14 @@ window.PedidoPDF = (function () {
     }
     if (!lista.length) html += '<div class="vazio">' + (pend ? "Nenhum pedido aguardando aprovação." : "Nenhum pedido aprovado nos últimos " + hist.dias + " dias.") + "</div>";
     lista.forEach(function (x) {
-      html += '<div class="ped" data-id="' + esc(x.id) + '"><div class="topo-ped"><div class="q1"><b>' + (x.nome ? esc(x.nome) + ' · ' : '') + esc(x.quando) + '</b>' +
-        '<span>' + (hist.mestre ? esc(x.loja) + ' · ' + esc(x.email) + '<br>' : '') + x.n + (x.n === 1 ? ' produto' : ' produtos') + ' · lista de ' + esc(x.dataLista) + '<br>' + chipStatus(x) +
-        (x.feitoPor ? '<br><small class="feito-mgr">Feito e aprovado pelo manager ' + esc(x.feitoPor) + '</small>' : '') + '</span></div>' +
+      // 04/11 (Marcelo): o MESMO cartão do painel da gerência (loja, nome e hora, produtos e quem fez, situação);
+      // o valor total (custo CD) só vem do servidor para a Gerência para cima
+      html += '<div class="ped" data-id="' + esc(x.id) + '"><div class="topo-ped"><div class="q1"><b>' + esc(x.loja) + '</b>' +
+        '<span>' + esc(x.nome || "Pedido") + ' · ' + esc(x.quando) +
+        '<br>' + x.n + (x.n === 1 ? ' produto' : ' produtos') + ' · ' + (x.direto ? 'feito direto no ERP' : x.feitoPor ? 'feito pelo manager ' + esc(x.feitoPor) : esc(x.email)) +
+        '<br>' + chipStatus(x) +
+        (typeof x.valor === "number" ? '<br><b style="color:var(--texto);font-size:14px">Valor total: ' + reais(x.valor) + '</b> <small>(custo CD' + (x.semCusto ? ' · ' + x.semCusto + ' sem custo' : '') + ')</small>' : '') +
+        '</span></div>' +
         '<button class="ver" data-ver="' + esc(x.id) + '">Ver itens</button></div><div class="itens-ped" hidden></div></div>';
     });
     $("lista").innerHTML = html;
@@ -3963,7 +3968,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.10";
+  var VERSAO_APP = "2026-11-04.11";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
