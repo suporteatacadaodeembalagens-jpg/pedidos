@@ -193,7 +193,8 @@
   html{overscroll-behavior-y:none}
   main{min-height:calc(100vh + 2px);box-sizing:border-box}
   .modos .modo{line-height:1.15}
-  #modos,#modosMgr{gap:6px}#modos .modo,#modosMgr .modo{padding:8px 3px;font-size:12.5px}   /* 4 botões: Fazer pedido | Pedido atual | Pedidos salvos | Pedidos anteriores */
+  #modos,#modosMgr{gap:6px}#modos .modo,#modosMgr .modo{padding:8px 3px;font-size:12.5px}
+  #modos{gap:4px;padding-left:10px;padding-right:10px;flex-wrap:wrap}#modos .modo{padding:7px 3px;font-size:11.5px;flex:1 1 0;min-width:min-content}   /* 03/11: 5 botões na loja: Novo pedido | Pedido atual | Pedidos salvos | Aguardando aprovação | Aprovados */
   .modo small{display:inline-block;margin-left:3px;background:var(--principal);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;font-weight:800}
   header.sem-pedido .busca, header.sem-pedido .abas{display:none}
   body.sem-rodape footer{display:none}
@@ -317,6 +318,7 @@
   .tab-lj th:first-child,.tab-lj td:first-child{text-align:left}
   .tab-lj td{text-align:right;padding:2px 6px;border-top:1px solid #f0e8dc}
   .tab-lj td b{color:var(--texto)}
+  .tab-lj .cu-un{display:block;font-size:11px;opacity:.75;white-space:nowrap}
   .lojas-mini .lj{padding:2px 5px;border-radius:6px;background:#f4ede2;white-space:nowrap;font-size:12px;overflow:hidden;text-overflow:ellipsis}
   .lojas-mini .lj b{color:var(--texto)}
   .lojas-mini .uma b{font-size:15px;color:var(--texto)}
@@ -442,10 +444,11 @@
     <button id="btnSairComo">Voltar ao painel</button>
   </div>
   <div class="modos" id="modos">
-    <button class="modo ativo" data-modo="lista">Fazer pedido</button>
+    <button class="modo ativo" data-modo="lista">Novo pedido</button>
     <button class="modo" data-modo="atual" id="btnModoAtual">Pedido atual</button>
     <button class="modo" data-modo="salvos">Pedidos salvos</button>
-    <button class="modo" data-modo="hist">Pedidos anteriores</button>
+    <button class="modo" data-modo="histp">Aguardando aprovação</button>
+    <button class="modo" data-modo="hista">Aprovados</button>
   </div>
   <div class="barra-pedido" id="barraPedido" hidden>
     <span>Pedido: <b id="nomePedido"></b></span>
@@ -1054,25 +1057,36 @@ window.PedidoPDF = (function () {
     if (n === 0 && v !== 0) return v > 0 ? "&lt;0,1" : "&gt;-0,1";
     return num(n);
   }
-  function htmlLojas(plu, so) {
+  /** 04/11: custo unitário -> "R$ 30,00 CX c/ 12 · R$ 2,50 un" (custo da embalagem de compra + unitário). */
+  function txtCusto(cu, t, q) {
+    cu = Number(cu) || 0; q = Number(q) || 0;
+    if (!(cu > 0)) return "—";
+    return q > 1 ? reais(cu * q) + " " + (t || "CX") + " c/ " + num(q) + " · " + reais(cu) + " un" : reais(cu) + " un";
+  }
+  /** custos = {loja: custo unitário} (Diretoria/Administração na Consulta: coluna de custo por loja). emb = {t, q} se o produto não está na lista. */
+  function htmlLojas(plu, so, custos, emb) {
     if (!RES || !RES.lojas || !RES.lojas.length) return "";
     var l = RES.d[plu] || [], cods = so ? RES.lojas.filter(function (c) { return c === so; }) : RES.lojas;
     if (!cods.length) return "";
-    var it = porPlu[plu] || {}, q = Number(it.q) || 0, t = q > 1 ? (it.t || "CX") : "UN";
+    var it = porPlu[plu] || emb || {}, q = Number(it.q) || 0, t = q > 1 ? (it.t || "CX") : "UN";
+    var cCus = custos ? function (c) {
+      var cu = Number(custos[c]) || 0;
+      return "<td>" + (cu > 0 ? "<b>" + reais(q > 1 ? cu * q : cu) + "</b>" + (q > 1 ? "<small class=\"cu-un\">" + reais(cu) + " un</small>" : "") : "—") + "</td>";
+    } : function () { return ""; };
     if (cods.length === 1) {
       var i = RES.idx[cods[0]], e = l[2 * i] || 0;
       return '<div class="lojas-mini uma">Loja ' + esc(cods[0]) + " " + esc(RES.nomes[cods[0]] || "") + "<br>Estoque: <b>" + emEmb(e, q) + "</b> " + esc(t) +
         "<br>Vendas 7 dias: <b>" + emEmb(l[2 * i + 1] || 0, q) + "</b> " + esc(t) + "</div>";
     }
-    return '<div class="lojas-mini"><table class="tab-lojas tab-lj"><tr><th>Loja</th><th>Estoque ' + esc(t) + "</th><th>Vendas 7 dias " + esc(t) + "</th></tr>" +
+    return '<div class="lojas-mini"><table class="tab-lojas tab-lj"><tr><th>Loja</th><th>Estoque ' + esc(t) + "</th><th>Vendas 7 dias " + esc(t) + "</th>" + (custos ? "<th>Custo " + esc(t) + "</th>" : "") + "</tr>" +
       cods.map(function (c) {
         var i = RES.idx[c], e = Number(l[2 * i]) || 0;
         return "<tr><td>" + esc(c) + " " + esc(RES.nomes[c] || "") + "</td><td" + (e < 0 ? ' class="neg"' : "") + "><b>" + emEmb(e, q) + "</b></td>" +
-          "<td>" + emEmb(l[2 * i + 1] || 0, q) + "</td></tr>";
+          "<td>" + emEmb(l[2 * i + 1] || 0, q) + "</td>" + cCus(c) + "</tr>";
       }).join("") + (function () {   // total de todas as lojas
         var te = 0, tv = 0;
         cods.forEach(function (c) { var i = RES.idx[c]; te += Number(l[2 * i]) || 0; tv += Number(l[2 * i + 1]) || 0; });
-        return '<tr class="tot-lojas"><td><b>Total lojas</b></td><td><b>' + emEmb(te, q) + "</b></td><td><b>" + emEmb(tv, q) + "</b></td></tr>";
+        return '<tr class="tot-lojas"><td><b>Total lojas</b></td><td><b>' + emEmb(te, q) + "</b></td><td><b>" + emEmb(tv, q) + "</b></td>" + (custos ? "<td></td>" : "") + "</tr>";
       })() + "</table></div>";
   }
   function aplicarDados(json, deServidor) {
@@ -1172,6 +1186,7 @@ window.PedidoPDF = (function () {
   var HIST = "__hist__";   // aba "Pedidos anteriores"
   var SALVOS = "__salvos__";   // 30/10: aba "Pedidos salvos" (da LOJA: todos os cargos continuam o mesmo pedido)
   function vendoSalvos() { return abaAtual === SALVOS || (abaAtual !== HIST && !atual); }
+  var histSt = "pendente";   // 03/11: "Pedidos anteriores" virou 2 abas: Aguardando aprovação | Aprovados
   var hist = null;          // {mestre, dias, pedidos:[{id, quando, loja, email, dataLista, n}]}
   var filtroLoja = "";
   var ultimaDep = null;     // departamento para voltar ao sair de "Pedidos anteriores"
@@ -1198,7 +1213,7 @@ window.PedidoPDF = (function () {
     document.body.classList.toggle("sem-rodape", h || !atual);
     $("barraPedido").hidden = h || !atual;
     if (atual) $("nomePedido").textContent = atual.nome;
-    var modo = h ? (abaAtual === SALVOS ? "salvos" : "hist") : (abaAtual === ATUAL ? "atual" : "lista");
+    var modo = h ? (abaAtual === SALVOS ? "salvos" : (histSt === "pendente" ? "histp" : "hista")) : (abaAtual === ATUAL ? "atual" : "lista");
     document.querySelector("header").classList.toggle("modo-atual", modo === "atual");
     Array.prototype.forEach.call($("modos").children, function (b) { b.classList.toggle("ativo", b.getAttribute("data-modo") === modo); });
     contarBotaoAtual();
@@ -1235,7 +1250,7 @@ window.PedidoPDF = (function () {
   }
   /** so = só UMA loja, sem "Ver por loja" (conferência). foco = digitação do pedido de UMA loja (Diretoria/Administração
    *  fazendo o pedido pela loja): o quadro mostra só essa loja e o "Ver por loja" abre o total e as outras lojas. */
-  function blocoEstoque(p, e, c, t, q, so, foco, comTotal) {   // comTotal = pedido de COMPRA: + coluna Estoque total (lojas + CD)
+  function blocoEstoque(p, e, c, t, q, so, foco, comTotal, comCusto) {   // comCusto = Consulta da Diretoria/Administração: "Ver por loja" com custo por loja   // comTotal = pedido de COMPRA: + coluna Estoque total (lojas + CD)
     q = Number(q) || 0; e = Number(e) || 0;
     var temCx = q > 1, lv = null, le = null, umaLoja = true;
     if (RES && RES.lojas && RES.lojas.length) {
@@ -1257,7 +1272,7 @@ window.PedidoPDF = (function () {
     if (!temCx) h += "<tr><td>UN</td>" + cel(lv) + cel(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td>" + (comTotal ? cel(tot) : "") + "</tr>";   // UN só quando não tem embalagem de compra
     h += "</table>";
     if (!so && (!umaLoja || (foco && RES && RES.lojas && RES.lojas.length > 1)))
-      h += '<details class="det-lojas"><summary>Ver por loja</summary>' + htmlLojas(p) + "</details>";
+      h += '<details class="det-lojas"' + (comCusto ? ' data-custo="' + esc(p) + '" data-t="' + esc(t || "") + '" data-q="' + (Number(q) || 0) + '"' : "") + "><summary>Ver por loja</summary>" + htmlLojas(p) + "</details>";
     return h;
   }
   function subItem(p, t, q, dep, extra) {
@@ -2056,14 +2071,15 @@ window.PedidoPDF = (function () {
       else ok({ mestre: true, dias: 30, pedidos: [{ id: "demo1", quando: "19/10/2026 17:40", loja: "Filial 02_Carapicuíba", email: "carapicuiba@atacadaodeembalagens.com.br", dataLista: "19/10/2026", n: 2 }] });
       return;
     }
-    var lista = hist.pedidos.filter(function (x) { return !filtroLoja || x.loja === filtroLoja; });
+    var pend = histSt === "pendente";
+    var lista = hist.pedidos.filter(function (x) { return (!filtroLoja || x.loja === filtroLoja) && ((x.status === "pendente") === pend); });
     var html = '<div class="aviso">Os pedidos ficam guardados por ' + hist.dias + ' dias. Depois disso são apagados automaticamente.</div>';
     if (hist.mestre) {
       var lojas = []; hist.pedidos.forEach(function (x) { if (lojas.indexOf(x.loja) < 0) lojas.push(x.loja); }); lojas.sort();
       html += '<select class="filtro-loja" id="filtroLoja"><option value="">Todas as lojas (' + hist.pedidos.length + ')</option>' +
         lojas.map(function (l) { return '<option' + (l === filtroLoja ? ' selected' : '') + ' value="' + esc(l) + '">' + esc(l) + '</option>'; }).join('') + '</select>';
     }
-    if (!lista.length) html += '<div class="vazio">Nenhum pedido nos últimos ' + hist.dias + ' dias.</div>';
+    if (!lista.length) html += '<div class="vazio">' + (pend ? "Nenhum pedido aguardando aprovação." : "Nenhum pedido aprovado nos últimos " + hist.dias + " dias.") + "</div>";
     lista.forEach(function (x) {
       html += '<div class="ped" data-id="' + esc(x.id) + '"><div class="topo-ped"><div class="q1"><b>' + (x.nome ? esc(x.nome) + ' · ' : '') + esc(x.quando) + '</b>' +
         '<span>' + (hist.mestre ? esc(x.loja) + ' · ' + esc(x.email) + '<br>' : '') + x.n + (x.n === 1 ? ' produto' : ' produtos') + ' · lista de ' + esc(x.dataLista) + '<br>' + chipStatus(x) +
@@ -2144,9 +2160,9 @@ window.PedidoPDF = (function () {
       hist = null; rasc = null; atual = null; LS.set("pedidoAtual", null); pedido = {}; salvarPedido(); desenharAbas(); desenharLista();
       $("revCorpo").innerHTML = r.aprovado
         ? '<div class="aviso">Pedido <b>' + esc(r.nome || corpo.nome) + '</b> da loja <b>' + esc(corpo.loja) + '</b> aprovado e enviado para o CD!<br>' + r.itens +
-          " produto(s) · " + esc(r.quando) + "<br><small>Arquivo: " + esc(r.arquivo || "") + ". A loja vê este pedido em Pedidos anteriores.</small></div>"
+          " produto(s) · " + esc(r.quando) + "<br><small>Arquivo: " + esc(r.arquivo || "") + ". A loja vê este pedido em Aprovados.</small></div>"
         : '<div class="aviso">Pedido <b>' + esc(r.nome || corpo.nome) + '</b> enviado para aprovação!<br>' + r.itens + " produto(s) · " +
-          esc(r.quando) + "<br><small>Depois que o gerente aprovar, ele segue para o CD. Acompanhe em Pedidos anteriores.</small></div>";
+          esc(r.quando) + "<br><small>Depois que o gerente aprovar, ele segue para o CD. Acompanhe em Aguardando aprovação.</small></div>";
       b.textContent = "Enviado";
     }
     function falha(e) {
@@ -2176,7 +2192,7 @@ window.PedidoPDF = (function () {
       atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {}); LS.set("pedidoDono", null);
       compra = compraVazia(); try { localStorage.removeItem("compra"); } catch (e) {}   // custos/preços não ficam no celular
       cmp.forn = null; cmp.fornNome = ""; cmp.busca = null; cmp.termo = ""; cmp.recentes = null; cmp.fornDados = {};
-      cons.termo = ""; cons.precos = null; cons.extra = null; cons.forn = ""; cons.fornProd = null; cons.fornNomes = null; mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
+      cons.termo = ""; cons.precos = null; cons.custoLoja = null; cons.extra = null; cons.forn = ""; cons.fornProd = null; cons.fornNomes = null; mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
     }
     try { localStorage.removeItem("rascCache"); } catch (e) {}   // a lista de estoque fica guardada (é igual para todas as lojas)
     renderId++; dados = null; RES = null; $("lista").innerHTML = ""; $("abas").innerHTML = "";
@@ -2201,7 +2217,7 @@ window.PedidoPDF = (function () {
         LS.set("pedidoDono", null);
         mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
         comoLoja = null; LS.set("comoLoja", null);
-        tela = "inicio"; cons.precos = null; cmp.forns = null; cmp.recentes = null; cmp.entregas = null; cmp.fornDados = {};
+        tela = "inicio"; cons.precos = null; cons.custoLoja = null; cmp.forns = null; cmp.recentes = null; cmp.entregas = null; cmp.fornDados = {};
         LS.set("sessao", sessao); LS.set("ultimoEmail", r.email);
         if (r.novosVisto) LS.set(chaveVistos(), r.novosVisto);   // o que este login já viu (mesmo em outro celular)
         cfg = { loja: r.loja || "" }; LS.set("cfg", cfg);
@@ -2357,9 +2373,11 @@ window.PedidoPDF = (function () {
       if (ehMestre()) t.push(tile("erros", "Relatório de erros", "Tudo que deu erro: ERP, login, pedidos, app", ICO.lista));
     } else {
       var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
-      t.push(tile("lj:lista", "Fazer pedido", atual ? "Continuar: " + atual.nome : "Começar ou continuar um pedido", ICO.carrinho, "destaque"));
+      t.push(tile("lj:lista", "Novo pedido", atual ? "Continuar: " + atual.nome : "Começar ou continuar um pedido", ICO.carrinho, "destaque"));
       t.push(tile("lj:atual", "Pedido atual", atual ? n + (n === 1 ? " item em " : " itens em ") + atual.nome : "Nenhum pedido aberto", ICO.lista));
-      t.push(tile("lj:hist", "Pedidos anteriores", "Enviados e aprovados", ICO.relogio));
+      t.push(tile("lj:salvos", "Pedidos salvos", "Pedidos da loja ainda não enviados", ICO.lista));
+      t.push(tile("lj:histp", "Aguardando aprovação", "Enviados, esperando a gerência aprovar", ICO.relogio));
+      t.push(tile("lj:hista", "Aprovados", "Pedidos já aprovados (a faturar e faturados)", ICO.ok));
       t.push(tile("consulta", "Consulta de produtos", "Estoque, fornecedor e EAN", ICO.lupa));
       if (nivelNum() >= 2) t.push(tile("analise", "Análise de vendas", "Vendas mês a mês da sua loja", ICO.grafico));
       else t.push(tile("bloq", "Análise de vendas", "Gerência, Administração e Diretoria", ICO.grafico, "bloq"));
@@ -2779,7 +2797,9 @@ window.PedidoPDF = (function () {
     tela = "app"; $("busca").value = "";
     if (p[0] === "mg") { mgr.filtro = p[1]; mgr.aberto = null; mgr.itens = null; mgr.sujo = false; }
     else {
-      abaAtual = p[1] === "hist" ? HIST : p[1] === "atual" ? ATUAL : (ultimaDep || (novosVistos() ? dados.departamentos[0].nome : NOVOS));
+      if (p[1] === "histp" || p[1] === "hista") histSt = p[1] === "histp" ? "pendente" : "aprovado";
+      abaAtual = /^hist/.test(p[1]) ? HIST : p[1] === "atual" ? ATUAL : p[1] === "salvos" ? SALVOS : (ultimaDep || (novosVistos() ? dados.departamentos[0].nome : NOVOS));
+      if (abaAtual === SALVOS) rasc = null;
       if (abaAtual === ATUAL) abertosAtual = {};
       LS.set("aba", abaAtual);
     }
@@ -2809,6 +2829,11 @@ window.PedidoPDF = (function () {
       desenharConsulta.fornIndo = true;
       chamar("fornecedoresCompra", [], function (l) { desenharConsulta.fornIndo = false; cons.fornNomes = l || [];
         var bx = $("consFornLista"); if (bx && !bx.hidden) mostrarFornCons(); }, function () { desenharConsulta.fornIndo = false; });
+    }
+    if (!m && nivelNum() >= 2 && !cons.custoLoja && !desenharConsulta.custoIndo) {   // 04/11: Gerência - custo da própria loja
+      desenharConsulta.custoIndo = true;
+      chamar("custosMinhaLoja", [], function (c) { desenharConsulta.custoIndo = false; cons.custoLoja = c || {}; if (tela === "consulta") resultadosConsulta(); },
+        function () { desenharConsulta.custoIndo = false; cons.custoLoja = {}; if (tela === "consulta") resultadosConsulta(); });
     }
     if (m && !cons.precos && !desenharConsulta.buscando) {   // preços: só managers (o servidor não manda para loja)
       desenharConsulta.buscando = true;
@@ -2915,7 +2940,10 @@ window.PedidoPDF = (function () {
     // 29/10: PLU, embalagem e setor já aparecem embaixo do nome do produto -> não repete na ficha
     var fic = [["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"]];
     if (m) fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : "—"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : "—"]);
-    var est = blocoEstoque(it.p, it.e, it.c != null && !it.fora ? it.c : null, it.t, it.q);
+    // 04/11 (Marcelo): Diretoria/Administração veem o custo do CD; a Gerência vê só o custo da PRÓPRIA loja
+    if (m) fic.push(["Custo CD", txtCusto(it.fora ? it.cu : it.c, it.t, it.q)]);
+    else if (nivelNum() >= 2) fic.push(["Custo loja", cons.custoLoja ? txtCusto(cons.custoLoja[it.p], it.t, it.q) : "…"]);
+    var est = blocoEstoque(it.p, it.e, it.c != null && !it.fora ? it.c : null, it.t, it.q, null, null, false, m);
     var acao;
     // 30/10 (Marcelo): o botão vermelho da Consulta LANÇA NO PEDIDO DE COMPRA. Só clica quem faz pedido de compra
     // (Diretoria/Administração); para os outros ele aparece cinza, travado. O pedido da loja usa "★ Adicionar ao pedido loja".
@@ -3652,6 +3680,20 @@ window.PedidoPDF = (function () {
   $("btnLer").addEventListener("click", lerParaBusca);
   $("btnFecharLeitor").addEventListener("click", fecharLeitor);
   $("btnLeitorFoto").addEventListener("click", function () { $("leitorFoto").click(); });
+  // 04/11: Consulta da Diretoria/Administração - ao abrir "Ver por loja", busca o custo de cada loja e põe na tabela
+  document.addEventListener("toggle", function (e) {
+    var d = e.target;
+    if (!d || !d.open || !d.getAttribute || !d.getAttribute("data-custo") || d._custo) return;
+    d._custo = true;
+    var p = d.getAttribute("data-custo"), emb = { t: d.getAttribute("data-t"), q: Number(d.getAttribute("data-q")) || 0 };
+    var box = d.querySelector(".lojas-mini");
+    if (box) box.insertAdjacentHTML("beforeend", '<div class="cu-carr"><small>Buscando o custo de cada loja…</small></div>');
+    chamar("fichaProduto", [p], function (r) {
+      var cus = {}; (r && r.lojas || []).forEach(function (l) { cus[l.cod] = l.custo; });
+      var novo = htmlLojas(p, null, cus, emb), b = d.querySelector(".lojas-mini");
+      if (b && novo) b.outerHTML = novo;
+    }, function () { d._custo = false; var c = d.querySelector(".cu-carr"); if (c) c.innerHTML = "<small>Não consegui buscar o custo agora.</small>"; });
+  }, true);
   $("leitorFoto").addEventListener("change", function (e) { lerFoto(e.target.files && e.target.files[0]); });
   $("telaLeitor").addEventListener("click", function (e) { if (e.target === $("telaLeitor")) fecharLeitor(); });
   $("btnMgrAprovar").addEventListener("click", aprovarMgr);
@@ -3660,8 +3702,10 @@ window.PedidoPDF = (function () {
   $("modos").addEventListener("click", function (e) {
     var b = e.target.closest("[data-modo]"); if (!b || !dados) return;
     var md = b.getAttribute("data-modo");
-    var nova = md === "hist" ? HIST : md === "salvos" ? SALVOS : md === "atual" ? ATUAL : (ultimaDep || dados.departamentos[0].nome);
-    if (nova === abaAtual || (md === "lista" && abaAtual !== HIST && abaAtual !== ATUAL && abaAtual !== SALVOS)) return;
+    var st = md === "histp" ? "pendente" : md === "hista" ? "aprovado" : "";
+    var nova = st ? HIST : md === "salvos" ? SALVOS : md === "atual" ? ATUAL : (ultimaDep || dados.departamentos[0].nome);
+    if ((nova === abaAtual && (!st || st === histSt)) || (md === "lista" && abaAtual !== HIST && abaAtual !== ATUAL && abaAtual !== SALVOS)) return;
+    if (st) histSt = st;
     abaAtual = nova;
     if (nova === SALVOS) rasc = null;   // pedidos salvos são da loja toda: busca a lista mais nova
     if (nova === ATUAL) abertosAtual = {};   // toda vez que entra no "Pedido atual", os setores vêm fechados
@@ -3759,7 +3803,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-03.18";
+  var VERSAO_APP = "2026-11-04.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
