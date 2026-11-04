@@ -1409,7 +1409,7 @@ window.PedidoPDF = (function () {
         d.itens.forEach(function (it) {
           // 04/11 (Marcelo): igual à Consulta de produtos (nome, PLU, marca, EAN e também FORNECEDOR), mas só a lista
           // de estoque do CD (produto com estoque 0 ou negativo no CD não vem aqui)
-          if ((Number(it.e) || 0) > 0 && (casaBusca(it, termo, termoNum) || (it.f && semAcento(it.f).indexOf(termo) >= 0))) achados.push(it);
+          if ((Number(it.e) || 0) > 0 && casaBusca(it, termo, termoNum, true)) achados.push(it);
         });
       });
       achados.sort(ordemAlfa);   // 04/11: em ordem alfabética, igual à Consulta
@@ -3140,7 +3140,7 @@ window.PedidoPDF = (function () {
     if (termo.length < 2) { box.innerHTML = '<div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
     var achados = [];
     dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) {
-      if (casaBusca(it, termo, termoNum) || (it.f && semAcento(it.f).indexOf(termo) >= 0)) achados.push(it);
+      if (casaBusca(it, termo, termoNum, true)) achados.push(it);
     }); });
     var mais80 = achados.length > 80;   // 04/11: ordena TODOS os achados e mostra os 80 primeiros em ordem alfabética
     achados = achados.sort(ordemAlfa).slice(0, 80);
@@ -3663,12 +3663,17 @@ window.PedidoPDF = (function () {
   function soDigitos(s) { return String(s || "").replace(/\D/g, "").replace(/^0+/, ""); }
   function numBusca(termo) { return /^[\d\s.-]+$/.test(termo) ? soDigitos(termo) : ""; }   // busca só com números = pode ser EAN
   var TXT_BUSCA = new WeakMap();
-  function casaBusca(it, termo, termoNum) {
+  function casaBusca(it, termo, termoNum, comForn) {
     var t = TXT_BUSCA.get(it);   // texto sem acento calculado 1 vez por produto (não vai para o armazenamento do celular)
     if (t == null) { t = semAcento((it.d || "") + " " + (it.p || "") + " " + (it.m || "")); TXT_BUSCA.set(it, t); }
-    return t.indexOf(termo) >= 0 ||
-      (termoNum.length >= 6 && !!it.b && it.b.indexOf(termoNum) >= 0);
+    if (comForn && it.f) t = t + " " + semAcento(it.f);   // comForn: também procura no FORNECEDOR (Consulta e busca da loja)
+    if (t.indexOf(termo) >= 0) return true;
+    if (termoNum.length >= 6 && !!it.b && it.b.indexOf(termoNum) >= 0) return true;
+    // 04/11: VÁRIAS PALAVRAS ("cob sicao"): acha quando TODAS as palavras aparecem, em qualquer ordem e posição
+    var pal = termo.split(/\s+/).filter(function (x) { return x; });
+    return pal.length > 1 && pal.every(function (x) { return t.indexOf(x) >= 0; });
   }
+
   // Câmera ao vivo (BarcodeDetector do Android ou a biblioteca ZXing). Se o celular não deixar abrir a câmera
   // dentro do site, a pessoa tira uma FOTO do código e ela é lida do mesmo jeito.
   var ZXING_URL = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
@@ -4104,7 +4109,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.21";
+  var VERSAO_APP = "2026-11-04.22";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
