@@ -257,6 +257,12 @@
   .mgr-item.zero{opacity:.45}
   .mgr-item .orig{color:var(--vermelho);font-weight:700}
   .mgr-add{border:0;border-radius:10px;padding:10px 12px;background:var(--azul);color:#fff;font-weight:800;font-size:13px}
+  .mgr-ver{border:0;border-radius:10px;padding:10px 12px;background:#e3f4e8;color:#1d6b35;font-weight:800;font-size:13px;white-space:nowrap}
+  .mgr-item.no-pedido{border:2px solid #9fd5ae;background:#f3fbf5}
+  .grupo-busca{font-weight:800;font-size:13px;margin:10px 2px 6px}
+  .grupo-busca.ja{color:#1d6b35}.grupo-busca.fora{color:#9b1c1c}
+  .tag-busca{display:inline-block;margin-top:4px;border-radius:6px;padding:1px 7px;font-size:11.5px;font-weight:800}
+  .tag-busca.ja{background:#e3f4e8;color:#1d6b35}.tag-busca.fora{background:#fde8e8;color:#9b1c1c}
   .voltar{border:0;background:none;color:var(--azul);font-weight:800;font-size:15px;padding:4px 0 10px}
   .setor-mgr{display:flex;align-items:center;justify-content:space-between;margin:16px 0 4px;padding:10px 14px;border-radius:10px;
     background:var(--marrom);color:#fff;font-weight:800;font-size:15px;letter-spacing:.3px;border-left:6px solid var(--ouro)}
@@ -2092,17 +2098,40 @@ window.PedidoPDF = (function () {
     var termo = semAcento(txt.trim());
     if (termo.length < 2) { box.innerHTML = ""; return; }
     if (!dados) { box.innerHTML = '<div class="vazio">Lista de estoque não carregada.</div>'; return; }
-    var ja = {}; mgr.itens.forEach(function (i) { ja[i.p] = 1; });
+    var ja = {}; mgr.itens.forEach(function (i) { ja[i.p] = i; });
     var termoNum = numBusca(termo);
-    var achados = [];
+    // 04/11 (Marcelo): a busca mostra os DOIS: o que JÁ ESTÁ no pedido (verde, botão "Ver no pedido") e o que NÃO está (+ Incluir)
+    var noPed = mgr.itens.filter(function (i) {
+      var it = porPlu[i.p] || { p: i.p, d: i.d, m: i.m, b: "" };
+      return casaBusca(it, termo, termoNum);
+    }).slice(0, 20);
+    var fora = [];
     dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) {
-      if (!ja[it.p] && achados.length < 20 && casaBusca(it, termo, termoNum)) achados.push(it);
+      if (!ja[it.p] && fora.length < 20 && casaBusca(it, termo, termoNum)) fora.push(it);
     }); });
-    box.innerHTML = achados.length ? achados.map(function (it) {
-      return '<div class="mgr-item"><div class="d">' + esc(it.d) + "<small>PLU " + esc(it.p) + " · " + esc(nomeAba(it.dep)) + " · estoque " + num(it.e) + " un</small></div>" +
+    var h = "";
+    if (noPed.length) h += '<div class="grupo-busca ja">&#10003; Já está no pedido (' + noPed.length + ")</div>" + noPed.map(function (i) {
+      var it = porPlu[i.p] || {};
+      return '<div class="mgr-item no-pedido"><div class="d">' + esc(i.d) + "<small>PLU " + esc(i.p) + (it.dep ? " · " + esc(nomeAba(it.dep)) : "") +
+        '</small><span class="tag-busca ja">' + (i.qtd > 0 ? "No pedido: " + num(i.qtd) + " " + esc(i.t || "un") : "No pedido com 0 (zerado)") + "</span></div>" +
+        '<button class="mgr-ver" data-mver="' + esc(i.p) + '">Ver no pedido</button></div>';
+    }).join("");
+    if (fora.length) h += '<div class="grupo-busca fora">Não está no pedido (' + fora.length + ")</div>" + fora.map(function (it) {
+      return '<div class="mgr-item"><div class="d">' + esc(it.d) + "<small>PLU " + esc(it.p) + " · " + esc(nomeAba(it.dep)) + " · estoque " + num(it.e) + " un</small>" +
+        '<span class="tag-busca fora">Não está no pedido</span></div>' +
         '<button class="mgr-add" data-madd="' + esc(it.p) + '">+ Incluir</button></div>';
-    }).join("") : '<div class="vazio" style="padding:10px">' + (termoNum.length >= 6 && mgr.itens.some(function (i) { return casaBusca(porPlu[i.p] || {}, "\u0000", termoNum); })
-        ? "Esse produto já está no pedido." : termoNum.length >= 8 ? "Nenhum produto com esse código de barras na lista de estoque atual." : "Nada encontrado.") + "</div>";
+    }).join("");
+    box.innerHTML = h || '<div class="vazio" style="padding:10px">' + (termoNum.length >= 8 ? "Nenhum produto com esse código de barras na lista de estoque atual." : "Nada encontrado.") + "</div>";
+  }
+  /** "Ver no pedido": abre o setor do produto e rola até ele (fica amarelo). */
+  function verNoPedidoMgr(plu) {
+    var i = mgr.itens.filter(function (x) { return x.p === plu; })[0]; if (!i) return;
+    var dep = i.dep || (porPlu[plu] && porPlu[plu].dep) || "OUTROS";
+    mgr.abertos = mgr.abertos || {}; mgr.abertos[dep] = true;
+    selPlu = String(plu);
+    desenharPedidoMgr();
+    var el = document.querySelector('.item[data-mp="' + plu + '"]');
+    if (el) { el.classList.add("sel"); el.scrollIntoView({ block: "center", behavior: "smooth" }); }
   }
   function mudarMgr(plu, delta) {
     var item = null;
@@ -3716,6 +3745,7 @@ window.PedidoPDF = (function () {
       }
       var mq = e.target.closest("[data-mq]"); if (mq) { mudarMgr(mq.closest("[data-mp]").getAttribute("data-mp"), Number(mq.getAttribute("data-mq"))); return; }
       var ad = e.target.closest("[data-madd]"); if (ad) { incluirMgr(ad.getAttribute("data-madd")); return; }
+      var vm = e.target.closest("[data-mver]"); if (vm) { verNoPedidoMgr(vm.getAttribute("data-mver")); return; }
       return;
     }
     var ver = e.target.closest("[data-ver]"); if (ver) { verPedido(ver); return; }
@@ -3968,7 +3998,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.11";
+  var VERSAO_APP = "2026-11-04.12";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
