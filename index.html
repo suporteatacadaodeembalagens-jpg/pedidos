@@ -437,6 +437,30 @@
   .cad-titulo{background:#fff6d6;border-radius:10px;padding:10px 12px;margin:4px 0 10px;font-size:13.5px;color:var(--texto)}
   .cad-titulo b{display:block;color:var(--marrom);font-size:15px;margin-bottom:2px}
   input.edita{width:54px;height:46px;text-align:center;font-size:20px;font-weight:700;border:2px solid var(--principal);border-radius:10px}
+  /* ===== 04/11: COMPUTADOR (tela larga + mouse) =====
+     Celular/tablet não muda nada. No computador: tudo ampliado (letras, botões, ícones) pelo --z
+     e o conteúdo fica numa coluna centralizada de --larg, sem esticar de ponta a ponta da tela.
+     Obs.: com zoom o "vh" também é ampliado, por isso as alturas em vh são divididas pelo --z aqui embaixo. */
+  @media (min-width:900px) and (hover:hover) and (pointer:fine){
+    :root{--z:1.15;--larg:900px}
+    html{zoom:var(--z)}
+    /* faixas do topo e do rodapé: fundo continua de ponta a ponta, conteúdo centralizado */
+    .topo,.modos,#modos,#modosMgr,.busca,.barra-pedido,.abas{padding-left:max(14px, calc((100% - var(--larg)) / 2));padding-right:max(14px, calc((100% - var(--larg)) / 2))}
+    .barra-como{margin-left:max(14px, calc((100% - var(--larg)) / 2));margin-right:max(14px, calc((100% - var(--larg)) / 2))}
+    footer,.barra-mgr{padding-left:max(14px, calc((100% - var(--larg)) / 2));padding-right:max(14px, calc((100% - var(--larg)) / 2))}
+    main{max-width:calc(var(--larg) + 24px);margin-left:auto;margin-right:auto;min-height:calc(100vh / var(--z) + 2px)}
+    .snack{left:50%;right:auto;transform:translateX(-50%);width:min(calc(100% - 24px), 600px)}
+    .botoes-rodape #btnSalvarPed{flex:0 0 30%}
+    .painel{max-width:760px}
+    .forn-lista{max-height:calc(55vh / var(--z))}
+    .login .caixa.cadastro{max-height:calc(100vh / var(--z) - 40px - var(--corte, 0px))}
+    /* mouse: mostra que dá para clicar */
+    button:not(:disabled),.tile,.item .desc,.aba,.modo{cursor:pointer}
+    .item:hover,.ped:hover{box-shadow:0 2px 8px rgba(63,31,30,.14)}
+    .modo:hover:not(.ativo),.aba:hover{filter:brightness(1.12)}
+  }
+  @media (min-width:1300px) and (hover:hover) and (pointer:fine){ :root{--z:1.25;--larg:960px} }
+  @media (min-width:1700px) and (hover:hover) and (pointer:fine){ :root{--z:1.35;--larg:1000px} }
 </style>
 </head>
 <body>
@@ -1626,7 +1650,7 @@ window.PedidoPDF = (function () {
   }
   function fecharModal() { $("telaFicha").classList.remove("aberta"); }
   function listaFav(l) {
-    return '<div style="max-height:46vh;overflow:auto;margin:8px 0 14px;border:1px solid #eadfce;border-radius:10px">' + l.map(function (x) {
+    return '<div style="max-height:calc(46vh / var(--z, 1));overflow:auto;margin:8px 0 14px;border:1px solid #eadfce;border-radius:10px">' + l.map(function (x) {
       var it = porPlu[x.p];
       return '<div style="padding:8px 10px;border-top:1px solid #f1e8db"><b>' + esc(it ? it.d : x.d || "") + "</b><br><small>PLU " + esc(x.p) +
         (it && it.t ? " · " + esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "") + "</small></div>";
@@ -4019,7 +4043,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.14";
+  var VERSAO_APP = "2026-11-04.15";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
