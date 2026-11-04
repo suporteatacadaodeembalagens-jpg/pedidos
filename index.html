@@ -1825,6 +1825,11 @@ window.PedidoPDF = (function () {
     }, function () { buscarHist.indo = false; });
   }
   /** Logo depois de abrir o app: já busca (em segundo plano) o que a pessoa mais usa, para as abas abrirem na hora. */
+  function buscarPrecosLoja() {
+    if (cons.precosLoja || buscarPrecosLoja.indo) return; buscarPrecosLoja.indo = true;
+    chamar("precosLoja", [], function (p) { buscarPrecosLoja.indo = false; cons.precosLoja = p || {}; if (tela === "consulta") resultadosConsulta(); },
+      function () { buscarPrecosLoja.indo = false; cons.precosLoja = {}; if (tela === "consulta") resultadosConsulta(); });
+  }
   function preCarregar() {
     if (!sessao || !EM_APPS_SCRIPT) return;
     carregarFotos();
@@ -1843,6 +1848,7 @@ window.PedidoPDF = (function () {
     } else {
       if (!hist) buscarHist();
       if (!rasc) buscarRasc();
+      buscarPrecosLoja();
       if (nivelNum() >= 2 && !cons.custoLoja && !desenharConsulta.custoIndo) {
         desenharConsulta.custoIndo = true;
         chamar("custosMinhaLoja", [], function (c) { desenharConsulta.custoIndo = false; cons.custoLoja = c || {}; if (tela === "consulta") resultadosConsulta(); },
@@ -2282,7 +2288,7 @@ window.PedidoPDF = (function () {
       atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {}); LS.set("pedidoDono", null);
       compra = compraVazia(); try { localStorage.removeItem("compra"); } catch (e) {}   // custos/preços não ficam no celular
       cmp.forn = null; cmp.fornNome = ""; cmp.busca = null; cmp.termo = ""; cmp.recentes = null; cmp.fornDados = {};
-      cons.termo = ""; cons.precos = null; cons.custoLoja = null; cons.extra = null; cons.forn = ""; cons.fornProd = null; cons.fornNomes = null; mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
+      cons.termo = ""; cons.precos = null; cons.precosLoja = null; cons.custoLoja = null; cons.extra = null; cons.forn = ""; cons.fornProd = null; cons.fornNomes = null; mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
     }
     try { localStorage.removeItem("rascCache"); } catch (e) {}   // a lista de estoque fica guardada (é igual para todas as lojas)
     renderId++; dados = null; RES = null; $("lista").innerHTML = ""; $("abas").innerHTML = "";
@@ -2307,7 +2313,7 @@ window.PedidoPDF = (function () {
         LS.set("pedidoDono", null);
         mgr = { filtro: "pendente", lista: null, loja: "", aberto: null, itens: null, sujo: false, busca: "" };
         comoLoja = null; LS.set("comoLoja", null);
-        tela = "inicio"; cons.precos = null; cons.custoLoja = null; cmp.forns = null; cmp.recentes = null; cmp.entregas = null; cmp.fornDados = {};
+        tela = "inicio"; cons.precos = null; cons.precosLoja = null; cons.custoLoja = null; cmp.forns = null; cmp.recentes = null; cmp.entregas = null; cmp.fornDados = {};
         LS.set("sessao", sessao); LS.set("ultimoEmail", r.email);
         if (r.novosVisto) LS.set(chaveVistos(), r.novosVisto);   // o que este login já viu (mesmo em outro celular)
         cfg = { loja: r.loja || "" }; LS.set("cfg", cfg);
@@ -2920,6 +2926,7 @@ window.PedidoPDF = (function () {
       chamar("fornecedoresCompra", [], function (l) { desenharConsulta.fornIndo = false; cons.fornNomes = l || [];
         var bx = $("consFornLista"); if (bx && !bx.hidden) mostrarFornCons(); }, function () { desenharConsulta.fornIndo = false; });
     }
+    if (!m) buscarPrecosLoja();   // 04/11: preço varejo/atacado para as lojas também
     if (!m && nivelNum() >= 2 && !cons.custoLoja && !desenharConsulta.custoIndo) {   // 04/11: Gerência - custo da própria loja
       desenharConsulta.custoIndo = true;
       chamar("custosMinhaLoja", [], function (c) { desenharConsulta.custoIndo = false; cons.custoLoja = c || {}; if (tela === "consulta") resultadosConsulta(); },
@@ -3025,11 +3032,11 @@ window.PedidoPDF = (function () {
     }, 250);
   }
   function htmlConsulta(it) {
-    var m = ehMgrLogin(), pr = m && cons.precos ? cons.precos[it.p] : null;
+    var m = ehMgrLogin(), tabP = m ? cons.precos : cons.precosLoja, pr = tabP ? tabP[it.p] : null;   // 04/11: preço para TODOS
     var emb = it.t ? it.t + (it.q > 1 ? " c/ " + num(it.q) : "") : "—";
     // 29/10: PLU, embalagem e setor já aparecem embaixo do nome do produto -> não repete na ficha
     var fic = [["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"]];
-    if (m) fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : "—"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : "—"]);
+    fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : tabP ? "—" : "…"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : tabP ? "—" : "…"]);
     // 04/11 (Marcelo): Diretoria/Administração veem o custo do CD; a Gerência vê só o custo da PRÓPRIA loja
     if (m) fic.push(["Custo CD", txtCusto(it.fora ? it.cu : (pr ? pr[2] : 0), it.t, it.q)]);   // it.c da lista é a quantidade de CX, não custo
     else if (nivelNum() >= 2) fic.push(["Custo loja", cons.custoLoja ? txtCusto(cons.custoLoja[it.p], it.t, it.q) : "…"]);
@@ -3956,7 +3963,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.9";
+  var VERSAO_APP = "2026-11-04.10";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
