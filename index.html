@@ -2104,6 +2104,18 @@ window.PedidoPDF = (function () {
     var n = mgr.itens.filter(function (i) { return i.qtd > 0; }).length;
     el.innerHTML = "<b>" + n + (n === 1 ? " produto" : " produtos") + "</b>no pedido" + (mgr.sujo ? " · alterações não salvas" : "");
   }
+  /** 04/11 (Marcelo): pedido APROVADO e já FATURADO (aba Faturados) não conta mais como trânsito nem no estoque virtual:
+   *  a mercadoria já saiu do CD (o estoque do CD já baixou). O servidor manda no trânsito loja/nome/status; para saber se
+   *  já faturou, cruza com a lista do painel (pedidos com NF). Na dúvida (dois pedidos iguais, um faturado e outro não), mantém. */
+  function aindaEmTransito(x) {
+    if (!x) return false;
+    if (x.fat || x.nf) return false;   // se o servidor já mandar a NF junto
+    var ped = (mgr.lista && mgr.lista.pedidos) || [];
+    if (x.id) { var p = ped.filter(function (y) { return y.id === x.id; })[0]; return !(p && notaDe(p)); }
+    if (x.status !== "aprovado") return true;   // aguardando aprovação: nunca está faturado
+    var mesmos = ped.filter(function (y) { return y.status !== "pendente" && y.loja === x.loja && (y.nome || "") === (x.nome || ""); });
+    return !(mesmos.length && mesmos.every(function (y) { return !!notaDe(y); }));
+  }
   /** Cartão grande do produto na conferência (igual ao da loja: estoque do CD em CX e UN, PLU e embalagem). */
   function htmlItemMgr(i, pode, o) {
     var it = porPlu[i.p], mudou = o !== i.qtd;
@@ -2114,7 +2126,7 @@ window.PedidoPDF = (function () {
     } else {
       topo = subItem(i.p, i.t, 0, "", ' · <b>fora da lista de estoque atual</b>');
     }
-    var tr = (mgr.aberto && mgr.aberto.transito || {})[i.p];
+    var tr = ((mgr.aberto && mgr.aberto.transito || {})[i.p] || []).filter(aindaEmTransito);   // 04/11: faturado sai do trânsito
     if (tr && tr.length) {   // o que outras listas (aguardando ou aprovadas) já pedem deste produto
       tr = tr.slice().sort(function (a, b) { return a.status === b.status ? a.loja.localeCompare(b.loja, "pt-BR", { numeric: true }) : (a.status === "aprovado" ? -1 : 1); });
       info += '<div class="transito"><b>Estoque em trânsito:</b>' + tr.map(function (x) {
@@ -4109,7 +4121,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.22";
+  var VERSAO_APP = "2026-11-04.23";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
