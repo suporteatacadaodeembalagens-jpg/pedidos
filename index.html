@@ -257,6 +257,9 @@
   .mgr-item.zero{opacity:.45}
   .mgr-item .orig{color:var(--vermelho);font-weight:700}
   .mgr-add{border:0;border-radius:10px;padding:10px 12px;background:var(--azul);color:#fff;font-weight:800;font-size:13px}
+  .virtual{margin-top:6px;padding:6px 10px;border-radius:8px;background:#e8f1fb;color:#1d4e89}
+  .virtual b{display:block;font-size:15px}.virtual small{font-size:12px;opacity:.85}
+  .virtual.neg{background:#fde8e8;color:#9b1c1c}
   .mgr-ver{border:0;border-radius:10px;padding:10px 12px;background:#e3f4e8;color:#1d6b35;font-weight:800;font-size:13px;white-space:nowrap}
   .mgr-item.no-pedido{border:2px solid #9fd5ae;background:#f3fbf5}
   .grupo-busca{font-weight:800;font-size:13px;margin:10px 2px 6px}
@@ -2083,6 +2086,14 @@ window.PedidoPDF = (function () {
         return "<div>" + num(x.qtd) + " " + esc((x.t || "un").toLowerCase()) + " (" + esc(x.loja) + ') <span class="st ' + (ok ? "st-ok" : "st-pend") + '">' +
           (ok ? "aprovado" : "aguardando aprovação") + "</span></div>";
       }).join("") + "</div>";
+    }
+    // 04/11 (Marcelo): ESTOQUE VIRTUAL do CD = estoque CD - em trânsito - este pedido (muda na hora quando a quantidade muda)
+    if (it) {
+      var qe = Number(it.q) || 1, un = function (qtd, t) { return (Number(qtd) || 0) * (String(t || "").toUpperCase() === "UN" ? 1 : qe); };
+      var trU = (tr || []).reduce(function (s, x) { return s + un(x.qtd, x.t); }, 0), peU = un(i.qtd, i.t), vU = (Number(it.e) || 0) - trU - peU;
+      var emb = qe > 1 ? (it.t || "CX") : "UN", f = function (v) { return qe > 1 ? emEmb(v, qe) : num(v); };
+      info += '<div class="virtual' + (vU < 0 ? " neg" : "") + '"><b>Estoque virtual CD: ' + f(vU) + " " + esc(emb) + "</b>" +
+        "<small>CD " + f(it.e) + " − trânsito " + f(trU) + " − este pedido " + f(peU) + "</small></div>";
     }
     if (mudou) info += '<span class="tag-mgr">' + (o == null ? "Incluído pelo manager" : "Loja pediu " + o + " " + esc(i.t || "un")) + "</span>";
     var qtd = '<div class="qtd"><b>' + i.qtd + "</b><small>" + esc(i.t || "un") + "</small></div>";
@@ -3998,7 +4009,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.12";
+  var VERSAO_APP = "2026-11-04.13";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
