@@ -2763,19 +2763,19 @@ window.PedidoPDF = (function () {
       return '<rect x="' + (i * bw + 2) + '" y="' + (H - h) + '" width="' + (bw - 4) + '" height="' + h + '" rx="2" fill="' + (m.parcial ? "#e7b9b9" : "#c62828") + '"/>' +
         '<text x="' + (i * bw + bw / 2) + '" y="' + (H + 12) + '" font-size="8" text-anchor="middle" fill="#7a6a5c">' + MESES_NOME[Number(m.mes.slice(5)) - 1] + "</text>";
     }).join("") + "</svg>";
-    var tabela;
-    if (cods.length === 1) {
-      tabela = '<table class="tab-lojas tab-lj"><tr><th>Mês</th><th>Vendas UN</th>' + (q > 1 ? "<th>" + esc(t) + "</th>" : "") + "</tr>" + meses.map(function (m) {
-        var v = tot(m);
-        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + num(v) + "</b></td>" + (q > 1 ? "<td>" + num(Math.round(v / q * 10) / 10) + "</td>" : "") + "</tr>";
-      }).join("") + "</table>";
-    } else {
-      tabela = '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:' + (140 + cods.length * 58) + 'px"><tr><th>Mês</th><th>Total</th>' +
+    // 04/11 (Marcelo): igual para todos - uma tabela com o TOTAL (Gerência: a loja dela; Administração/Diretoria: total das
+    // lojas) e, para quem vê mais de uma loja, o botão "Ver por loja" abre a tabela loja a loja.
+    var tabela = '<table class="tab-lojas tab-lj"><tr><th>Mês</th><th>' + (cods.length === 1 ? "Vendas UN" : "Total lojas UN") + "</th>" + (q > 1 ? "<th>" + esc(t) + "</th>" : "") + "</tr>" + meses.map(function (m) {
+      var v = tot(m);
+      return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + num(v) + "</b></td>" + (q > 1 ? "<td>" + num(Math.round(v / q * 10) / 10) + "</td>" : "") + "</tr>";
+    }).join("") + "</table>";
+    if (cods.length > 1) {
+      tabela += '<details class="det-lojas" style="margin-top:10px"><summary>Ver por loja</summary><div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:' + (140 + cods.length * 58) + 'px"><tr><th>Mês</th><th>Total</th>' +
         cods.map(function (c) { return '<th title="' + esc(r.nomes[c] || "") + '">' + esc(c) + "<br><small>" + esc((r.nomes[c] || "").slice(0, 7)) + "</small></th>"; }).join("") + "</tr>" +
         meses.map(function (m) {
           return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + num(tot(m)) + "</b></td>" +
             cods.map(function (c) { return "<td>" + num(Number(m.lojas[c]) || 0) + "</td>"; }).join("") + "</tr>";
-        }).join("") + "</table></div>";
+        }).join("") + "</table></div></details>";
     }
     box.innerHTML = volta + cab + resumo + svg + tabela + '<p style="margin:10px 0 0"><small>Vendas em unidades. Mês "(até …)" ainda está correndo.</small></p>';
   }
@@ -3811,7 +3811,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.2";
+  var VERSAO_APP = "2026-11-04.3";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
