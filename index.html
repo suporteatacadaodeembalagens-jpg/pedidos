@@ -114,6 +114,10 @@
   .acao-cons .btn{padding:11px 14px}
   .acao-cons{flex-wrap:wrap;gap:8px}
   .acao-cons .btn-fav{width:100%}
+  .ficha-foto{text-align:center;margin:0 0 12px}
+  .ficha-foto img{max-width:100%;max-height:300px;object-fit:contain;border-radius:10px;background:#fff}
+  .ficha-foto .foto-fonte{display:block;font-size:11px;color:var(--sub);margin-top:4px}
+  .ficha-foto .sem-foto{background:#f6f0e6;border-radius:10px;padding:22px 12px;color:var(--sub)}
   .ped .q1 b.nome-salvo{font-size:17px;word-break:break-word}
   .acao-cons .btn-ana{background:#e6eef8;color:#1d4e89;border:1px solid #b8cff5}
   .acao-cons .btn-ana.bloq{opacity:.6}
@@ -2946,7 +2950,7 @@ window.PedidoPDF = (function () {
     var fic = [["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"]];
     if (m) fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : "—"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : "—"]);
     // 04/11 (Marcelo): Diretoria/Administração veem o custo do CD; a Gerência vê só o custo da PRÓPRIA loja
-    if (m) fic.push(["Custo CD", txtCusto(it.fora ? it.cu : it.c, it.t, it.q)]);
+    if (m) fic.push(["Custo CD", txtCusto(it.fora ? it.cu : (pr ? pr[2] : 0), it.t, it.q)]);   // it.c da lista é a quantidade de CX, não custo
     else if (nivelNum() >= 2) fic.push(["Custo loja", cons.custoLoja ? txtCusto(cons.custoLoja[it.p], it.t, it.q) : "…"]);
     var est = blocoEstoque(it.p, it.e, it.c != null && !it.fora ? it.c : null, it.t, it.q, null, null, false, m);
     var acao;
@@ -2977,13 +2981,26 @@ window.PedidoPDF = (function () {
     var emb = it.t ? it.t + (it.q > 1 ? " c/ " + num(it.q) : "") : "—";
     $("fichaTitulo").textContent = it.d;
     var fic = [["PLU", it.p], ["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"], ["Embalagem", emb]];
-    $("fichaCorpo").innerHTML = '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
-      '<div class="ficha-paineis"><div class="ficha-painel"><div class="grupo">Estoque e vendas por loja</div>' +
-      '<div id="fichaLojas"><div class="carregando"><div class="giro"></div>Carregando…</div></div></div>' +
-      '</div>';
+    // 04/11 (Marcelo): na CONSULTA, tocar no produto mostra a FOTO (achada pelo robô na web pelo código de barras);
+    // o estoque e as vendas por loja ficam logo abaixo, em "Ver estoque e vendas por loja"
+    var naConsulta = tela === "consulta";
+    var painelLojas = '<div id="fichaLojas"><div class="carregando"><div class="giro"></div>Carregando…</div></div>';
+    $("fichaCorpo").innerHTML = (naConsulta ? '<div id="fichaFoto" class="ficha-foto"><div class="carregando"><div class="giro"></div>Buscando a foto…</div></div>' : "") +
+      '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
+      '<div class="ficha-paineis"><div class="ficha-painel">' +
+      (naConsulta ? '<details class="det-lojas"><summary>Ver estoque e vendas por loja</summary>' + painelLojas + "</details>"
+        : '<div class="grupo">Estoque e vendas por loja</div>' + painelLojas) + "</div></div>";
     $("telaFicha").classList.add("aberta");
-    chamar("fichaProduto", [plu], function (r) { if ($("fichaTitulo").textContent === it.d) desenharFichaLojas(it, r); },
+    chamar("fichaProduto", [plu], function (r) { if ($("fichaTitulo").textContent === it.d) { desenharFichaLojas(it, r); desenharFoto(r && r.foto); } },
       function (e) { var b = $("fichaLojas"); if (b) b.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
+  function desenharFoto(f) {
+    var box = $("fichaFoto"); if (!box) return;
+    if (!f || !f.u) { box.innerHTML = '<div class="sem-foto">Foto ainda não encontrada.<br><small>O robô procura pelo código de barras uma vez por dia.</small></div>'; return; }
+    box.innerHTML = '<img src="' + esc(f.u) + '" alt="Foto do produto" loading="lazy" referrerpolicy="no-referrer">' +
+      '<small class="foto-fonte">Foto: ' + esc(f.f || "web") + " (pelo código de barras)</small>";
+    var img = box.querySelector("img");
+    img.addEventListener("error", function () { box.innerHTML = '<div class="sem-foto">Não consegui abrir a foto agora.</div>'; });
   }
   /** Estoque e vendas por loja numa tabela só. No topo: total Matriz + lojas e total só da Matriz (CD 001). */
   function desenharFichaLojas(it, r) {
@@ -3813,7 +3830,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.4";
+  var VERSAO_APP = "2026-11-04.5";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
