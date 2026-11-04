@@ -114,6 +114,9 @@
   .acao-cons .btn{padding:11px 14px}
   .acao-cons{flex-wrap:wrap;gap:8px}
   .acao-cons .btn-fav{width:100%}
+  .acao-cons .btn-ana{background:#e6eef8;color:#1d4e89;border:1px solid #b8cff5}
+  .acao-cons .btn-ana.bloq{opacity:.6}
+  .acao-cons .linha-acao + .linha-acao{margin-top:8px}
   .acao-cons .btn-cont{background:var(--marrom);color:#fff;border:2px solid var(--ouro)}   /* 29/10: cor forte, à esquerda do outro botão */
   .acao-cons .linha-acao{display:flex;gap:8px;width:100%;align-items:stretch}
   .acao-cons .linha-acao > *{flex:1 1 0;min-width:0}
@@ -2692,11 +2695,11 @@ window.PedidoPDF = (function () {
   }
   // ---------------- ANÁLISE DE VENDAS (mensal, por loja) ----------------
   var MESES_NOME = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-  function abrirAnalise() {
+  function abrirAnalise(semFoco) {   // semFoco = aberta pela Consulta já num produto (não abre o teclado)
     modal("Análise de vendas", '<input id="anaBusca" type="search" placeholder="Produto, PLU ou código de barras" autocomplete="off" ' +
       'style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #d8ccb9;border-radius:10px;font-size:16px">' +
       '<div id="anaRes" style="margin-top:10px"><div class="vazio" style="padding:10px 0">Digite o nome, o PLU ou o código de barras do produto.</div></div>');
-    setTimeout(function () { var i = $("anaBusca"); if (i) i.focus(); }, 150);
+    if (!semFoco) setTimeout(function () { var i = $("anaBusca"); if (i) i.focus(); }, 150);
   }
   function buscarAnalise(t) {
     var q = semAcento(t).trim(), box = $("anaRes");
@@ -2952,7 +2955,10 @@ window.PedidoPDF = (function () {
       acao = '<button class="btn btn-verde" data-cpr="' + esc(it.p) + '">' + (c ? "Na compra: " + c.qtd + " " + esc((c.t || "un").toLowerCase()) + " (+1)" : "Lançar no pedido de compra") + "</button>";
     } else acao = '<button class="btn btn-verde bloq" disabled title="Só quem faz pedido de compra">\uD83D\uDD12 Pedido de compra</button>';
     if (sessao) acao = '<div class="linha-acao"><button class="btn btn-cont" data-cont="' + esc(it.p) + '">Pedir contagem de estoque</button>' + acao + "</div>";   // à ESQUERDA do outro botão, na mesma linha (todos os logins)
-    if (sessao) acao += '<button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>';   // favoritos do próximo pedido da loja
+    if (sessao) acao += '<div class="linha-acao"><button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>' +   // favoritos do próximo pedido da loja
+      // 04/11 (Marcelo): ao lado, a Análise de vendas DESTE produto (Gerência, Administração e Diretoria; Operacional vê com cadeado)
+      (m || nivelNum() >= 2 ? '<button class="btn btn-ana" data-anacons="' + esc(it.p) + '" data-anad="' + esc(it.d) + '">&#128200; Análise de vendas</button>'
+        : '<button class="btn btn-ana bloq" data-anabloq="1" title="Gerência, Administração e Diretoria">\uD83D\uDD12 Análise de vendas</button>') + "</div>";
     return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"><div class="desc">' + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
       '<div class="acao-cons">' + acao + "</div></div>";
@@ -3513,6 +3519,8 @@ window.PedidoPDF = (function () {
       if (e.target.closest("#btnLerCons")) { abrirLeitor(function (c) { cons.termo = c; var i = $("consBusca"); if (i) i.value = c; resultadosConsulta(); }); return; }
       var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
       var fv = e.target.closest("[data-fav]"); if (fv) { favoritoClique(fv.getAttribute("data-fav")); return; }
+      var ac = e.target.closest("[data-anacons]"); if (ac) { abrirAnalise(true); abrirAnaliseItem(ac.getAttribute("data-anacons"), ac.getAttribute("data-anad")); return; }
+      if (e.target.closest("[data-anabloq]")) { avisoBloqueio(); return; }
       var ctb = e.target.closest("[data-cont]"); if (ctb) { contagemClique(ctb.getAttribute("data-cont")); return; }
       var cr = e.target.closest("[data-cpr]"); if (cr) { var pc = cr.getAttribute("data-cpr"); mudarCompra(pc, 1); resultadosConsulta(); toast("Colocado no pedido de compra"); return; }
     }
@@ -3803,7 +3811,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.1";
+  var VERSAO_APP = "2026-11-04.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
