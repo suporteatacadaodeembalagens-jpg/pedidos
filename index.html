@@ -3137,19 +3137,23 @@ window.PedidoPDF = (function () {
     if (termo.length < 2) { box.innerHTML = '<div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
     var achados = [];
     dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) {
-      if (achados.length < 80 && (casaBusca(it, termo, termoNum) || (it.f && semAcento(it.f).indexOf(termo) >= 0))) achados.push(it);
+      if (casaBusca(it, termo, termoNum) || (it.f && semAcento(it.f).indexOf(termo) >= 0)) achados.push(it);
     }); });
+    var mais80 = achados.length > 80;   // 04/11: ordena TODOS os achados e mostra os 80 primeiros em ordem alfabética
+    achados = achados.sort(ordemAlfa).slice(0, 80);
     // produtos com estoque 0 ou negativo no CD (não entram no pedido): vêm do servidor
     var ex = cons.extra && cons.extra.termo === cons.termo.trim() ? cons.extra.lista : null;
     var fora = (ex || []).filter(function (x) { return !porPlu[x.p]; });
     if (!ex) buscarForaLista(cons.termo.trim());
     var n = achados.length + fora.length;
-    box.innerHTML = n ? '<div class="grupo">' + n + (achados.length === 80 || (ex && ex.length === 80) ? "+" : "") + " encontrado(s)</div>" +
-        achados.map(htmlConsulta).join("") + fora.map(htmlConsulta).join("") +
+    box.innerHTML = n ? '<div class="grupo">' + n + (mais80 || (ex && ex.length === 80) ? "+" : "") + " encontrado(s)</div>" +
+        achados.concat(fora).sort(ordemAlfa).map(htmlConsulta).join("") +   // 04/11 (Marcelo): em ordem alfabética
         (ex ? "" : '<div class="carregando"><div class="giro"></div>Procurando também os produtos com estoque zerado ou negativo…</div>')
       : (ex ? '<div class="vazio">' + (termoNum.length >= 8 ? "Nenhum produto com esse código de barras." : "Nada encontrado.") + "</div>"
         : '<div class="carregando"><div class="giro"></div>Procurando…</div>');
   }
+  /** Ordem alfabética pelo nome do produto (sem diferença de maiúscula/acento; números em ordem: 2 antes de 10). */
+  function ordemAlfa(a, b) { return String(a.d || "").localeCompare(String(b.d || ""), "pt-BR", { numeric: true, sensitivity: "base" }); }
   /** Busca no servidor os produtos do relatório de estoque (qualquer estoque no CD), para a consulta. */
   function buscarForaLista(t) {
     if (buscarForaLista.termo === t) return;
@@ -4097,7 +4101,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.19";
+  var VERSAO_APP = "2026-11-04.20";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
