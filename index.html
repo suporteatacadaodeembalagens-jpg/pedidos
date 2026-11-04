@@ -257,6 +257,8 @@
   .mgr-item.zero{opacity:.45}
   .mgr-item .orig{color:var(--vermelho);font-weight:700}
   .mgr-add{border:0;border-radius:10px;padding:10px 12px;background:var(--azul);color:#fff;font-weight:800;font-size:13px}
+  .item.piscar{animation:piscarSel .8s ease-in-out 2}
+  @keyframes piscarSel{50%{box-shadow:0 0 0 4px var(--ouro)}}
   .virtual{margin-top:6px;padding:6px 10px;border-radius:8px;background:#e8f1fb;color:#1d4e89}
   .virtual b{display:block;font-size:15px}.virtual small{font-size:12px;opacity:.85}
   .virtual.neg{background:#fde8e8;color:#9b1c1c}
@@ -2140,9 +2142,17 @@ window.PedidoPDF = (function () {
     var dep = i.dep || (porPlu[plu] && porPlu[plu].dep) || "OUTROS";
     mgr.abertos = mgr.abertos || {}; mgr.abertos[dep] = true;
     selPlu = String(plu);
+    mgr.busca = "";                                   // 04/11: fecha a busca (o teclado sai da frente) e vai até o produto
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     desenharPedidoMgr();
-    var el = document.querySelector('.item[data-mp="' + plu + '"]');
-    if (el) { el.classList.add("sel"); el.scrollIntoView({ block: "center", behavior: "smooth" }); }
+    var ir = function () {
+      var el = document.querySelector('#lista .item[data-mp="' + plu + '"]'); if (!el) return;
+      el.classList.add("sel", "piscar");
+      var topo = document.querySelector("header"), alt = topo ? topo.getBoundingClientRect().height : 0;
+      window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.pageYOffset - alt - 12), behavior: "smooth" });
+      setTimeout(function () { el.classList.remove("piscar"); }, 1600);
+    };
+    setTimeout(ir, 60); setTimeout(ir, 400);          // de novo depois que o teclado do celular fecha (a tela muda de tamanho)
   }
   function mudarMgr(plu, delta) {
     var item = null;
@@ -4009,7 +4019,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.13";
+  var VERSAO_APP = "2026-11-04.14";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
