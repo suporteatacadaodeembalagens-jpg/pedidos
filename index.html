@@ -262,6 +262,8 @@
   .virtual{margin-top:6px;padding:6px 10px;border-radius:8px;background:#e8f1fb;color:#1d4e89}
   .virtual b{display:block;font-size:15px}.virtual small{font-size:12px;opacity:.85}
   .virtual.neg{background:#fde8e8;color:#9b1c1c}
+  .salvos-plu{margin-top:6px;padding:6px 9px;border-radius:8px;background:#f1f0ee;border:1px dashed #c9bfb3;font-size:13px;line-height:1.5;color:#4d423d}
+  .salvos-plu b{color:var(--marrom)}.salvos-plu small{color:var(--sub);font-size:11.5px}
   .mgr-ver{border:0;border-radius:10px;padding:10px 12px;background:#e3f4e8;color:#1d6b35;font-weight:800;font-size:13px;white-space:nowrap}
   .mgr-item.no-pedido{border:2px solid #9fd5ae;background:#f3fbf5}
   .grupo-busca{font-weight:800;font-size:13px;margin:10px 2px 6px}
@@ -2042,6 +2044,7 @@ window.PedidoPDF = (function () {
       mgr.aberto = x; mgr.itens = (x.itens || []).map(function (i) { return { p: i.p, d: i.d, m: i.m, dep: i.dep, t: i.t, qtd: i.qtd }; });
       mgr.sujo = false; mgr.busca = ""; mgr.abertos = {};   // setores começam FECHADOS; abre ao tocar
       desenharManager(); window.scrollTo(0, 0);
+      buscarSalvosPorPlu();   // 04/11: pedidos salvos das lojas por produto (só mostra)
     }, function (e) { toast(String(e && e.message || e)); mgr.aberto = null; desenharManager(); });
   }
   function podeEditarMgr() { return !!(mgr.aberto && mgr.aberto.status === "pendente" && sessao && sessao.aprova); }
@@ -2119,7 +2122,7 @@ window.PedidoPDF = (function () {
       var trU = (tr || []).reduce(function (s, x) { return s + un(x.qtd, x.t); }, 0), peU = un(i.qtd, i.t), vU = (Number(it.e) || 0) - trU - peU;
       var emb = qe > 1 ? (it.t || "CX") : "UN", f = function (v) { return qe > 1 ? emEmb(v, qe) : num(v); };
       info += '<div class="virtual' + (vU < 0 ? " neg" : "") + '"><b>Estoque virtual CD: ' + f(vU) + " " + esc(emb) + "</b>" +
-        "<small>CD " + f(it.e) + " − trânsito " + f(trU) + " − este pedido " + f(peU) + "</small></div>";
+        "<small>CD " + f(it.e) + " − trânsito " + f(trU) + " − este pedido " + f(peU) + "</small></div>" + htmlSalvosPlu(i.p);
     }
     if (mudou) info += '<span class="tag-mgr">' + (o == null ? "Incluído pelo manager" : "Loja pediu " + o + " " + esc(i.t || "un")) + "</span>";
     var qtd = '<div class="qtd"><b>' + i.qtd + "</b><small>" + esc(i.t || "un") + "</small></div>";
@@ -2129,6 +2132,52 @@ window.PedidoPDF = (function () {
       '<div class="rodape-item">' + (pode ? '<div class="stepper"><button class="seta menos" data-mq="-1" aria-label="Diminuir">&#9660;</button>' + qtd +
               '<button class="seta mais" data-mq="1" aria-label="Aumentar">&#9650;</button></div>' : qtd) +
       "</div></div>";
+  }
+  // ---- 04/11 (Marcelo): PEDIDOS SALVOS das lojas no cartão da conferência ----
+  // Só MOSTRA o que as lojas têm em pedidos salvos (não enviados) deste produto; NÃO abate do estoque virtual.
+  // O servidor não manda os itens na lista de salvos (rascunhosManager só traz quantos produtos), então busca os
+  // salvos de cada loja que tem algum (listarRascunhos "pela loja", o mesmo do Continuar) e junta por PLU.
+  var salvosPorPlu = null, salvosPorPluT = 0;
+  function htmlSalvosPlu(plu) {
+    var l = salvosPorPlu && salvosPorPlu[plu];
+    if (!l || !l.length) return "";
+    var it = porPlu[plu], t = String(unPedido(it)).toLowerCase();
+    l = l.slice().sort(function (a, b) { return a.loja.localeCompare(b.loja, "pt-BR", { numeric: true }); });
+    return '<div class="salvos-plu"><b>Em pedidos salvos</b> <small>(não entra no estoque virtual)</small>' + l.map(function (x) {
+      return "<div>" + num(x.qtd) + " " + esc(t) + " (" + esc(x.loja) + (x.nome ? " · " + esc(x.nome) : "") + ")</div>";
+    }).join("") + "</div>";
+  }
+  function pintarSalvosPlu() {   // atualiza só esse quadro nos cartões já na tela (não redesenha: não perde o que está sendo editado)
+    if (!mgr.aberto) return;
+    Array.prototype.forEach.call(document.querySelectorAll("#lista .item[data-mp]"), function (el) {
+      var v = el.querySelector(".virtual"); if (!v) return;
+      var velho = el.querySelector(".salvos-plu"); if (velho) velho.remove();
+      var h = htmlSalvosPlu(el.getAttribute("data-mp")); if (h) v.insertAdjacentHTML("afterend", h);
+    });
+  }
+  function buscarSalvosPorPlu() {
+    if (!EM_APPS_SCRIPT || !sessao || buscarSalvosPorPlu.indo) return;
+    if (salvosPorPlu && Date.now() - salvosPorPluT < 120000) return;   // guarda por 2 min
+    buscarSalvosPorPlu.indo = true;
+    var fim = function (mapa) { buscarSalvosPorPlu.indo = false; salvosPorPlu = mapa; salvosPorPluT = Date.now(); pintarSalvosPlu(); };
+    var juntar = function (lista) {
+      var lojas = [];
+      (lista || []).forEach(function (x) { if (x.loja && lojas.indexOf(x.loja) < 0) lojas.push(x.loja); });
+      if (!lojas.length) { fim({}); return; }
+      var mapa = {}, falta = lojas.length, pronto = function () { if (--falta === 0) fim(mapa); };
+      lojas.forEach(function (loja) {
+        google.script.run.withSuccessHandler(function (l) {
+          (l || []).forEach(function (r) {
+            Object.keys(r.itens || {}).forEach(function (p) {
+              var q = Number(r.itens[p]) || 0;
+              if (q > 0) (mapa[p] = mapa[p] || []).push({ loja: loja, nome: r.nome || "", qtd: q });
+            });
+          });
+          pronto();
+        }).withFailureHandler(pronto).listarRascunhos(sessao.token + "~" + encodeURIComponent(loja));
+      });
+    };
+    chamar("rascunhosManager", [], function (l) { salvosMgr = l || []; juntar(salvosMgr); }, function () { buscarSalvosPorPlu.indo = false; });
   }
   function buscarMgr(txt) {
     mgr.busca = txt; var box = $("mgrRes"); if (!box) return;
@@ -4043,7 +4092,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.15";
+  var VERSAO_APP = "2026-11-04.16";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
