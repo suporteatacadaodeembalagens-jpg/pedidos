@@ -118,6 +118,8 @@
   .ficha-foto img{max-width:100%;max-height:300px;object-fit:contain;border-radius:10px;background:#fff}
   .ficha-foto .foto-fonte{display:block;font-size:11px;color:var(--sub);margin-top:4px}
   .ficha-foto .sem-foto{background:#f6f0e6;border-radius:10px;padding:22px 12px;color:var(--sub)}
+  .ficha-foto .tirar-foto{display:block;width:100%;margin-top:12px;font-size:16px;padding:14px}
+  .ficha-foto .trocar-foto{margin-top:8px;padding:7px 14px;font-size:13px}
   .ped .q1 b.nome-salvo{font-size:17px;word-break:break-word}
   .acao-cons .btn-ana{background:#e6eef8;color:#1d4e89;border:1px solid #b8cff5}
   .acao-cons .btn-ana.bloq{opacity:.6}
@@ -1330,7 +1332,8 @@ window.PedidoPDF = (function () {
   function fotoUrl(p, mini) {
     var u = FOTOS && FOTOS[p]; if (!u) return "";
     if (u.charAt(0) === "~") u = PREF_FOTO + u.slice(1);
-    return mini ? u.replace(/\.(200|400|full)\.jpg$/, ".100.jpg") : u;
+    if (mini) u = /drive\.google\.com\/thumbnail/.test(u) ? u.replace(/sz=w\d+/, "sz=w120") : u.replace(/\.(200|400|full)\.jpg$/, ".100.jpg");
+    return u;
   }
   function miniFoto(p) {
     var u = fotoUrl(p, true);
@@ -3015,18 +3018,49 @@ window.PedidoPDF = (function () {
       (naConsulta ? '<details class="det-lojas"><summary>Ver estoque e vendas por loja</summary>' + painelLojas + "</details>"
         : '<div class="grupo">Estoque e vendas por loja</div>' + painelLojas) + "</div></div>";
     $("telaFicha").classList.add("aberta");
-    chamar("fichaProduto", [plu], function (r) { if ($("fichaTitulo").textContent === it.d) { desenharFichaLojas(it, r); desenharFoto(r && r.foto); } },
+    chamar("fichaProduto", [plu], function (r) { if ($("fichaTitulo").textContent === it.d) { desenharFichaLojas(it, r); desenharFoto(r && r.foto, plu); } },
       function (e) { var b = $("fichaLojas"); if (b) b.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
-  function desenharFoto(f) {
+  function desenharFoto(f, plu) {
     var box = $("fichaFoto"); if (!box) return;
-    if (!f || !f.u) { box.innerHTML = '<div class="sem-foto">Foto ainda não encontrada.<br><small>O robô procura pelo código de barras uma vez por dia.</small></div>'; return; }
+    // 04/11 (Marcelo): sem foto (nem na web) -> pede para TIRAR A FOTO pelo celular; vale para todos.
+    // Trocar uma foto que já existe: Gerência para cima (o servidor confere).
+    var btn = function (txt, cls) { return '<button class="btn ' + cls + '" data-tirarfoto="' + esc(plu) + '" type="button">&#128247; ' + txt + "</button>"; };
+    if (!f || !f.u) { box.innerHTML = '<div class="sem-foto">Este produto ainda não tem foto.<br><small>Tire uma foto do produto: ela fica para todos.</small>' +
+      btn("Tirar foto do produto", "btn-verde tirar-foto") + "</div>"; return; }
     box.innerHTML = '<img src="' + esc(f.u) + '" alt="Foto do produto" loading="lazy" referrerpolicy="no-referrer">' +
-      '<small class="foto-fonte">Foto: ' + esc(f.f || "web") + " (pelo código de barras)</small>";
+      '<small class="foto-fonte">Foto: ' + esc(f.f || "web") + (f.n && /app/.test(f.f || "") ? " · " + esc(f.n) : /app/.test(f.f || "") ? "" : " (pelo código de barras)") + "</small>" +
+      (ehMgrLogin() || nivelNum() >= 2 ? btn("Trocar foto", "btn-cinza trocar-foto") : "");
     var img = box.querySelector("img");
     img.addEventListener("error", function () { box.innerHTML = '<div class="sem-foto">Não consegui abrir a foto agora.</div>'; });
   }
   /** Estoque e vendas por loja numa tabela só. No topo: total Matriz + lojas e total só da Matriz (CD 001). */
+  /** Tira a foto pelo celular, reduz para no máximo 900 px (JPEG) e manda para o servidor. */
+  function tirarFoto(plu) {
+    var inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment");
+    inp.addEventListener("change", function () {
+      var arq = inp.files && inp.files[0]; if (!arq) return;
+      var box = $("fichaFoto"); if (box) box.innerHTML = '<div class="carregando"><div class="giro"></div>Mandando a foto…</div>';
+      var img = new Image(), url = URL.createObjectURL(arq);
+      img.onload = function () {
+        var max = 900, k = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        chamar("salvarFotoCelular", [plu, c.toDataURL("image/jpeg", 0.8)], function (r) {
+          if (FOTOS) FOTOS[plu] = r.u;
+          desenharFoto({ u: r.u, f: r.f, n: r.n }, plu);
+          Array.prototype.forEach.call(document.querySelectorAll('.item[data-plu="' + plu + '"] > .desc'), function (d) {
+            var v = d.querySelector(".mini-foto"); if (v) v.remove(); d.insertAdjacentHTML("afterbegin", miniFoto(plu));
+          });
+          toast("Foto salva. Obrigado!");
+        }, function (e) { toast(String(e && e.message || e)); desenharFoto(null, plu); });
+      };
+      img.onerror = function () { toast("Não consegui abrir a foto. Tente de novo."); desenharFoto(null, plu); };
+      img.src = url;
+    });
+    inp.click();
+  }
   function desenharFichaLojas(it, r) {
     var box = $("fichaLojas"); if (!box) return;
     var cx = it.t && it.q > 1, preco = r.lojas.some(function (l) { return l.venda != null; }), custo = r.lojas.some(function (l) { return l.custo != null; }), vend = !!r.vendasPeriodo;
@@ -3687,6 +3721,7 @@ window.PedidoPDF = (function () {
     var b = e.target.closest("[data-favloja]"); if (b) { addFavorito(b.getAttribute("data-favplu"), b.getAttribute("data-favloja")); return; }
     if (e.target.closest("[data-conttodas]")) { var cks = $("fichaCorpo").querySelectorAll("[data-contck]"), liga = false; for (var k = 0; k < cks.length; k++) if (!cks[k].checked) liga = true; for (k = 0; k < cks.length; k++) cks[k].checked = liga; return; }
     var cok = e.target.closest("[data-contok]"); if (cok) { var sel = [].slice.call($("fichaCorpo").querySelectorAll("[data-contck]:checked")).map(function (x) { return x.value; }); if (!sel.length) { toast("Marque pelo menos uma loja"); return; } pedirContagem(cok.getAttribute("data-contok"), sel); return; }
+    var tf = e.target.closest("[data-tirarfoto]"); if (tf) { tirarFoto(tf.getAttribute("data-tirarfoto")); return; }
     var cfl = e.target.closest("[data-contfiltro]"); if (cfl) { contagem.filtro = cfl.getAttribute("data-contfiltro"); desenharContagemAba(); return; }
     var ctab = e.target.closest("[data-conttab]"); if (ctab) { contagem.aba = ctab.getAttribute("data-conttab"); contagem.filtro = ""; desenharContagemAba(); return; }
     var clj = e.target.closest("[data-contloja]"); if (clj) { contagem.lojaCont = clj.getAttribute("data-contloja"); desenharContar(); return; }
@@ -3854,7 +3889,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.6";
+  var VERSAO_APP = "2026-11-04.7";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
