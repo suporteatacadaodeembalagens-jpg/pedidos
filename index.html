@@ -1833,7 +1833,19 @@ window.PedidoPDF = (function () {
     if ((e.falhas || []).length) h += "<br><small>Não digitados: " + e.falhas.map(function (f) { return esc(f.p) + " (" + esc(f.motivo) + ")"; }).join(", ") + "</small>";
     if (sessao && sessao.aprova && e.st !== "fila" && e.st !== "digitando" && !x.direto && !f)
       h += '<br><button class="btn btn-cinza" style="margin-top:8px;padding:9px 14px" id="btnErpDeNovo" type="button">Digitar de novo no ERP</button>';
+    // 05/11: divergência resolvida à mão (ex.: os itens que faltaram foram digitados no ERP) -> some o "com problema"
+    if (sessao && sessao.aprova && !x.direto && ((e.st === "digitado" && (e.falhas || []).length) || e.st === "erro" || e.st === "verificar"))
+      h += ' <button class="btn btn-cinza" style="margin-top:8px;padding:9px 14px" id="btnErpDescons" type="button">Desconsiderar divergência</button>';
     return h + "</div>";
+  }
+  function erpDesconsiderar() {
+    var e = mgr.aberto && mgr.aberto.erp, n = e && (e.falhas || []).length;
+    if (!confirm((n ? "Os " + n + " item(ns) que o robô não digitou já foram digitados à mão no ERP?\n\n" : "O pedido já está certo no ERP?\n\n") +
+      "A divergência some deste pedido (fica registrado quem desconsiderou). O robô NÃO digita nada.")) return;
+    chamar("desconsiderarErp", [mgr.aberto.id], function (r) {
+      mgr.aberto.erp = Object.assign({}, mgr.aberto.erp || {}, { st: "digitado", falhas: [], msg: (r && r.erp && r.erp.msg) || "" });
+      toast("Divergência desconsiderada."); mgr.lista = null; desenharManager();
+    }, function (err) { toast(String(err && err.message || err)); });
   }
   function erpDeNovo() {
     var e = mgr.aberto && mgr.aberto.erp;
@@ -3855,6 +3867,7 @@ window.PedidoPDF = (function () {
       var rm = e.target.closest("[data-rascmgr]"); if (rm) { continuarSalvoMgr(rm.getAttribute("data-loja"), rm.getAttribute("data-rascmgr")); return; }
       if (e.target.closest("#mgrVoltar")) { voltarMgr(); return; }
       if (e.target.closest("#btnErpDeNovo")) { erpDeNovo(); return; }
+      if (e.target.closest("#btnErpDescons")) { erpDesconsiderar(); return; }
       if (e.target.closest("#btnLerMgr")) { lerParaMgr(); return; }
       var st = e.target.closest("[data-setor]");
       if (st) {   // abre/fecha o setor sem redesenhar a tela
@@ -4121,7 +4134,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-04.23";
+  var VERSAO_APP = "2026-11-05.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
