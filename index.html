@@ -3241,7 +3241,7 @@ window.PedidoPDF = (function () {
         chamar("produtosFornecedor", [f], function (l) {
           resultadosFornecedor.indo = null;
           cons.fornProd = { nome: f, lista: (l || []).map(function (x) { return porPlu[x.p] ||
-            { p: x.p, d: x.d, m: x.m, f: x.f, b: x.b, t: x.t, q: x.q, e: Number(x.e) || 0, cu: x.c, dep: "", fora: 1 }; }) };
+            { p: x.p, d: x.d, m: x.m, f: x.f, b: x.b, t: x.t, q: x.q, e: Number(x.e) || 0, cu: x.c, dep: "", fora: 1, fl: x.fl }; }) };
           if (tela === "consulta" && cons.forn === f) resultadosConsulta();
         }, function () { resultadosFornecedor.indo = null; cons.fornProd = { nome: f, lista: produtosDoFornLocal(f) }; if (tela === "consulta" && cons.forn === f) resultadosConsulta(); });
         return;
@@ -3289,7 +3289,7 @@ window.PedidoPDF = (function () {
       chamar("buscarProdutos", [t], function (l) {
         if (buscarForaLista.termo === t) buscarForaLista.termo = null;
         cons.extra = { termo: t, lista: (l || []).map(function (x) {
-          return { p: x.p, d: x.d, m: x.m, f: x.f, b: x.b, t: x.t, q: x.q, e: Number(x.e) || 0, cu: x.c, dep: "", fora: 1 }; }) };
+          return { p: x.p, d: x.d, m: x.m, f: x.f, b: x.b, t: x.t, q: x.q, e: Number(x.e) || 0, cu: x.c, dep: "", fora: 1, fl: x.fl }; }) };
         if (tela === "consulta" && cons.termo.trim() === t) resultadosConsulta();
       }, function () { if (buscarForaLista.termo === t) buscarForaLista.termo = null; cons.extra = { termo: t, lista: [] }; if (tela === "consulta") resultadosConsulta(); });
     }, 250);
@@ -3316,7 +3316,11 @@ window.PedidoPDF = (function () {
       // 04/11 (Marcelo): ao lado, a Análise de vendas DESTE produto (Gerência, Administração e Diretoria; Operacional vê com cadeado)
       (m || nivelNum() >= 2 ? '<button class="btn btn-ana" data-anacons="' + esc(it.p) + '" data-anad="' + esc(it.d) + '">&#128200; Análise de vendas</button>'
         : '<button class="btn btn-ana bloq" data-anabloq="1" title="Gerência, Administração e Diretoria">\uD83D\uDD12 Análise de vendas</button>') + "</div>";
-    return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"><div class="desc">' + miniFoto(it.p) + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
+    // 05/11 (Marcelo): produto FORA DE LINHA (cadastro do ERP) em VERMELHO, com o aviso escrito
+    var fl = !!it.fl;
+    return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"' + (fl ? ' style="border:2px solid #c62828;background:#fdecec"' : "") + '>' +
+      (fl ? '<div style="background:#c62828;color:#fff;font-weight:800;font-size:12px;letter-spacing:.5px;border-radius:6px;padding:4px 8px;margin:0 0 6px;display:inline-block">&#9888; PRODUTO FORA DE LINHA</div>' : "") +
+      '<div class="desc"' + (fl ? ' style="color:#b71c1c"' : "") + '>' + miniFoto(it.p) + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
       subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
       '<div class="acao-cons">' + acao + "</div></div>";
   }
@@ -4234,7 +4238,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-05.6";
+  var VERSAO_APP = "2026-11-05.7";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
