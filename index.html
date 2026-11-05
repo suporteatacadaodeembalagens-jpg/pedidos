@@ -3021,6 +3021,24 @@ window.PedidoPDF = (function () {
        ["Melhor mês", melhor ? nomeMes(melhor.mes) + " (" + cx(tot(melhor)) + " " + esc(un) + ")" : "—"]].map(function (x) {
         return '<div style="background:#f6f0e6;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
       }).join("") + "</div>";
+    // 05/11 (Marcelo): R$ VENDIDO e MARGEM (%) - do relatório ABC de Vendas Individual (robô), das lojas que a pessoa vê
+    function rs(m) { var v = 0, c = 0; cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { v += Number(x[0]) || 0; c += Number(x[1]) || 0; } }); return [v, c]; }
+    function marg(vc) { return vc[0] > 0 ? (vc[0] - vc[1]) / vc[0] * 100 : null; }
+    function pct(x) { return x == null ? "—" : (Math.round(x * 10) / 10).toString().replace(".", ",") + "%"; }
+    var comValor = meses.some(function (m) { return !!m.valores; }), tabValores = "";
+    if (comValor) {
+      var fv = fech.filter(function (m) { return !!m.valores; }), sv = [0, 0];
+      fv.forEach(function (m) { var x = rs(m); sv[0] += x[0]; sv[1] += x[1]; });
+      resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
+        [["Vendido " + fv.length + (fv.length === 1 ? " mês" : " meses"), reais(sv[0])], ["Margem média", pct(marg(sv))]].map(function (x) {
+          return '<div style="background:#eaf3ee;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
+        }).join("") + "</div>";
+      tabValores = '<table class="tab-lojas tab-lj" style="margin:0 0 12px"><tr><th>Mês</th><th>Vendido R$</th><th>Margem</th></tr>' + meses.map(function (m) {
+        if (!m.valores) return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + '</td><td colspan="2"><small>ainda não carregado</small></td></tr>';
+        var x = rs(m), mg = marg(x);
+        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + reais(x[0]) + '</b></td><td style="color:' + (mg == null ? "inherit" : mg < 15 ? "#c62828" : mg < 30 ? "#9a6b00" : "#2e7d32") + '">' + pct(mg) + "</td></tr>";
+      }).join("") + "</table>";
+    }
     // 05/11 (Marcelo): sem a tabela do total - para quem vê mais de uma loja a tabela LOJA A LOJA já aparece aberta;
     // o gráfico vem DEPOIS dela, com os valores em cima das barras, a linha da média, o melhor mês em destaque e
     // botões para ver o gráfico de UMA loja.
@@ -3082,7 +3100,7 @@ window.PedidoPDF = (function () {
     var graf = '<div style="background:#fffaf2;border:1px solid #efe2cf;border-radius:12px;padding:10px 10px 8px;margin:0 0 6px">' +
       '<div style="font-weight:700;margin:0 0 6px;color:#5b4636">Vendas por mês <small id="anaGrafTit" style="font-weight:400;color:#8a7867">' + (cods.length > 1 ? "· todas as lojas" : "") + "</small></div>" +
       chips + '<div id="anaGraf">' + grafico("") + "</div></div>";
-    box.innerHTML = volta + cab + resumo + tabela + graf + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
+    box.innerHTML = volta + cab + resumo + tabela + tabValores + graf + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
     Array.prototype.forEach.call(box.querySelectorAll("[data-analoja]"), function (b) {
       b.addEventListener("click", function () {
         var c = b.getAttribute("data-analoja");
@@ -4195,7 +4213,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-05.4";
+  var VERSAO_APP = "2026-11-05.5";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
