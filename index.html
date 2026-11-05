@@ -2949,20 +2949,29 @@ window.PedidoPDF = (function () {
   // ---------------- ANÁLISE DE VENDAS (mensal, por loja) ----------------
   var MESES_NOME = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   function abrirAnalise(semFoco) {   // semFoco = aberta pela Consulta já num produto (não abre o teclado)
-    modal("Análise de vendas", '<input id="anaBusca" type="search" placeholder="Produto, PLU ou código de barras" autocomplete="off" ' +
+    // 05/11 (Marcelo): busca igual à Consulta de produtos - nome, PLU, marca, fornecedor ou EAN (várias palavras) e o
+    // leitor de código de barras; achou UM produto (ou o código exato) -> já abre a análise dele.
+    modal("Análise de vendas", '<input id="anaBusca" type="search" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" autocomplete="off" ' +
       'style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #d8ccb9;border-radius:10px;font-size:16px">' +
-      '<div id="anaRes" style="margin-top:10px"><div class="vazio" style="padding:10px 0">Digite o nome, o PLU ou o código de barras do produto.</div></div>');
+      '<button class="btn-ler escuro" type="button" data-analer="1" style="width:100%;margin-top:8px">' + ICO_EAN + "Ler código de barras</button>" +
+      '<div id="anaRes" style="margin-top:10px"><div class="vazio" style="padding:10px 0">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div></div>');
     if (!semFoco) setTimeout(function () { var i = $("anaBusca"); if (i) i.focus(); }, 150);
   }
-  function buscarAnalise(t) {
-    var q = semAcento(t).trim(), box = $("anaRes");
+  function buscarAnalise(t, semAbrir, doLeitor) {
+    var q = semAcento(t).trim(), box = $("anaRes"), qn = numBusca(q);
     if (!box) return;
-    if (q.length < 2) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Digite pelo menos 2 letras.</div>'; return; }
+    if (q.length < 2) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
     var achados = [], vistos = {};
     Object.keys(porPlu).forEach(function (k) {
       var it = porPlu[k];
-      if (achados.length < 40 && (it.p.indexOf(q) === 0 || (it.b && String(it.b) === q) || semAcento(it.d).indexOf(q) >= 0)) { achados.push(it); vistos[it.p] = 1; }
+      if (casaBusca(it, q, qn, true)) { achados.push(it); vistos[it.p] = 1; }
     });
+    achados = achados.sort(ordemAlfa).slice(0, 80);
+    // código exato (PLU ou EAN) ou UM produto só -> abre direto a análise (não quando volta pelo "Outro produto")
+    var exato = qn ? achados.filter(function (it) { return soDigitos(it.p) === qn || (it.b && soDigitos(it.b) === qn); }) : [];
+    if (!semAbrir && (exato.length === 1 || (achados.length === 1 && (doLeitor || q.length >= 3)))) {
+      var um = exato[0] || achados[0]; abrirAnaliseItem(um.p, um.d); return;
+    }
     function desenhar(extra) {
       var l = achados.concat((extra || []).filter(function (x) { return !vistos[x.p]; }));
       box.innerHTML = l.length ? l.map(function (it) {
@@ -4027,7 +4036,8 @@ window.PedidoPDF = (function () {
     }
     if (e.target.closest("[data-favok]")) fecharModal();
     var an = e.target.closest("[data-ana]"); if (an) { abrirAnaliseItem(an.getAttribute("data-ana"), an.getAttribute("data-anad")); return; }
-    if (e.target.closest("[data-anavolta]")) { var ib = $("anaBusca"); buscarAnalise(ib ? ib.value : ""); if (ib) ib.focus(); return; }
+    if (e.target.closest("[data-anavolta]")) { var ib = $("anaBusca"); buscarAnalise(ib ? ib.value : "", true); if (ib) ib.focus(); return; }
+    if (e.target.closest("[data-analer]")) { abrirLeitor(function (c) { var ib2 = $("anaBusca"); if (ib2) ib2.value = c; buscarAnalise(c, false, true); }); return; }
     var ef = e.target.closest("[data-errfiltro]"); if (ef) { ERR.filtro = ef.getAttribute("data-errfiltro"); desenharErros(); return; }
     var ea = e.target.closest("[data-errapagar]");
     if (ea) {
@@ -4185,7 +4195,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-05.3";
+  var VERSAO_APP = "2026-11-05.4";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
