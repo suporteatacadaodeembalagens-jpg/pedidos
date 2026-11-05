@@ -2997,16 +2997,19 @@ window.PedidoPDF = (function () {
     var meses = (r && r.meses) || [], cods = (r && r.lojas) || [];
     if (!meses.length) { box.innerHTML = volta + cab + '<div class="aviso">Ainda não há vendas mensais carregadas. O robô busca os meses no ERP aos poucos (ou rode no PC do robô o 21_CARGA_VENDAS_MESES.bat).</div>'; return; }
     function tot(m) { return cods.reduce(function (a, c) { return a + (Number(m.lojas[c]) || 0); }, 0); }
+    // 05/11 (Marcelo): tudo na EMBALAGEM DE COMPRA (CX/FD...), quebrado com 1 casa igual nos pedidos (ex.: 151,5 CX)
+    var fat = q > 1 ? q : 1, un = q > 1 ? t : "UN";
+    function cx(v) { return num(Math.round(v / fat * 10) / 10); }
     var fech = meses.filter(function (m) { return !m.parcial; }).slice(0, 12);
     var soma = fech.reduce(function (a, m) { return a + tot(m); }, 0), media = fech.length ? soma / fech.length : 0;
     var u3 = fech.slice(0, 3).reduce(function (a, m) { return a + tot(m); }, 0), a3 = fech.slice(3, 6).reduce(function (a, m) { return a + tot(m); }, 0);
     var tend = fech.length >= 6 && a3 > 0 ? Math.round((u3 - a3) / a3 * 100) : null;
     var melhor = fech.slice().sort(function (a, b) { return tot(b) - tot(a); })[0];
     var resumo = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px">' +
-      [["Total " + fech.length + (fech.length === 1 ? " mês" : " meses"), num(soma) + " UN"],
-       ["Média por mês", num(Math.round(media)) + " UN" + (q > 1 ? " · " + num(Math.round(media / q * 10) / 10) + " " + esc(t) : "")],
+      [["Total " + fech.length + (fech.length === 1 ? " mês" : " meses"), cx(soma) + " " + esc(un)],
+       ["Média por mês", cx(media) + " " + esc(un)],
        ["Últimos 3 meses x 3 anteriores", tend == null ? "—" : (tend > 0 ? "+" : "") + tend + "%"],
-       ["Melhor mês", melhor ? nomeMes(melhor.mes) + " (" + num(tot(melhor)) + ")" : "—"]].map(function (x) {
+       ["Melhor mês", melhor ? nomeMes(melhor.mes) + " (" + cx(tot(melhor)) + " " + esc(un) + ")" : "—"]].map(function (x) {
         return '<div style="background:#f6f0e6;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
       }).join("") + "</div>";
     // 05/11 (Marcelo): sem a tabela do total - para quem vê mais de uma loja a tabela LOJA A LOJA já aparece aberta;
@@ -3014,27 +3017,26 @@ window.PedidoPDF = (function () {
     // botões para ver o gráfico de UMA loja.
     var tabela;
     if (cods.length > 1) {
-      tabela = '<div style="overflow-x:auto;margin:0 0 12px"><table class="tab-lojas tab-lj" style="min-width:' + (140 + cods.length * 58) + 'px"><tr><th>Mês</th><th>Total</th>' +
+      tabela = '<div style="overflow-x:auto;margin:0 0 12px"><table class="tab-lojas tab-lj" style="min-width:' + (140 + cods.length * 58) + 'px"><tr><th>Mês</th><th>Total ' + esc(un) + '</th>' +
         cods.map(function (c) { return '<th title="' + esc(r.nomes[c] || "") + '">' + esc(c) + "<br><small>" + esc((r.nomes[c] || "").slice(0, 7)) + "</small></th>"; }).join("") + "</tr>" +
         meses.map(function (m) {
-          return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + num(tot(m)) + "</b></td>" +
-            cods.map(function (c) { return "<td>" + num(Number(m.lojas[c]) || 0) + "</td>"; }).join("") + "</tr>";
+          return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + cx(tot(m)) + "</b></td>" +
+            cods.map(function (c) { return "<td>" + cx(Number(m.lojas[c]) || 0) + "</td>"; }).join("") + "</tr>";
         }).join("") + "</table></div>";
     } else {
-      tabela = '<table class="tab-lojas tab-lj" style="margin:0 0 12px"><tr><th>Mês</th><th>Vendas UN</th>' + (q > 1 ? "<th>" + esc(t) + "</th>" : "") + "</tr>" + meses.map(function (m) {
-        var v = tot(m);
-        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + num(v) + "</b></td>" + (q > 1 ? "<td>" + num(Math.round(v / q * 10) / 10) + "</td>" : "") + "</tr>";
+      tabela = '<table class="tab-lojas tab-lj" style="margin:0 0 12px"><tr><th>Mês</th><th>Vendas ' + esc(un) + "</th></tr>" + meses.map(function (m) {
+        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + cx(tot(m)) + "</b></td></tr>";
       }).join("") + "</table>";
     }
     function grafico(loja) {
-      var val = function (m) { return loja ? Number(m.lojas[loja]) || 0 : tot(m); };
+      var val = function (m) { return (loja ? Number(m.lojas[loja]) || 0 : tot(m)) / fat; };
       var serie = meses.slice().reverse(), vals = serie.map(val);
       var fechV = serie.filter(function (m) { return !m.parcial; }).map(val);
       var med = fechV.length ? fechV.reduce(function (a, b) { return a + b; }, 0) / fechV.length : 0;
       var maxv = Math.max.apply(null, vals.concat([med, 1])), W = 340, H = 150, top = 18, base = top + H, bw = W / serie.length;
       var iMelhor = -1, vMelhor = -1;
       serie.forEach(function (m, i) { if (!m.parcial && vals[i] > vMelhor) { vMelhor = vals[i]; iMelhor = i; } });
-      var curto = function (v) { return v >= 10000 ? (Math.round(v / 100) / 10).toString().replace(".", ",") + "k" : num(Math.round(v)); };
+      var curto = function (v) { return v >= 10000 ? (Math.round(v / 100) / 10).toString().replace(".", ",") + "k" : num(v >= 100 ? Math.round(v) : Math.round(v * 10) / 10); };
       var g = '<svg viewBox="0 0 ' + W + " " + (base + 30) + '" style="width:100%;height:auto;display:block" role="img" aria-label="Vendas por mês">' +
         '<defs><linearGradient id="gAna" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e53935"/><stop offset="1" stop-color="#8e1b1b"/></linearGradient>' +
         '<linearGradient id="gAnaTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4b400"/><stop offset="1" stop-color="#c98a00"/></linearGradient>' +
@@ -3046,7 +3048,7 @@ window.PedidoPDF = (function () {
       serie.forEach(function (m, i) {
         var v = vals[i], h = Math.max(v > 0 ? 2 : 0, Math.round(v / maxv * H)), x = i * bw + 3, w = bw - 6, y = base - h;
         var cor = m.parcial ? "url(#pAna)" : i === iMelhor ? "url(#gAnaTop)" : "url(#gAna)";
-        g += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="4" fill="' + cor + '"><title>' + nomeMes(m.mes) + ": " + num(v) + " UN</title></rect>";
+        g += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="4" fill="' + cor + '"><title>' + nomeMes(m.mes) + ": " + num(Math.round(v * 10) / 10) + " " + esc(un) + "</title></rect>";
         g += '<text x="' + (x + w / 2) + '" y="' + (y - 4) + '" font-size="8.5" font-weight="700" text-anchor="middle" fill="' + (i === iMelhor ? "#9a6b00" : "#5b4636") + '">' + curto(v) + "</text>";
         var mm = Number(m.mes.slice(5)), aa = m.mes.slice(2, 4);
         g += '<text x="' + (x + w / 2) + '" y="' + (base + 12) + '" font-size="8.5" text-anchor="middle" fill="#7a6a5c">' + MESES_NOME[mm - 1] + "</text>";
@@ -3061,7 +3063,7 @@ window.PedidoPDF = (function () {
         '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#c62828;vertical-align:-1px"></i> mês fechado</span>' +
         '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f4b400;vertical-align:-1px"></i> melhor mês</span>' +
         '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f3d6d6;border:1px solid #e7a9a9;vertical-align:-1px"></i> mês correndo</span>' +
-        '<span><i style="display:inline-block;width:14px;border-top:2px dashed #1f6f8b;vertical-align:3px"></i> média <b style="color:#1f6f8b">' + num(Math.round(med)) + ' UN</b></span></div>';
+        '<span><i style="display:inline-block;width:14px;border-top:2px dashed #1f6f8b;vertical-align:3px"></i> média <b style="color:#1f6f8b">' + num(Math.round(med * 10) / 10) + " " + esc(un) + '</b></span></div>';
       return g + leg;
     }
     var chips = cods.length > 1 ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px">' + [""].concat(cods).map(function (c) {
@@ -3071,7 +3073,7 @@ window.PedidoPDF = (function () {
     var graf = '<div style="background:#fffaf2;border:1px solid #efe2cf;border-radius:12px;padding:10px 10px 8px;margin:0 0 6px">' +
       '<div style="font-weight:700;margin:0 0 6px;color:#5b4636">Vendas por mês <small id="anaGrafTit" style="font-weight:400;color:#8a7867">' + (cods.length > 1 ? "· todas as lojas" : "") + "</small></div>" +
       chips + '<div id="anaGraf">' + grafico("") + "</div></div>";
-    box.innerHTML = volta + cab + resumo + tabela + graf + '<p style="margin:10px 0 0"><small>Vendas em unidades. Mês "(até …)" ainda está correndo.</small></p>';
+    box.innerHTML = volta + cab + resumo + tabela + graf + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
     Array.prototype.forEach.call(box.querySelectorAll("[data-analoja]"), function (b) {
       b.addEventListener("click", function () {
         var c = b.getAttribute("data-analoja");
@@ -4183,7 +4185,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-05.2";
+  var VERSAO_APP = "2026-11-05.3";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
