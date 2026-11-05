@@ -1398,6 +1398,7 @@ window.PedidoPDF = (function () {
     carregarFotos();
     if (tela === "inicio") { desenharInicio(); return; }
     if (tela === "consulta") { desenharConsulta(); return; }
+    if (tela === "analise") { desenharAnaliseTela(); return; }
     if (tela === "compra") { desenharCompra(); return; }
     if (!dados) return;
     if (ehManager()) { desenharManager(); return; }
@@ -2949,13 +2950,33 @@ window.PedidoPDF = (function () {
   // ---------------- ANÁLISE DE VENDAS (mensal, por loja) ----------------
   var MESES_NOME = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   function abrirAnalise(semFoco) {   // semFoco = aberta pela Consulta já num produto (não abre o teclado)
-    // 05/11 (Marcelo): busca igual à Consulta de produtos - nome, PLU, marca, fornecedor ou EAN (várias palavras) e o
-    // leitor de código de barras; achou UM produto (ou o código exato) -> já abre a análise dele.
-    modal("Análise de vendas", '<input id="anaBusca" type="search" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" autocomplete="off" ' +
-      'style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #d8ccb9;border-radius:10px;font-size:16px">' +
-      '<button class="btn-ler escuro" type="button" data-analer="1" style="width:100%;margin-top:8px">' + ICO_EAN + "Ler código de barras</button>" +
-      '<div id="anaRes" style="margin-top:10px"><div class="vazio" style="padding:10px 0">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div></div>');
+    // 05/11 (Marcelo): a Análise de vendas é uma PÁGINA só dela, igual à Consulta de produtos (não mais uma janelinha):
+    // busca por nome, PLU, marca, fornecedor ou EAN (várias palavras) e leitor de código de barras; achou UM produto
+    // (ou o código exato) -> já abre a análise dele.
+    if (typeof fecharModal === "function") { try { fecharModal(); } catch (e) {} }
+    tela = "analise"; $("busca").value = ""; desenharLista(); window.scrollTo(0, 0);
     if (!semFoco) setTimeout(function () { var i = $("anaBusca"); if (i) i.focus(); }, 150);
+  }
+  function desenharAnaliseTela() {
+    renderId++; atualizarModo();
+    var L = $("lista");
+    if (L.querySelector("#anaBusca") && L.querySelector("#anaRes")) return;   // já está aberta (não apaga a análise)
+    L.innerHTML = '<div class="titulo-tela">Análise de vendas</div>' +
+      '<div class="campo"><input id="anaBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN">' +
+      '<button class="btn-ler escuro" type="button" data-analer="1">' + ICO_EAN + "Ler código de barras</button></div>" +
+      '<div id="anaRes" style="margin-top:10px"><div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div></div>';
+    if (desenharAnaliseTela.ligado) return;
+    desenharAnaliseTela.ligado = true;
+    L.addEventListener("input", function (e) {
+      if (tela !== "analise" || e.target.id !== "anaBusca") return;
+      clearTimeout(buscarAnalise.t); var v = e.target.value; buscarAnalise.t = setTimeout(function () { buscarAnalise(v); }, 200);
+    });
+    L.addEventListener("click", function (e) {
+      if (tela !== "analise") return;
+      var an = e.target.closest("[data-ana]"); if (an) { abrirAnaliseItem(an.getAttribute("data-ana"), an.getAttribute("data-anad")); window.scrollTo(0, 0); return; }
+      if (e.target.closest("[data-anavolta]")) { var ib = $("anaBusca"); buscarAnalise(ib ? ib.value : "", true); if (ib) ib.focus(); return; }
+      if (e.target.closest("[data-analer]")) { abrirLeitor(function (c) { var ib2 = $("anaBusca"); if (ib2) ib2.value = c; buscarAnalise(c, false, true); }); }
+    });
   }
   function buscarAnalise(t, semAbrir, doLeitor) {
     var q = semAcento(t).trim(), box = $("anaRes"), qn = numBusca(q);
@@ -4213,7 +4234,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-05.5";
+  var VERSAO_APP = "2026-11-05.6";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
