@@ -3660,7 +3660,16 @@ window.PedidoPDF = (function () {
     if (!dados) { box.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando a lista de estoque…</div>'; return; }
     if (cons.forn) { resultadosFornecedor(box); return; }
     var termo = semAcento(cons.termo.trim()), termoNum = numBusca(termo);
-    if (termo.length < 2) { box.innerHTML = '<div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
+    if (termo === "%") {   // 06/11 (Marcelo): '%' = TODOS os produtos da lista (respeita Linha / Fora de linha)
+      var todos = [], outT = 0;
+      dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) { if (passaLinha(it)) todos.push(it); else outT++; }); });
+      todos.sort(ordemAlfa);
+      var lim = cons.limite || 60, mos = todos.slice(0, lim);
+      box.innerHTML = '<div class="grupo">' + todos.length + " produtos (todos " + (cons.linha === "fora" ? "os fora de linha" : "os em linha") + ")</div>" + mos.map(htmlConsulta).join("") +
+        (todos.length > mos.length ? '<button class="btn btn-cinza" style="width:100%;margin:6px 0 14px" data-consmais="1">Mostrar mais ' + Math.min(60, todos.length - mos.length) + " (faltam " + (todos.length - mos.length) + ")</button>" : "") + dicaLinha(outT);
+      return;
+    }
+    if (termo.length < 2) { box.innerHTML = '<div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras. Digite % para ver todos.</div>'; return; }
     var achados = [], outrosL = 0;
     dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) {
       if (casaBusca(it, termo, termoNum, true)) { if (passaLinha(it)) achados.push(it); else outrosL++; }   // 06/11: Linha / Fora de linha
@@ -4659,7 +4668,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.8";
+  var VERSAO_APP = "2026-11-06.9";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
