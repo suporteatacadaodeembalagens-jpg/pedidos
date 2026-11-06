@@ -408,7 +408,8 @@
   .campo label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
   .campo input{width:100%;border:1px solid #d8c9ae;border-radius:10px;padding:12px;font-size:16px;background:#fff}
   .campo input:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
-  .campo-forn{position:relative;margin-top:-2px}.campo-forn input{padding-right:46px}.campo-forn.ativo input{border:2px solid var(--ouro);background:#fffbe9;font-weight:700}
+  .campo-forn{position:relative;margin-top:-2px}
+  .busca .campo-forn input{padding-left:12px;background-image:none}.campo-forn input{padding-right:46px}.campo-forn.ativo input{border:2px solid var(--ouro);background:#fffbe9;font-weight:700}
   .campo-forn .limpar{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:#efe6d8;color:var(--marrom);border-radius:50%;width:30px;height:30px;font-size:17px;font-weight:700}
   .rev{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--linha);font-size:14px}
   .rev .q{min-width:64px;text-align:right;font-weight:700}
@@ -514,8 +515,9 @@
     <button class="modo ativo" data-mg="pendente">Aguardando aprovação</button>
     <button class="modo" data-mg="aprovado">Aprovados</button>
   </div>
-  <div class="busca"><input id="busca" type="search" placeholder="Buscar produto, PLU, marca ou EAN" autocomplete="off">
-    <button class="btn-ler" id="btnLer" type="button"><svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><rect width="2" height="16"/><rect x="3" width="1" height="16"/><rect x="5" width="2" height="16"/><rect x="8" width="1" height="16"/><rect x="10" width="3" height="16"/><rect x="14" width="1" height="16"/><rect x="16" width="2" height="16"/><rect x="19" width="1" height="16"/><rect x="21" width="1" height="16"/></svg>Ler código de barras</button></div>
+  <div class="busca"><input id="busca" type="search" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" autocomplete="off">
+    <button class="btn-ler" id="btnLer" type="button"><svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><rect width="2" height="16"/><rect x="3" width="1" height="16"/><rect x="5" width="2" height="16"/><rect x="8" width="1" height="16"/><rect x="10" width="3" height="16"/><rect x="14" width="1" height="16"/><rect x="16" width="2" height="16"/><rect x="19" width="1" height="16"/><rect x="21" width="1" height="16"/></svg>Ler código de barras</button>
+    <div class="campo forn-wrap campo-forn" data-bpw="lj" style="margin:8px 0 0"><input id="ljForn" data-bpforn="lj" autocomplete="off" placeholder="Fornecedor: toque para ver todos"><button class="limpar" type="button" data-bplimpar="lj" aria-label="Tirar o filtro de fornecedor" hidden>&times;</button><div class="forn-lista" id="ljFornLista" hidden></div></div></div>
   <nav class="abas" id="abas"></nav>
 </header>
 
@@ -1394,6 +1396,85 @@ window.PedidoPDF = (function () {
       });
     }, function () {});
   }
+  // ---------------- BUSCA PADRÃO (06/11, Marcelo): a MESMA busca da Consulta de produtos em todas as telas ----------------
+  // nome, PLU, marca, fornecedor ou EAN (várias palavras em qualquer ordem), leitor de código de barras, filtro de
+  // FORNECEDOR (toca e aparece a lista de todos; digitando filtra), ordem alfabética e o título "N produtos de X com “…”".
+  var BP = { lj: { forn: "", fn: function () { desenharLista(); } },
+    ct: { forn: "", fn: function () { var i = $("contBusca"); buscarCont(i ? i.value : ""); } },
+    an: { forn: "", fn: function () { var i = $("anaBusca"); buscarAnalise(i ? i.value : "", true); } } };
+  var bpExtra = {};   // produtos que vieram do servidor (fora da lista de estoque)
+  function htmlFornFiltro(px) {
+    var f = (BP[px] && BP[px].forn) || "";
+    return '<div class="campo forn-wrap campo-forn' + (f ? " ativo" : "") + '" data-bpw="' + px + '"><input id="' + px + 'Forn" data-bpforn="' + px + '" autocomplete="off" placeholder="Fornecedor: toque para ver todos" value="' + esc(f) + '">' +
+      '<button class="limpar" type="button" data-bplimpar="' + px + '" aria-label="Tirar o filtro de fornecedor"' + (f ? "" : " hidden") + ">&times;</button>" +
+      '<div class="forn-lista" id="' + px + 'FornLista" hidden></div></div>';
+  }
+  function bpCarregarForns() {
+    if (!ehMgrLogin() || cons.fornNomes || (Array.isArray(cmp.forns) && cmp.forns.length) || bpCarregarForns.indo) return;
+    bpCarregarForns.indo = true;
+    chamar("fornecedoresCompra", [], function (l) { bpCarregarForns.indo = false; cons.fornNomes = l || [];
+      Object.keys(BP).forEach(function (px) { var b = $(px + "FornLista"); if (b && !b.hidden) bpMostrarForn(px); }); }, function () { bpCarregarForns.indo = false; });
+  }
+  function bpMostrarForn(px) {
+    var box = $(px + "FornLista"), inp = $(px + "Forn"); if (!box || !inp) return;
+    bpCarregarForns();
+    if (ehMgrLogin() && !cons.fornNomes && bpCarregarForns.indo) { box.innerHTML = '<div class="cmp-dica" style="padding:10px">Carregando fornecedores…</div>'; box.hidden = false; return; }
+    var t = semAcento(inp.value.trim()), l = nomesForn().filter(function (f) { return !t || semAcento(f.nome).indexOf(t) >= 0; });
+    box.innerHTML = l.length ? l.slice(0, 80).map(function (f) { return '<button type="button" data-bpfsel="' + px + '" data-fn="' + esc(f.nome) + '">' + esc(f.nome) + "<small>" + f.n + " produtos</small></button>"; }).join("") +
+      (l.length > 80 ? '<div class="cmp-dica" style="padding:8px 12px">Digite para filtrar (' + l.length + " fornecedores)</div>" : "")
+      : '<div class="cmp-dica" style="padding:10px 12px">Nenhum fornecedor com esse nome.</div>';
+    box.hidden = false;
+  }
+  function bpFiltrar(px, v) {
+    var st = BP[px]; if (!st) return;
+    v = String(v || "").trim();
+    var alvo = v ? (nomesForn().filter(function (f) { return semAcento(f.nome) === semAcento(v); })[0] || {}).nome : "";
+    if (v && !alvo) return;                          // ainda digitando: só filtra quando bater com um fornecedor
+    if ((alvo || "") === st.forn) return;
+    st.forn = alvo || "";
+    var w = document.querySelector('[data-bpw="' + px + '"]'); if (w) w.classList.toggle("ativo", !!st.forn);
+    var lp = document.querySelector('[data-bplimpar="' + px + '"]'); if (lp) lp.hidden = !st.forn;
+    st.fn();
+  }
+  /** Filtra igual à Consulta: fornecedor escolhido + busca (2+ letras) em nome/PLU/marca/fornecedor/EAN; ordem alfabética. */
+  function filtrarPadrao(lista, termoBruto, forn) {
+    var termo = semAcento(String(termoBruto || "").trim()), n = numBusca(termo);
+    return lista.filter(function (it) { return it && (!forn || it.f === forn) && (termo.length < 2 || casaBusca(it, termo, n, true)); }).sort(ordemAlfa);
+  }
+  function cabecalhoPadrao(n, forn, termoBruto, mais) {
+    var t = String(termoBruto || "").trim();
+    return '<div class="grupo">' + n + (mais ? "+" : "") + (forn ? (n === 1 ? " produto" : " produtos") + " de " + esc(forn) + (t.length >= 2 ? " com “" + esc(t) + "”" : "") : " encontrado(s)") + "</div>";
+  }
+  function produtosLocais() { return Object.keys(porPlu).map(function (k) { return porPlu[k]; }); }
+  /** Produtos do servidor (estoque zerado/negativo no CD) para completar a busca. ok(lista) só se o termo não mudou. */
+  function bpServidor(t, ok) {
+    t = String(t || "").trim(); if (t.length < 3) return;
+    clearTimeout(bpServidor.h);
+    bpServidor.h = setTimeout(function () {
+      chamar("buscarProdutos", [t], function (l) {
+        var out = (l || []).filter(function (x) { return !porPlu[x.p]; }).map(function (x) {
+          var it = { p: x.p, d: x.d, m: x.m, f: x.f, b: x.b, t: x.t, q: x.q, e: Number(x.e) || 0, cu: x.c, dep: "", fora: 1, fl: x.fl };
+          bpExtra[x.p] = it; return it; });
+        ok(out);
+      }, function () {});
+    }, 300);
+  }
+  document.addEventListener("focusin", function (e) { var f = e.target.closest && e.target.closest("[data-bpforn]"); if (f) bpMostrarForn(f.getAttribute("data-bpforn")); });
+  document.addEventListener("input", function (e) {
+    var f = e.target.closest && e.target.closest("[data-bpforn]"); if (!f) return;
+    var px = f.getAttribute("data-bpforn"); bpMostrarForn(px); bpFiltrar(px, f.value);
+  });
+  document.addEventListener("click", function (e) {
+    var s = e.target.closest("[data-bpfsel]");
+    if (s) { var px = s.getAttribute("data-bpfsel"), nf = s.getAttribute("data-fn"), inp = $(px + "Forn"); if (inp) { inp.value = nf; inp.blur(); }
+      $(px + "FornLista").hidden = true; bpFiltrar(px, nf); return; }
+    var lp = e.target.closest("[data-bplimpar]");
+    if (lp) { var p2 = lp.getAttribute("data-bplimpar"), i2 = $(p2 + "Forn"); if (i2) i2.value = ""; if ($(p2 + "FornLista")) $(p2 + "FornLista").hidden = true; bpFiltrar(p2, ""); return; }
+    var lr = e.target.closest("[data-bpler]");
+    if (lr) { var p3 = lr.getAttribute("data-bpler"); abrirLeitor(function (c) { var ib = $(p3 === "ct" ? "contBusca" : "anaBusca"); if (ib) ib.value = c; if (p3 === "ct") buscarCont(c); else buscarAnalise(c, false, true); }); return; }
+    if (!e.target.closest("[data-bpw]")) Object.keys(BP).forEach(function (px) { var b = $(px + "FornLista"); if (b) b.hidden = true; });
+  });
+
   function desenharLista() {
     carregarFotos();
     if (tela === "inicio") { desenharInicio(); return; }
@@ -1403,21 +1484,16 @@ window.PedidoPDF = (function () {
     if (!dados) return;
     if (ehManager()) { desenharManager(); return; }
     if (vendoSalvos()) { desenharTelaPedidos(); return; }
-    var termo = semAcento($("busca").value.trim()), termoNum = numBusca(termo);
-    if (termo) {
-      var achados = [];
-      dados.departamentos.forEach(function (d) {
-        d.itens.forEach(function (it) {
-          // 04/11 (Marcelo): igual à Consulta de produtos (nome, PLU, marca, EAN e também FORNECEDOR), mas só a lista
-          // de estoque do CD (produto com estoque 0 ou negativo no CD não vem aqui)
-          if ((Number(it.e) || 0) > 0 && casaBusca(it, termo, termoNum, true)) achados.push(it);
-        });
-      });
-      achados.sort(ordemAlfa);   // 04/11: em ordem alfabética, igual à Consulta
+    var termo = semAcento($("busca").value.trim()), termoNum = numBusca(termo), fornL = BP.lj.forn;
+    if (termo.length >= 2 || fornL) {
+      // 06/11: busca padrão da Consulta (nome, PLU, marca, fornecedor, EAN) + filtro de FORNECEDOR, só a lista de estoque
+      // do CD (produto com estoque 0 ou negativo no CD não entra no pedido)
+      var todosL = []; dados.departamentos.forEach(function (d) { d.itens.forEach(function (it) { if ((Number(it.e) || 0) > 0) todosL.push(it); }); });
+      var achados = filtrarPadrao(todosL, $("busca").value, fornL);
       if (!achados.length) { renderId++; $("lista").innerHTML = '<div class="vazio">' + (termoNum.length >= 8
           ? "Nenhum produto com o código de barras “" + esc($("busca").value.trim()) + "” na lista de estoque atual."
-          : "Nada encontrado para “" + esc($("busca").value) + "”.") + "</div>"; return; }
-      renderizar('<div class="grupo">' + achados.length + " encontrado(s)</div>",
+          : fornL ? "Nenhum produto de " + esc(fornL) + (termo.length >= 2 ? " com “" + esc($("busca").value.trim()) + "”" : "") + " na lista de estoque atual." : "Nada encontrado para “" + esc($("busca").value) + "”.") + "</div>"; return; }
+      renderizar(cabecalhoPadrao(achados.length, fornL, $("busca").value),
         achados.slice(0, 300).map(function (it) { return htmlItem(it, true); }), "");
     } else if (abaAtual === HIST) {
       renderId++; desenharHistorico();
@@ -2861,10 +2937,11 @@ window.PedidoPDF = (function () {
         '<input type="number" inputmode="decimal" min="0" step="any" data-cun="' + esc(x.k) + '" value="' + esc(v.un == null ? "" : v.un) + '" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid #d8ccb9;border-radius:8px"></label>' +
         '<div style="min-width:90px;text-align:right" id="ctot_' + esc(x.k) + '"><small>Total</small><br><b>' + (tot == null ? "—" : num(tot) + " UN") + "</b></div></div></div>";
     }).join("");
-    h += '<div style="margin:12px 0 6px"><input id="contBusca" type="search" placeholder="Incluir outro produto: nome, PLU ou código de barras" autocomplete="off" ' +
-      'style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #d8ccb9;border-radius:10px;font-size:16px"></div><div id="contAchados"></div>' +
+    h += '<div style="margin:12px 0 6px"><div style="font-weight:700;margin:0 0 4px">Incluir outro produto</div><div class="campo" style="margin:0"><input id="contBusca" type="search" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" autocomplete="off" value="' + esc(BP.ct.termo || "") + '">' +
+      '<button class="btn-ler escuro" type="button" data-bpler="ct">' + ICO_EAN + "Ler código de barras</button></div>" + htmlFornFiltro("ct") + '</div><div id="contAchados"></div>' +
       '<button class="btn btn-verde" style="width:100%;margin-top:10px" data-contsalvar="1">Finalizar contagem</button>';
     box.innerHTML = h;
+    if (BP.ct.termo || BP.ct.forn) buscarCont(BP.ct.termo || "");
   }
   function totalCont(v, q) {
     var cx = v && v.cx !== "" && v.cx != null ? Number(v.cx) : null, un = v && v.un !== "" && v.un != null ? Number(v.un) : null;
@@ -2872,23 +2949,31 @@ window.PedidoPDF = (function () {
     return (cx || 0) * (q > 1 ? q : 1) + (un || 0);
   }
   function buscarCont(t) {
+    // 06/11: busca padrão (igual à Consulta) + filtro de fornecedor
     var box = $("contAchados"); if (!box) return;
-    var q = semAcento(t).trim();
-    if (q.length < 2) { box.innerHTML = ""; return; }
-    var achados = [];
-    Object.keys(porPlu).forEach(function (k) {
-      var it = porPlu[k];
-      if (achados.length < 15 && (it.p.indexOf(q) === 0 || (it.b && String(it.b) === q) || semAcento(it.d).indexOf(q) >= 0)) achados.push(it);
-    });
-    box.innerHTML = achados.length ? achados.map(function (it) {
-      return '<button class="btn btn-cinza" style="display:block;width:100%;text-align:left;margin:6px 0 0;padding:9px" data-contadd="' + esc(it.p) + '"><b>' + esc(it.d) + "</b><br><small>PLU " + esc(it.p) + "</small></button>";
-    }).join("") : '<div class="vazio" style="padding:6px 0">Nada encontrado.</div>';
+    BP.ct.termo = t;
+    var q = semAcento(String(t || "")).trim(), forn = BP.ct.forn;
+    if (q.length < 2 && !forn) { box.innerHTML = ""; return; }
+    var achados = filtrarPadrao(produtosLocais(), t, forn);
+    var ex = buscarCont.extra && buscarCont.extra.t === String(t || "").trim() ? buscarCont.extra.l : [];
+    if (!forn && ex.length) achados = achados.concat(ex).sort(ordemAlfa);
+    var mostra = achados.slice(0, 60);
+    box.innerHTML = achados.length ? cabecalhoPadrao(achados.length, forn, t) + mostra.map(function (it) {
+      return '<button class="btn btn-cinza" style="display:block;width:100%;text-align:left;margin:6px 0 0;padding:9px" data-contadd="' + esc(it.p) + '"><b>' + esc(it.d) + "</b><br><small>PLU " + esc(it.p) +
+        (it.t ? " · " + esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "") + (it.f ? " · " + esc(it.f) : "") + "</small></button>";
+    }).join("") + (achados.length > mostra.length ? '<div class="cmp-dica" style="padding:8px 0">Mostrando 60 de ' + achados.length + " — refine a busca.</div>" : "")
+      : '<div class="vazio" style="padding:6px 0">' + (forn ? "Nenhum produto desse fornecedor com essa busca." : "Nada encontrado.") + "</div>";
+    if (!forn && q.length >= 3 && !(buscarCont.extra && buscarCont.extra.t === String(t).trim())) {
+      var pedido = String(t).trim();
+      bpServidor(pedido, function (l) { buscarCont.extra = { t: pedido, l: l }; var i = $("contBusca"); if (i && i.value.trim() === pedido) buscarCont(i.value); });
+    }
   }
+
   function incluirNaContagem(plu) {
     var cod = contagem.lojaCont || contagem.minha; if (!cod) return;
     var rl = rascCont()[cod] = rascCont()[cod] || { v: {}, extras: [] };
     var ja = contagem.itens.some(function (x) { return x.loja === cod && x.p === plu && x.status !== "contado"; }) || rl.extras.some(function (x) { return x.p === plu; });
-    if (!ja) rl.extras.push({ p: plu, d: (porPlu[plu] || {}).d || "" });
+    if (!ja) rl.extras.push({ p: plu, d: (porPlu[plu] || bpExtra[plu] || {}).d || "" });
     guardarRascCont(); desenharContar(); toast(ja ? "Esse produto já está na contagem" : "Produto incluído na contagem");
   }
   function finalizarContagem() {
@@ -2968,7 +3053,7 @@ window.PedidoPDF = (function () {
       '<button type="button" class="btn" data-anamodo="prod" style="flex:1;padding:9px">Produto</button>' +
       '<button type="button" class="btn btn-cinza" data-anamodo="forn" style="flex:1;padding:9px">Fornecedores</button></div>' +
       '<div id="anaProd"><div class="campo"><input id="anaBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN">' +
-      '<button class="btn-ler escuro" type="button" data-analer="1">' + ICO_EAN + "Ler código de barras</button></div>" +
+      '<button class="btn-ler escuro" type="button" data-analer="1">' + ICO_EAN + "Ler código de barras</button></div>" + htmlFornFiltro("an") +
       '<div id="anaRes" style="margin-top:10px"><div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div></div></div>' +
       '<div id="anaForn" style="display:none"></div>';
     anaForn.r = null;
@@ -2998,35 +3083,30 @@ window.PedidoPDF = (function () {
     });
   }
   function buscarAnalise(t, semAbrir, doLeitor) {
-    var q = semAcento(t).trim(), box = $("anaRes"), qn = numBusca(q);
+    // 06/11: busca padrão (igual à Consulta) + filtro de fornecedor
+    var q = semAcento(t).trim(), box = $("anaRes"), qn = numBusca(q), forn = BP.an.forn;
     if (!box) return;
-    if (q.length < 2) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
-    var achados = [], vistos = {};
-    Object.keys(porPlu).forEach(function (k) {
-      var it = porPlu[k];
-      if (casaBusca(it, q, qn, true)) { achados.push(it); vistos[it.p] = 1; }
-    });
-    achados = achados.sort(ordemAlfa).slice(0, 80);
+    if (q.length < 2 && !forn) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
+    var todos = filtrarPadrao(produtosLocais(), t, forn), vistos = {};
+    todos.forEach(function (it) { vistos[it.p] = 1; });
+    var achados = todos.slice(0, 80);
     // código exato (PLU ou EAN) ou UM produto só -> abre direto a análise (não quando volta pelo "Outro produto")
     var exato = qn ? achados.filter(function (it) { return soDigitos(it.p) === qn || (it.b && soDigitos(it.b) === qn); }) : [];
-    if (!semAbrir && (exato.length === 1 || (achados.length === 1 && (doLeitor || q.length >= 3)))) {
+    if (!semAbrir && q.length >= 2 && (exato.length === 1 || (achados.length === 1 && (doLeitor || q.length >= 3)))) {
       var um = exato[0] || achados[0]; abrirAnaliseItem(um.p, um.d); return;
     }
     function desenhar(extra) {
-      var l = achados.concat((extra || []).filter(function (x) { return !vistos[x.p]; }));
-      box.innerHTML = l.length ? l.map(function (it) {
+      var ex = (extra || []).filter(function (x) { return !vistos[x.p]; });
+      var l = achados.concat(ex).sort(ordemAlfa);
+      box.innerHTML = l.length ? cabecalhoPadrao(todos.length + ex.length, forn, t, todos.length > 80) + l.map(function (it) {
         return '<button class="btn btn-cinza" style="display:block;width:100%;text-align:left;margin:0 0 6px;padding:10px" data-ana="' + esc(it.p) + '" data-anad="' + esc(it.d) + '">' +
-          "<b>" + esc(it.d) + "</b><br><small>PLU " + esc(it.p) + (it.t ? " · " + esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "") + "</small></button>";
-      }).join("") : '<div class="vazio" style="padding:10px 0">Nada encontrado.</div>';
+          "<b>" + esc(it.d) + "</b><br><small>PLU " + esc(it.p) + (it.t ? " · " + esc(it.t) + (it.q > 1 ? " c/ " + num(it.q) : "") : "") + (it.f ? " · " + esc(it.f) : "") + "</small></button>";
+      }).join("") : '<div class="vazio" style="padding:10px 0">' + (forn ? "Nenhum produto desse fornecedor com essa busca." : "Nada encontrado.") + "</div>";
     }
     desenhar();
-    if (achados.length < 5 && q.length >= 3) {
-      clearTimeout(buscarAnalise.h);
-      buscarAnalise.h = setTimeout(function () {
-        chamar("buscarProdutos", [t], function (l) { if ($("anaBusca") && $("anaBusca").value === t) desenhar(l || []); }, function () {});
-      }, 300);
-    }
+    if (!forn && q.length >= 3) bpServidor(t, function (l) { if ($("anaBusca") && $("anaBusca").value === t) desenhar(l); });
   }
+
   function nomeMes(m, parcial, periodo) {
     var a = m.split("-"); var nome = MESES_NOME[Number(a[1]) - 1] + "/" + a[0].slice(2);
     if (parcial) { var f = String(periodo || "").match(/a (\d{2}\/\d{2})/); nome += " (até " + (f ? f[1] : "hoje") + ")"; }
@@ -3773,7 +3853,7 @@ window.PedidoPDF = (function () {
         '<datalist id="cmpFormas"><option value="CARTEIRA"><option value="BOLETO"><option value="DEPÓSITO"><option value="PIX"></datalist></div></div>' +
       '<div class="dupla"><div class="campo"><label for="cmpCob">Cobertura (dias)</label><input id="cmpCob" inputmode="numeric" maxlength="2" placeholder="Ex.: 30" value="' + esc(compra.cobertura || "") + '"></div><div></div></div>' +
       '<button class="btn btn-cinza largo" id="cmpVerForn" type="button">Ver produtos deste fornecedor</button>' +
-      '<div class="campo"><label for="cmpBusca">Buscar produto (cadastro inteiro, até sem estoque)</label><input id="cmpBusca" type="search" autocomplete="off" placeholder="Descrição, marca, PLU ou EAN" value="' + esc(cmp.termo) + '">' +
+      '<div class="campo"><label for="cmpBusca">Buscar produto (cadastro inteiro, até sem estoque)</label><input id="cmpBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" value="' + esc(cmp.termo) + '">' +
       '<button class="btn-ler escuro" id="btnLerCmp" type="button">' + ICO_EAN + "Ler código de barras</button></div>" +
       '<div class="campo"><label for="cmpObs">Observações do pedido (opcional)</label><input id="cmpObs" maxlength="300" value="' + esc(compra.obs) + '"></div>' +
       '<div id="cmpRes"></div><div id="cmpItens"></div>';
@@ -3831,16 +3911,15 @@ window.PedidoPDF = (function () {
     }, function (e) { toast(String(e && e.message || e)); });
   }
   function listaVisivelCmp() {
+    // 06/11: busca padrão da Consulta (nome, PLU, marca, fornecedor, EAN, várias palavras) e ordem alfabética
     var termo = semAcento(cmp.termo.trim());
     if (termo.length >= 2) {
-      if (Array.isArray(cmp.forn)) { var n = numBusca(termo), pal = termo.split(/\s+/);
-        return cmp.forn.filter(function (x) { return n.length >= 6 ? (x.b && x.b.indexOf(n) >= 0) || x.p === ("000000" + n).slice(-6)
-          : pal.every(function (p) { return semAcento(x.d + " " + x.m + " " + x.p).indexOf(p) >= 0; }); }); }
-      return cmp.busca;
+      if (Array.isArray(cmp.forn)) return filtrarPadrao(cmp.forn, cmp.termo, "");
+      return Array.isArray(cmp.busca) ? cmp.busca.slice().sort(ordemAlfa) : cmp.busca;
     }
     return cmp.forn;
   }
-  /** Cartão do produto na compra. detalhe = mostra preço/desconto/IPI editáveis e o total (só na lista "Itens da compra"). */
+
   function htmlCompra(x, detalhe) {
     var it = porPlu[x.p], c = compra.itens[x.p], q = c ? c.qtd : 0, un = x.t || "UN";
     var eCD = typeof x.e === "number" ? x.e : (it ? it.e : 0);   // estoque do CD em unidades (pode ser negativo)
@@ -3873,7 +3952,7 @@ window.PedidoPDF = (function () {
     if (l === "carregando") res.innerHTML = '<div class="carregando"><div class="giro"></div>Buscando…</div>';
     else if (!l) res.innerHTML = '<div class="cmp-dica">Escolha o fornecedor e toque em “Ver produtos deste fornecedor”, ou busque/leia o EAN de qualquer produto.</div>';
     else if (!l.length) res.innerHTML = '<div class="vazio" style="padding:14px">Nada encontrado.</div>';
-    else res.innerHTML = '<div class="grupo">' + l.length + (cmp.forn && !cmp.termo.trim() ? " produtos de " + esc(cmp.fornNome) : " encontrado(s)") + "</div>" +
+    else res.innerHTML = cabecalhoPadrao(l.length, Array.isArray(cmp.forn) ? cmp.fornNome : "", cmp.termo) +
       l.slice(0, cmp.limite).map(function (x) { return htmlCompra(x, false); }).join("") +
       (l.length > cmp.limite ? '<button class="btn btn-cinza largo" id="cmpMais" type="button">Mostrar mais ' + Math.min(150, l.length - cmp.limite) + "</button>" : "");
     atualizarItensCmp();
@@ -4458,7 +4537,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-05.8";
+  var VERSAO_APP = "2026-11-06.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
