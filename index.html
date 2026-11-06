@@ -3049,9 +3049,7 @@ window.PedidoPDF = (function () {
     // 05/11 (Marcelo): 2 abas - PRODUTO (como antes) e FORNECEDORES (ranking, total do fornecedor e os produtos dele),
     // com filtro ANO / MÊS / DIA comparando com o mesmo período do ano anterior.
     L.innerHTML = '<div class="titulo-tela">Análise de vendas</div>' +
-      '<div class="ana-abas" style="display:flex;gap:6px;margin:0 0 10px">' +
-      '<button type="button" class="btn" data-anamodo="prod" style="flex:1;padding:9px">Produto</button>' +
-      '<button type="button" class="btn btn-cinza" data-anamodo="forn" style="flex:1;padding:9px">Fornecedores</button></div>' +
+      // 06/11 (Marcelo): sem as abas Produto/Fornecedores - o fornecedor agora é o filtro embaixo da busca
       '<div id="anaProd"><div class="campo"><input id="anaBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN">' +
       '<button class="btn-ler escuro" type="button" data-analer="1">' + ICO_EAN + "Ler código de barras</button></div>" + htmlFornFiltro("an") +
       '<div id="anaRes" style="margin-top:10px"><div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div></div></div>' +
@@ -4537,7 +4535,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.1";
+  var VERSAO_APP = "2026-11-06.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
