@@ -3272,6 +3272,8 @@ window.PedidoPDF = (function () {
         }).join("") + "</table></div>";
     })();
     box.innerHTML = volta + cab + resumo + precoH + tabela + tabValores + graf + compH + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
+    // 06/11 (Marcelo): na Consulta, botão "Fechar análise" também no FIM da análise
+    if (desenharAnalise.alvo) box.insertAdjacentHTML("beforeend", '<button class="btn btn-cinza" style="display:block;width:100%;margin:14px 0 0" data-anafechar="' + esc(plu) + '">&#10005; Fechar análise</button>');
     Array.prototype.forEach.call(box.querySelectorAll("[data-analoja]"), function (b) {
       b.addEventListener("click", function () {
         var c = b.getAttribute("data-analoja");
@@ -4321,7 +4323,7 @@ window.PedidoPDF = (function () {
       if (e.target.closest("#btnLerCons")) { abrirLeitor(function (c) { cons.termo = c; var i = $("consBusca"); if (i) i.value = c; resultadosConsulta(); }); return; }
       var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
       var fv = e.target.closest("[data-fav]"); if (fv) { favoritoClique(fv.getAttribute("data-fav")); return; }
-      var af = e.target.closest("[data-anafechar]"); if (af) { var bf = $("anaIn_" + af.getAttribute("data-anafechar")); if (bf) { bf.hidden = true; bf.innerHTML = ""; } return; }
+      var af = e.target.closest("[data-anafechar]"); if (af) { var bf = $("anaIn_" + af.getAttribute("data-anafechar")); if (bf) { bf.hidden = true; bf.innerHTML = ""; try { bf.parentElement.scrollIntoView({ block: "nearest" }); } catch (x) {} } return; }
       var ac = e.target.closest("[data-anacons]"); if (ac) { anaInline(ac.getAttribute("data-anacons"), ac.getAttribute("data-anad")); return; }
       if (e.target.closest("[data-anabloq]")) { avisoBloqueio(); return; }
       var ctb = e.target.closest("[data-cont]"); if (ctb) { contagemClique(ctb.getAttribute("data-cont")); return; }
@@ -4620,7 +4622,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.5";
+  var VERSAO_APP = "2026-11-06.6";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
