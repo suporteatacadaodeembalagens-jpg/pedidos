@@ -3575,6 +3575,8 @@ window.PedidoPDF = (function () {
       '<div class="campo forn-wrap campo-forn' + (cons.forn ? " ativo" : "") + '"><input id="consForn" autocomplete="off" placeholder="Fornecedor: toque para ver todos" value="' + esc(cons.forn) + '">' +
       '<button class="limpar" id="consFornLimpar" type="button" aria-label="Tirar o filtro de fornecedor"' + (cons.forn ? "" : " hidden") + ">&times;</button>" +
       '<div class="forn-lista" id="consFornLista" hidden></div></div>' +
+      // 06/11 (Marcelo): aviso pequeno do "%"
+      '<div style="font-size:12px;color:#8a7867;margin:-2px 2px 6px">💡 Dica: digite <b>%</b> na busca para ver <b>todos</b> os produtos (em linha ou fora de linha, conforme a bolinha ao lado).</div>' +
       "</div>" + htmlLinhaCons() + "</div>" +
       '<div id="consRes"></div>';
     if (m && !cons.fornNomes && !desenharConsulta.fornIndo) {   // managers: TODOS os fornecedores do cadastro
@@ -4668,7 +4670,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.9";
+  var VERSAO_APP = "2026-11-06.10";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
