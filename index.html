@@ -1401,7 +1401,7 @@ window.PedidoPDF = (function () {
   // FORNECEDOR (toca e aparece a lista de todos; digitando filtra), ordem alfabética e o título "N produtos de X com “…”".
   var BP = { lj: { forn: "", fn: function () { desenharLista(); } },
     ct: { forn: "", fn: function () { var i = $("contBusca"); buscarCont(i ? i.value : ""); } },
-    an: { forn: "", fn: function () { var i = $("anaBusca"); buscarAnalise(i ? i.value : "", true); } } };
+    an: { forn: "", modo: "prod", fn: function () { var i = $("anaBusca"); buscarAnalise(i ? i.value : "", true); } } };
   var bpExtra = {};   // produtos que vieram do servidor (fora da lista de estoque)
   function htmlFornFiltro(px) {
     var f = (BP[px] && BP[px].forn) || "";
@@ -3050,8 +3050,8 @@ window.PedidoPDF = (function () {
     // com filtro ANO / MÊS / DIA comparando com o mesmo período do ano anterior.
     L.innerHTML = '<div class="titulo-tela">Análise de vendas</div>' +
       // 06/11 (Marcelo): sem as abas Produto/Fornecedores - o fornecedor agora é o filtro embaixo da busca
-      '<div id="anaProd"><div class="campo"><input id="anaBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN">' +
-      '<button class="btn-ler escuro" type="button" data-analer="1">' + ICO_EAN + "Ler código de barras</button></div>" + htmlFornFiltro("an") +
+      '<div id="anaProd"><div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1 1 280px;min-width:0"><div class="campo"><input id="anaBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN">' +
+      '<button class="btn-ler escuro" type="button" data-analer="1">' + ICO_EAN + "Ler código de barras</button></div>" + htmlFornFiltro("an") + "</div>" + htmlModoAna() + "</div>" +
       '<div id="anaRes" style="margin-top:10px"><div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div></div></div>' +
       '<div id="anaForn" style="display:none"></div>';
     anaForn.r = null;
@@ -3065,14 +3065,15 @@ window.PedidoPDF = (function () {
     });
     L.addEventListener("change", function (e) {
       if (tela !== "analise") return;
+      if (e.target.name === "anaModo") { BP.an.modo = e.target.value; anaForn.f = ""; var im = $("anaBusca"); buscarAnalise(im ? im.value : "", true); return; }
       if (e.target.id === "fTipo") { anaForn.tipo = e.target.value; anaForn.chave = ""; carregarRanking(); }
       else if (e.target.id === "fChave") { anaForn.chave = e.target.value; carregarRanking(); }
     });
     L.addEventListener("click", function (e) {
       if (tela !== "analise") return;
       var md = e.target.closest("[data-anamodo]"); if (md) { modoAnalise(md.getAttribute("data-anamodo")); return; }
-      var fn = e.target.closest("[data-fnome]"); if (fn) { abrirFornecedor(fn.getAttribute("data-fnome")); window.scrollTo(0, 0); return; }
-      if (e.target.closest("[data-fvolta]")) { desenharRanking(); return; }
+      var fn = e.target.closest("[data-fnome]"); if (fn) { verTotalForn(fn.getAttribute("data-fnome")); window.scrollTo(0, 0); return; }
+      if (e.target.closest("[data-fvolta]")) { anaForn.f = ""; var iv = $("anaBusca"); buscarAnalise(iv ? iv.value : "", true); return; }
       var fm = e.target.closest("[data-fmet]"); if (fm) { anaForn.met = Number(fm.getAttribute("data-fmet")); desenharFornecedor(); return; }
       if (e.target.closest("[data-fmais]")) { anaForn.todos = true; desenharFornecedor(); return; }
       var an = e.target.closest("[data-ana]"); if (an) { if (an.closest("#anaForn")) modoAnalise("prod"); abrirAnaliseItem(an.getAttribute("data-ana"), an.getAttribute("data-anad")); window.scrollTo(0, 0); return; }
@@ -3084,6 +3085,8 @@ window.PedidoPDF = (function () {
     // 06/11: busca padrão (igual à Consulta) + filtro de fornecedor
     var q = semAcento(t).trim(), box = $("anaRes"), qn = numBusca(q), forn = BP.an.forn;
     if (!box) return;
+    if (BP.an.modo === "forn") { buscarFornAnalise(t, semAbrir); return; }   // 06/11: bolinha "Por fornecedor"
+    anaVer("res"); anaForn.f = "";
     if (q.length < 2 && !forn) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div>'; return; }
     var todos = filtrarPadrao(produtosLocais(), t, forn), vistos = {};
     todos.forEach(function (it) { vistos[it.p] = 1; });
@@ -3111,7 +3114,7 @@ window.PedidoPDF = (function () {
     return nome;
   }
   function abrirAnaliseItem(plu, desc) {
-    if ($("anaProd") && $("anaProd").style.display === "none") modoAnalise("prod");
+    anaVer("res");
     var box = $("anaRes"); if (!box) return;
     box.innerHTML = '<div class="carregando"><div class="giro"></div>Calculando…</div>';
     chamar("analiseVendas", [plu], function (r) { desenharAnalise(plu, desc, r); },
@@ -3316,17 +3319,52 @@ window.PedidoPDF = (function () {
     }
     return h;
   }
-  function modoAnalise(m) {
-    Array.prototype.forEach.call(document.querySelectorAll("[data-anamodo]"), function (b) { b.className = "btn" + (b.getAttribute("data-anamodo") === m ? "" : " btn-cinza"); });
-    $("anaProd").style.display = m === "prod" ? "" : "none";
-    $("anaForn").style.display = m === "forn" ? "" : "none";
-    if (m === "forn" && !anaForn.r) carregarRanking();
+  function modoAnalise(m) { anaVer(m === "forn" ? "forn" : "res"); }
+  /** 06/11: Análise de vendas mostra OU a lista/análise de produto (#anaRes) OU o total do fornecedor (#anaForn). */
+  function anaVer(qual) {
+    var a = $("anaRes"), f = $("anaForn"); if (!a || !f) return;
+    a.style.display = qual === "forn" ? "none" : ""; f.style.display = qual === "forn" ? "" : "none";
   }
+  /** Bolinhas ao lado da busca: "Por fornecedor" (soma tudo do fornecedor) ou "Por produto" (produto a produto). */
+  function htmlModoAna() {
+    return '<div class="ana-modo" style="flex:0 0 auto;display:flex;flex-direction:column;gap:10px;padding:14px 4px 0">' +
+      [["forn", "Por fornecedor"], ["prod", "Por produto"]].map(function (o) {
+        return '<label style="display:flex;align-items:center;gap:8px;font-weight:700;color:#5b4636;cursor:pointer;white-space:nowrap">' +
+          '<input type="radio" name="anaModo" value="' + o[0] + '"' + (BP.an.modo === o[0] ? " checked" : "") + ' style="width:20px;height:20px;accent-color:#c62828;margin:0">' + o[1] + "</label>";
+      }).join("") + "</div>";
+  }
+  /** Abre a soma de TODAS as vendas do fornecedor (mês a mês, ano a ano, dia a dia, por loja e os produtos). */
+  function verTotalForn(nome) {
+    anaVer("forn"); anaForn.f = nome;
+    var box = $("anaForn"); if (!box) return;
+    if (anaForn.r && anaForn.r.chave) { abrirFornecedor(nome); return; }
+    box.innerHTML = '<div class="carregando"><div class="giro"></div>Somando as vendas de ' + esc(nome) + "…</div>";
+    chamar("rankingFornecedores", [anaForn.tipo, anaForn.chave], function (r) {
+      anaForn.r = r; anaForn.tipo = r.tipo; anaForn.chave = r.chave; if (anaForn.f === nome) abrirFornecedor(nome);
+    }, function (e) { box.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
+  /** Modo "Por fornecedor": com fornecedor no filtro já abre o total dele; sem filtro, a busca lista os fornecedores. */
+  function buscarFornAnalise(t, semAbrir) {
+    var box = $("anaRes"), forn = BP.an.forn, q = semAcento(String(t || "")).trim();
+    if (forn) { if (anaForn.f !== forn || $("anaForn").style.display === "none") verTotalForn(forn); return; }
+    anaForn.f = ""; anaVer("res");
+    if (q.length < 2) { box.innerHTML = '<div class="vazio" style="padding:10px 0">Escolha o fornecedor no filtro (toque para ver todos) ou digite o nome do fornecedor, um produto, PLU ou EAN.</div>'; return; }
+    var cont = {};
+    filtrarPadrao(produtosLocais(), t, "").forEach(function (it) { if (it.f) cont[it.f] = (cont[it.f] || 0) + 1; });
+    nomesForn().forEach(function (f) { if (semAcento(f.nome).indexOf(q) >= 0 && !(f.nome in cont)) cont[f.nome] = 0; });
+    var l = Object.keys(cont).sort(function (a, b) { return a.localeCompare(b, "pt-BR"); });
+    if (!semAbrir && l.length === 1 && q.length >= 3) { verTotalForn(l[0]); return; }
+    box.innerHTML = l.length ? '<div class="grupo">' + l.length + (l.length === 1 ? " fornecedor" : " fornecedores") + " com “" + esc(String(t).trim()) + "”</div>" + l.slice(0, 80).map(function (f) {
+      return '<button class="btn btn-cinza" style="display:block;width:100%;text-align:left;margin:0 0 6px;padding:10px" data-fnome="' + esc(f) + '"><b>' + esc(f) + "</b>" +
+        (cont[f] ? "<br><small>" + cont[f] + (cont[f] === 1 ? " produto" : " produtos") + " com essa busca</small>" : "") + "</button>";
+    }).join("") : '<div class="vazio" style="padding:10px 0">Nenhum fornecedor encontrado.</div>';
+  }
+
   function carregarRanking() {
     var box = $("anaForn"); if (!box) return;
     box.innerHTML = '<div class="carregando"><div class="giro"></div>Somando as vendas dos fornecedores…</div>';
     chamar("rankingFornecedores", [anaForn.tipo, anaForn.chave], function (r) {
-      anaForn.r = r; anaForn.tipo = r.tipo; anaForn.chave = r.chave; desenharRanking();
+      anaForn.r = r; anaForn.tipo = r.tipo; anaForn.chave = r.chave; if (anaForn.f && BP.an.modo === "forn") abrirFornecedor(anaForn.f); else desenharRanking();
     }, function (e) { box.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
   function filtroPeriodo() {
@@ -3380,7 +3418,7 @@ window.PedidoPDF = (function () {
     var linha = (R0.lista || []).filter(function (x) { return x.f === r.f; })[0] || { cx: 0, v: 0, c: 0, cxA: 0, vA: 0, cA: 0 };
     function somaL(lj, i) { var s = 0; cods.forEach(function (c) { var x = lj && lj[c]; if (x) s += Number(x[i]) || 0; }); return s; }
     var porMes = {}; (r.meses || []).forEach(function (m) { porMes[m.mes] = m.lojas; });
-    var h = '<button class="btn btn-cinza" style="margin:0 0 10px" data-fvolta="1">&#8592; Fornecedores</button>' +
+    var h = (BP.an.forn ? "" : '<button class="btn btn-cinza" style="margin:0 0 10px" data-fvolta="1">&#8592; Voltar</button>') + filtroPeriodo() +
       '<div style="margin:0 0 8px"><b style="font-size:16px">' + esc(r.f) + "</b></div>" + textoComparando(R0);
     var mg = margemDe(linha.v, linha.c), mgA = margemDe(linha.vA, linha.cA);
     h += cartoes([["Vendido R$", reais(linha.v), variacao(linha.v, linha.vA) + " (antes " + reais(linha.vA) + ")"],
@@ -4535,7 +4573,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.2";
+  var VERSAO_APP = "2026-11-06.3";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
