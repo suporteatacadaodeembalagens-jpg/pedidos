@@ -3120,10 +3120,24 @@ window.PedidoPDF = (function () {
     chamar("analiseVendas", [plu], function (r) { desenharAnalise(plu, desc, r); },
       function (e) { box.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
+  /** 06/11 (Marcelo): na Consulta de produtos o botão 'Análise de vendas' abre a análise do produto EMBAIXO do card
+   *  (2º toque ou 'Fechar análise' fecha). Gerência vê só a loja dela; Administração e Diretoria, todas (servidor). */
+  function anaInline(plu, desc) {
+    var box = $("anaIn_" + plu); if (!box) return;
+    if (!box.hidden) { box.hidden = true; box.innerHTML = ""; return; }
+    Array.prototype.forEach.call(document.querySelectorAll(".ana-inline"), function (b) { if (b !== box) { b.hidden = true; b.innerHTML = ""; } });
+    box.hidden = false; box.innerHTML = '<div class="carregando"><div class="giro"></div>Calculando a análise de vendas…</div>';
+    chamar("analiseVendas", [plu], function (r) {
+      if (box.hidden) return;
+      desenharAnalise.alvo = box;
+      try { desenharAnalise(plu, desc, r); } finally { desenharAnalise.alvo = null; }
+    }, function (e) { box.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
   function desenharAnalise(plu, desc, r) {
-    var box = $("anaRes"); if (!box) return;
+    var box = desenharAnalise.alvo || $("anaRes"); if (!box) return;
     var it = porPlu[plu] || {}, q = Number(it.q) || 0, t = it.t || "CX";
-    var volta = '<button class="btn btn-cinza" style="margin:0 0 10px" data-anavolta="1">&#8592; Outro produto</button>';
+    var volta = desenharAnalise.alvo ? '<button class="btn btn-cinza" style="margin:0 0 10px" data-anafechar="' + esc(plu) + '">&#10005; Fechar análise</button>'
+      : '<button class="btn btn-cinza" style="margin:0 0 10px" data-anavolta="1">&#8592; Outro produto</button>';
     var cab = '<div style="margin:0 0 8px"><b>' + esc(it.d || desc || "PLU " + plu) + "</b><br><small>PLU " + esc(plu) + (it.t ? " · " + esc(it.t) + (q > 1 ? " c/ " + num(q) : "") : "") + "</small></div>";
     var meses = (r && r.meses) || [], cods = (r && r.lojas) || [];
     if (!meses.length) { box.innerHTML = volta + cab + '<div class="aviso">Ainda não há vendas mensais carregadas. O robô busca os meses no ERP aos poucos (ou rode no PC do robô o 21_CARGA_VENDAS_MESES.bat).</div>'; return; }
@@ -3681,8 +3695,9 @@ window.PedidoPDF = (function () {
     if (sessao) acao = '<div class="linha-acao"><button class="btn btn-cont" data-cont="' + esc(it.p) + '">Pedir contagem de estoque</button>' + acao + "</div>";   // à ESQUERDA do outro botão, na mesma linha (todos os logins)
     if (sessao) acao += '<div class="linha-acao"><button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>' +   // favoritos do próximo pedido da loja
       // 04/11 (Marcelo): ao lado, a Análise de vendas DESTE produto (Gerência, Administração e Diretoria; Operacional vê com cadeado)
-      (m || nivelNum() >= 2 ? '<button class="btn btn-ana" data-anacons="' + esc(it.p) + '" data-anad="' + esc(it.d) + '">&#128200; Análise de vendas</button>'
-        : '<button class="btn btn-ana bloq" data-anabloq="1" title="Gerência, Administração e Diretoria">\uD83D\uDD12 Análise de vendas</button>') + "</div>";
+      // 06/11 (Marcelo): só Gerência para cima (Operacional não vê o botão); abre a análise EMBAIXO, aqui na Consulta
+      (m || nivelNum() >= 2 ? '<button class="btn btn-ana" data-anacons="' + esc(it.p) + '" data-anad="' + esc(it.d) + '">&#128200; Análise de vendas</button>' : "") + "</div>" +
+      (m || nivelNum() >= 2 ? '<div class="ana-inline" id="anaIn_' + esc(it.p) + '" hidden style="margin:12px 0 0;padding:12px 0 0;border-top:2px solid #efe2cf"></div>' : "");
     // 05/11 (Marcelo): produto FORA DE LINHA (cadastro do ERP) em VERMELHO, com o aviso escrito
     var fl = !!it.fl;
     return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"' + (fl ? ' style="border:2px solid #c62828;background:#fdecec"' : "") + '>' +
@@ -4306,7 +4321,8 @@ window.PedidoPDF = (function () {
       if (e.target.closest("#btnLerCons")) { abrirLeitor(function (c) { cons.termo = c; var i = $("consBusca"); if (i) i.value = c; resultadosConsulta(); }); return; }
       var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
       var fv = e.target.closest("[data-fav]"); if (fv) { favoritoClique(fv.getAttribute("data-fav")); return; }
-      var ac = e.target.closest("[data-anacons]"); if (ac) { abrirAnalise(true); abrirAnaliseItem(ac.getAttribute("data-anacons"), ac.getAttribute("data-anad")); return; }
+      var af = e.target.closest("[data-anafechar]"); if (af) { var bf = $("anaIn_" + af.getAttribute("data-anafechar")); if (bf) { bf.hidden = true; bf.innerHTML = ""; } return; }
+      var ac = e.target.closest("[data-anacons]"); if (ac) { anaInline(ac.getAttribute("data-anacons"), ac.getAttribute("data-anad")); return; }
       if (e.target.closest("[data-anabloq]")) { avisoBloqueio(); return; }
       var ctb = e.target.closest("[data-cont]"); if (ctb) { contagemClique(ctb.getAttribute("data-cont")); return; }
       var cr = e.target.closest("[data-cpr]"); if (cr) { var pc = cr.getAttribute("data-cpr"); mudarCompra(pc, 1); resultadosConsulta(); toast("Colocado no pedido de compra"); return; }
@@ -4604,7 +4620,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.4";
+  var VERSAO_APP = "2026-11-06.5";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
