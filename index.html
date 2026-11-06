@@ -3151,6 +3151,8 @@ window.PedidoPDF = (function () {
       : '<button class="btn btn-cinza" style="margin:0 0 10px" data-anavolta="1">&#8592; Outro produto</button>';
     var cab = '<div style="margin:0 0 8px"><b>' + esc(it.d || desc || "PLU " + plu) + "</b><br><small>PLU " + esc(plu) + (it.t ? " · " + esc(it.t) + (q > 1 ? " c/ " + num(q) : "") : "") + "</small></div>";
     var meses = (r && r.meses) || [], cods = (r && r.lojas) || [];
+    // 06/11 (Marcelo): os meses mais antigos SEM venda deste produto (antes de ele começar a vender) não aparecem
+    while (meses.length > 1 && !cods.some(function (c) { var mm = meses[meses.length - 1]; return Number(mm.lojas[c]) > 0 || (mm.valores && mm.valores[c]); })) meses = meses.slice(0, -1);
     if (!meses.length) { box.innerHTML = volta + cab + '<div class="aviso">Ainda não há vendas mensais carregadas. O robô busca os meses no ERP aos poucos (ou rode no PC do robô o 21_CARGA_VENDAS_MESES.bat).</div>'; return; }
     function tot(m) { return cods.reduce(function (a, c) { return a + (Number(m.lojas[c]) || 0); }, 0); }
     // 05/11 (Marcelo): tudo na EMBALAGEM DE COMPRA (CX/FD...), quebrado com 1 casa igual nos pedidos (ex.: 151,5 CX)
@@ -4670,7 +4672,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.10";
+  var VERSAO_APP = "2026-11-06.11";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
