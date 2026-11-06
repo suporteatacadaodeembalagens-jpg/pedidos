@@ -3145,21 +3145,28 @@ window.PedidoPDF = (function () {
       }).join("") + "</div>";
     // 05/11 (Marcelo): R$ VENDIDO e MARGEM (%) - do relatório ABC de Vendas Individual (robô), das lojas que a pessoa vê
     function rs(m) { var v = 0, c = 0; cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { v += Number(x[0]) || 0; c += Number(x[1]) || 0; } }); return [v, c]; }
-    function marg(vc) { return vc[0] > 0 ? (vc[0] - vc[1]) / vc[0] * 100 : null; }
+    function marg(vc) { return vc[1] > 0 ? (vc[0] - vc[1]) / vc[1] * 100 : null; }   // 06/11: MARKUP = (venda - custo) / custo
+    function unit(m) {   // preço e custo médios UNITÁRIOS do mês = R$ / quantidade (só as lojas com R$)
+      var q = 0, v = 0, c = 0;
+      cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { q += Number(m.lojas[k]) || 0; v += Number(x[0]) || 0; c += Number(x[1]) || 0; } });
+      return q > 0 ? [v / q, c / q] : null;
+    }
     function pct(x) { return x == null ? "—" : (Math.round(x * 10) / 10).toString().replace(".", ",") + "%"; }
     var comValor = meses.some(function (m) { return !!m.valores; }), tabValores = "";
     if (comValor) {
       var fv = fech.filter(function (m) { return !!m.valores; }), sv = [0, 0];
       fv.forEach(function (m) { var x = rs(m); sv[0] += x[0]; sv[1] += x[1]; });
       resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
-        [["Vendido " + fv.length + (fv.length === 1 ? " mês" : " meses"), reais(sv[0])], ["Margem média", pct(marg(sv))]].map(function (x) {
+        [["Vendido " + fv.length + (fv.length === 1 ? " mês" : " meses"), reais(sv[0])], ["Markup médio", pct(marg(sv))]].map(function (x) {
           return '<div style="background:#eaf3ee;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
         }).join("") + "</div>";
-      tabValores = '<table class="tab-lojas tab-lj" style="margin:0 0 12px"><tr><th>Mês</th><th>Vendido R$</th><th>Margem</th></tr>' + meses.map(function (m) {
-        if (!m.valores) return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + '</td><td colspan="2"><small>ainda não carregado</small></td></tr>';
-        var x = rs(m), mg = marg(x);
-        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + reais(x[0]) + '</b></td><td style="color:' + (mg == null ? "inherit" : mg < 15 ? "#c62828" : mg < 30 ? "#9a6b00" : "#2e7d32") + '">' + pct(mg) + "</td></tr>";
-      }).join("") + "</table>";
+      // 06/11 (Marcelo): preço e custo médios do mês (na embalagem) e MARKUP (sobre o custo); * = estimado
+      tabValores = '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th>Mês</th><th>Vendido R$</th><th>Preço ' + esc(un) + '</th><th>Custo ' + esc(un) + '</th><th>Markup</th></tr>' + meses.map(function (m) {
+        if (!m.valores) return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + '</td><td colspan="4"><small>ainda não carregado</small></td></tr>';
+        var x = rs(m), mg = marg(x), u = unit(m);
+        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + (m.est ? " *" : "") + "</td><td><b>" + reais(x[0]) + "</b></td><td>" + (u && u[0] > 0 ? reais(u[0] * fat) : "—") + "</td><td>" + (u && u[1] > 0 ? reais(u[1] * fat) : "—") +
+          '</td><td style="color:' + corMargem(mg) + '">' + pct(mg) + "</td></tr>";
+      }).join("") + "</table></div>" + (meses.some(function (m) { return m.est && m.valores; }) ? '<p style="margin:-6px 0 12px"><small>* R$, preço e custo estimados pelo preço e custo atuais (a Posição de vendas só traz a quantidade).</small></p>' : "");
     }
     // 05/11 (Marcelo): sem a tabela do total - para quem vê mais de uma loja a tabela LOJA A LOJA já aparece aberta;
     // o gráfico vem DEPOIS dela, com os valores em cima das barras, a linha da média, o melhor mês em destaque e
@@ -3226,7 +3233,31 @@ window.PedidoPDF = (function () {
     var compH = blocoComparacoes(meses, function (k) { var m = meses.filter(function (x) { return x.mes === k; })[0]; return m ? tot(m) / fat : null; },
       r.mesDias, function (d) { var x = r.dias && r.dias[d]; if (!x) return null; var s = 0; cods.forEach(function (c) { if (x[c]) s += Number(x[c][0]) || 0; }); return s / fat; },
       fmtCx, un);
-    box.innerHTML = volta + cab + resumo + tabela + tabValores + graf + compH + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
+    // 06/11 (Marcelo): preço de venda e custo ATUAIS x mês anterior x mesmo mês do ano passado, com o markup
+    var precoH = "";
+    (function () {
+      var A = r.atual, mesAt = meses.length ? meses[0].mes : "", ant = "", aa = "";
+      if (mesAt) { var yy = Number(mesAt.slice(0, 4)), mm = Number(mesAt.slice(5)); ant = mm === 1 ? (yy - 1) + "-12" : yy + "-" + ("0" + (mm - 1)).slice(-2); aa = (yy - 1) + mesAt.slice(4); }
+      function achar(k) { return meses.filter(function (m) { return m.mes === k; })[0]; }
+      var linhas = [], temAtual = !!(A && (A.preco > 0 || A.custo > 0));
+      if (temAtual) linhas.push(["Atual (lista de estoque)", A.preco, A.custo, false]);
+      [[ant, "Mês anterior"], [aa, "Mesmo mês do ano passado"]].forEach(function (z) {
+        var m = z[0] && achar(z[0]), u = m && m.valores && unit(m);
+        if (u) linhas.push([z[1] + " · " + nomeMes(z[0]), u[0], u[1], !!m.est]);
+      });
+      if (!linhas.length) return;
+      var b = linhas[0];
+      precoH = '<div style="font-weight:700;margin:4px 0 6px;color:#5b4636">Preço de venda, custo e markup <small style="font-weight:400">(' + esc(un) + (fat > 1 ? " c/ " + num(fat) : "") + ")</small></div>" +
+        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th style="text-align:left"></th><th>Preço</th><th>Custo</th><th>Markup</th></tr>' +
+        linhas.map(function (l, i) {
+          var mk = l[2] > 0 ? (l[1] - l[2]) / l[2] * 100 : null;
+          var vp = temAtual && i && b[1] > 0 && l[1] > 0 ? "<br><small>atual " + variacao(b[1], l[1]) + "</small>" : "";
+          var vc = temAtual && i && b[2] > 0 && l[2] > 0 ? "<br><small>atual " + variacao(b[2], l[2]) + "</small>" : "";
+          return '<tr><td style="text-align:left">' + esc(l[0]) + (l[3] ? " *" : "") + "</td><td><b>" + (l[1] > 0 ? reais(l[1] * fat) : "—") + "</b>" + vp + "</td><td><b>" + (l[2] > 0 ? reais(l[2] * fat) : "—") + "</b>" + vc +
+            '</td><td style="color:' + corMargem(mk) + '"><b>' + pctTxt(mk) + "</b></td></tr>";
+        }).join("") + "</table></div>";
+    })();
+    box.innerHTML = volta + cab + resumo + precoH + tabela + tabValores + graf + compH + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
     Array.prototype.forEach.call(box.querySelectorAll("[data-analoja]"), function (b) {
       b.addEventListener("click", function () {
         var c = b.getAttribute("data-analoja");
@@ -3243,8 +3274,8 @@ window.PedidoPDF = (function () {
   function nomePeriodo(tipo, k) { return !k ? "" : tipo === "ano" ? k : tipo === "mes" ? nomeMes(k) : nomeDia(k); }
   function anoAntes(k) { return String(Number(String(k).slice(0, 4)) - 1) + String(k).slice(4); }
   function pctTxt(x) { return x == null ? "—" : (Math.round(x * 10) / 10).toString().replace(".", ",") + "%"; }
-  function margemDe(v, c) { return v > 0 ? (v - c) / v * 100 : null; }
-  function corMargem(mg) { return mg == null ? "inherit" : mg < 15 ? "#c62828" : mg < 30 ? "#9a6b00" : "#2e7d32"; }
+  function margemDe(v, c) { return c > 0 ? (v - c) / c * 100 : null; }   // 06/11: MARKUP (sobre o custo)
+  function corMargem(mg) { return mg == null ? "inherit" : mg < 20 ? "#c62828" : mg < 45 ? "#9a6b00" : "#2e7d32"; }
   function variacao(a, b) {
     if (!(b > 0)) return a > 0 ? '<span style="color:#2e7d32;font-weight:700">novo</span>' : "—";
     var p = (a - b) / b * 100, r = Math.round(p);
@@ -3390,10 +3421,10 @@ window.PedidoPDF = (function () {
     var vis = q ? lista.filter(function (x) { return semAcento(x.f).indexOf(q) >= 0; }) : lista;
     var h = filtroPeriodo() + textoComparando(r);
     if (!lista.length) { box.innerHTML = h + '<div class="aviso">Ainda não há vendas carregadas para este período. O robô de dados busca no ERP aos poucos.</div>'; return; }
-    h += cartoes([["Vendido (todos)", reais(tv), variacao(tv, tva) + " x ano ant."], ["Margem", '<span style="color:' + corMargem(margemDe(tv, tc)) + '">' + pctTxt(margemDe(tv, tc)) + "</span>"],
+    h += cartoes([["Vendido (todos)", reais(tv), variacao(tv, tva) + " x ano ant."], ["Markup", '<span style="color:' + corMargem(margemDe(tv, tc)) + '">' + pctTxt(margemDe(tv, tc)) + "</span>"],
       ["Fornecedores com venda", num(lista.filter(function (x) { return x.v || x.cx; }).length)], ["Caixas", cxTxt(tcx)]], "#eaf3ee");
     h += '<div class="campo" style="margin:0 0 8px"><input id="fBusca" type="search" autocomplete="off" placeholder="Filtrar fornecedor" value="' + esc(anaForn.filtro || "") + '"></div>';
-    h += '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:440px"><tr><th>#</th><th style="text-align:left">Fornecedor</th><th>Vendido R$</th><th>Margem</th><th>x ano ant.</th><th>CX</th></tr>' +
+    h += '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:440px"><tr><th>#</th><th style="text-align:left">Fornecedor</th><th>Vendido R$</th><th>Markup</th><th>x ano ant.</th><th>CX</th></tr>' +
       vis.slice(0, 300).map(function (x) {
         var mg = margemDe(x.v, x.c);
         return '<tr data-fnome="' + esc(x.f) + '" style="cursor:pointer"><td>' + (lista.indexOf(x) + 1) + '</td><td style="text-align:left"><b>' + esc(x.f) + "</b></td><td>" + reais(x.v) +
@@ -3423,7 +3454,7 @@ window.PedidoPDF = (function () {
     var mg = margemDe(linha.v, linha.c), mgA = margemDe(linha.vA, linha.cA);
     h += cartoes([["Vendido R$", reais(linha.v), variacao(linha.v, linha.vA) + " (antes " + reais(linha.vA) + ")"],
       ["Caixas", cxTxt(linha.cx), variacao(linha.cx, linha.cxA) + " (antes " + cxTxt(linha.cxA) + ")"],
-      ["Margem", '<span style="color:' + corMargem(mg) + '">' + pctTxt(mg) + "</span>", "antes " + pctTxt(mgA)],
+      ["Markup", '<span style="color:' + corMargem(mg) + '">' + pctTxt(mg) + "</span>", "antes " + pctTxt(mgA)],
       ["Lucro R$", reais(linha.v - linha.c), variacao(linha.v - linha.c, linha.vA - linha.cA)]], "#eaf3ee");
     h += '<div style="display:flex;gap:6px;margin:0 0 8px">' + [[1, "R$ vendido"], [0, "Caixas"]].map(function (o) {
       return '<button type="button" data-fmet="' + o[0] + '" style="cursor:pointer;border:1px solid #d8c9b6;border-radius:14px;padding:4px 12px;font-size:12px;background:' + (met === o[0] ? "#c62828;color:#fff" : "#fff;color:#5b4636") + '">' + o[1] + "</button>";
@@ -3443,7 +3474,7 @@ window.PedidoPDF = (function () {
       var pa = pegar(R0.chave), pb = pegar(R0.ant, R0.tipo === "ano" && R0.ateMes < "12" ? R0.ateMes : "");
       var temDia = R0.tipo !== "dia" || (r.dias && r.dias[R0.chave]);
       if (temDia) h += '<div style="font-weight:700;margin:4px 0 6px;color:#5b4636">Por loja · ' + esc(nomePeriodo(R0.tipo, R0.chave)) + "</div>" +
-        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:400px"><tr><th style="text-align:left">Loja</th><th>Vendido R$</th><th>Margem</th><th>x ano ant.</th><th>CX</th></tr>' +
+        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:400px"><tr><th style="text-align:left">Loja</th><th>Vendido R$</th><th>Markup</th><th>x ano ant.</th><th>CX</th></tr>' +
         cods.map(function (c) {
           var x = pa[c] || [0, 0, 0], y = pb[c] || [0, 0, 0], m2 = margemDe(x[1], x[2]);
           return '<tr><td style="text-align:left">' + esc(c) + " " + esc((r.nomes[c] || "").slice(0, 14)) + "</td><td>" + reais(x[1]) + '</td><td style="color:' + corMargem(m2) + '">' + pctTxt(m2) + "</td><td>" + variacao(x[1], y[1]) + "</td><td>" + cxTxt(x[0]) + "</td></tr>";
@@ -3456,7 +3487,7 @@ window.PedidoPDF = (function () {
     else if (!P.lista.length) h += '<div class="vazio" style="padding:6px 0">' + (P.erro ? "Não consegui somar os produtos agora." : "Nenhum produto dele vendeu neste período.") + "</div>";
     else {
       var lp = anaForn.todos ? P.lista : P.lista.slice(0, 60);
-      h += '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:460px"><tr><th style="text-align:left">Produto</th><th>Vendido R$</th><th>Margem</th><th>x ano ant.</th><th>CX</th></tr>' +
+      h += '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:460px"><tr><th style="text-align:left">Produto</th><th>Vendido R$</th><th>Markup</th><th>x ano ant.</th><th>CX</th></tr>' +
         lp.map(function (x) {
           var m3 = margemDe(x.v, x.c);
           return '<tr data-ana="' + esc(x.p) + '" data-anad="' + esc(x.d) + '" style="cursor:pointer"><td style="text-align:left">' + esc(x.d) + "<br><small>PLU " + esc(x.p) + (x.emb > 1 ? " · c/ " + num(x.emb) : "") + "</small></td><td>" + reais(x.v) +
@@ -4573,7 +4604,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.3";
+  var VERSAO_APP = "2026-11-06.4";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
