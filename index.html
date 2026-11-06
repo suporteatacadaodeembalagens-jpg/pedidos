@@ -2961,19 +2961,38 @@ window.PedidoPDF = (function () {
     renderId++; atualizarModo();
     var L = $("lista");
     if (L.querySelector("#anaBusca") && L.querySelector("#anaRes")) return;   // já está aberta (não apaga a análise)
+    // 05/11 (Marcelo): 2 abas - PRODUTO (como antes) e FORNECEDORES (ranking, total do fornecedor e os produtos dele),
+    // com filtro ANO / MÊS / DIA comparando com o mesmo período do ano anterior.
     L.innerHTML = '<div class="titulo-tela">Análise de vendas</div>' +
-      '<div class="campo"><input id="anaBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN">' +
+      '<div class="ana-abas" style="display:flex;gap:6px;margin:0 0 10px">' +
+      '<button type="button" class="btn" data-anamodo="prod" style="flex:1;padding:9px">Produto</button>' +
+      '<button type="button" class="btn btn-cinza" data-anamodo="forn" style="flex:1;padding:9px">Fornecedores</button></div>' +
+      '<div id="anaProd"><div class="campo"><input id="anaBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN">' +
       '<button class="btn-ler escuro" type="button" data-analer="1">' + ICO_EAN + "Ler código de barras</button></div>" +
-      '<div id="anaRes" style="margin-top:10px"><div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div></div>';
+      '<div id="anaRes" style="margin-top:10px"><div class="vazio">Digite o nome, PLU, marca, fornecedor ou EAN — ou leia o código de barras.</div></div></div>' +
+      '<div id="anaForn" style="display:none"></div>';
+    anaForn.r = null;
     if (desenharAnaliseTela.ligado) return;
     desenharAnaliseTela.ligado = true;
     L.addEventListener("input", function (e) {
-      if (tela !== "analise" || e.target.id !== "anaBusca") return;
+      if (tela !== "analise") return;
+      if (e.target.id === "fBusca") { anaForn.filtro = e.target.value; desenharRanking(); return; }
+      if (e.target.id !== "anaBusca") return;
       clearTimeout(buscarAnalise.t); var v = e.target.value; buscarAnalise.t = setTimeout(function () { buscarAnalise(v); }, 200);
+    });
+    L.addEventListener("change", function (e) {
+      if (tela !== "analise") return;
+      if (e.target.id === "fTipo") { anaForn.tipo = e.target.value; anaForn.chave = ""; carregarRanking(); }
+      else if (e.target.id === "fChave") { anaForn.chave = e.target.value; carregarRanking(); }
     });
     L.addEventListener("click", function (e) {
       if (tela !== "analise") return;
-      var an = e.target.closest("[data-ana]"); if (an) { abrirAnaliseItem(an.getAttribute("data-ana"), an.getAttribute("data-anad")); window.scrollTo(0, 0); return; }
+      var md = e.target.closest("[data-anamodo]"); if (md) { modoAnalise(md.getAttribute("data-anamodo")); return; }
+      var fn = e.target.closest("[data-fnome]"); if (fn) { abrirFornecedor(fn.getAttribute("data-fnome")); window.scrollTo(0, 0); return; }
+      if (e.target.closest("[data-fvolta]")) { desenharRanking(); return; }
+      var fm = e.target.closest("[data-fmet]"); if (fm) { anaForn.met = Number(fm.getAttribute("data-fmet")); desenharFornecedor(); return; }
+      if (e.target.closest("[data-fmais]")) { anaForn.todos = true; desenharFornecedor(); return; }
+      var an = e.target.closest("[data-ana]"); if (an) { if (an.closest("#anaForn")) modoAnalise("prod"); abrirAnaliseItem(an.getAttribute("data-ana"), an.getAttribute("data-anad")); window.scrollTo(0, 0); return; }
       if (e.target.closest("[data-anavolta]")) { var ib = $("anaBusca"); buscarAnalise(ib ? ib.value : "", true); if (ib) ib.focus(); return; }
       if (e.target.closest("[data-analer]")) { abrirLeitor(function (c) { var ib2 = $("anaBusca"); if (ib2) ib2.value = c; buscarAnalise(c, false, true); }); }
     });
@@ -3014,6 +3033,7 @@ window.PedidoPDF = (function () {
     return nome;
   }
   function abrirAnaliseItem(plu, desc) {
+    if ($("anaProd") && $("anaProd").style.display === "none") modoAnalise("prod");
     var box = $("anaRes"); if (!box) return;
     box.innerHTML = '<div class="carregando"><div class="giro"></div>Calculando…</div>';
     chamar("analiseVendas", [plu], function (r) { desenharAnalise(plu, desc, r); },
@@ -3078,7 +3098,7 @@ window.PedidoPDF = (function () {
     }
     function grafico(loja) {
       var val = function (m) { return (loja ? Number(m.lojas[loja]) || 0 : tot(m)) / fat; };
-      var serie = meses.slice().reverse(), vals = serie.map(val);
+      var serie = meses.slice(0, 13).reverse(), vals = serie.map(val);
       var fechV = serie.filter(function (m) { return !m.parcial; }).map(val);
       var med = fechV.length ? fechV.reduce(function (a, b) { return a + b; }, 0) / fechV.length : 0;
       var maxv = Math.max.apply(null, vals.concat([med, 1])), W = 340, H = 150, top = 18, base = top + H, bw = W / serie.length;
@@ -3121,7 +3141,11 @@ window.PedidoPDF = (function () {
     var graf = '<div style="background:#fffaf2;border:1px solid #efe2cf;border-radius:12px;padding:10px 10px 8px;margin:0 0 6px">' +
       '<div style="font-weight:700;margin:0 0 6px;color:#5b4636">Vendas por mês <small id="anaGrafTit" style="font-weight:400;color:#8a7867">' + (cods.length > 1 ? "· todas as lojas" : "") + "</small></div>" +
       chips + '<div id="anaGraf">' + grafico("") + "</div></div>";
-    box.innerHTML = volta + cab + resumo + tabela + tabValores + graf + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
+    // 05/11 (Marcelo): comparações mês a mês (este ano x ano passado), ano a ano e dia a dia (mês atual x mesmo mês do ano passado)
+    var compH = blocoComparacoes(meses, function (k) { var m = meses.filter(function (x) { return x.mes === k; })[0]; return m ? tot(m) / fat : null; },
+      r.mesDias, function (d) { var x = r.dias && r.dias[d]; if (!x) return null; var s = 0; cods.forEach(function (c) { if (x[c]) s += Number(x[c][0]) || 0; }); return s / fat; },
+      fmtCx, un);
+    box.innerHTML = volta + cab + resumo + tabela + tabValores + graf + compH + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
     Array.prototype.forEach.call(box.querySelectorAll("[data-analoja]"), function (b) {
       b.addEventListener("click", function () {
         var c = b.getAttribute("data-analoja");
@@ -3130,6 +3154,202 @@ window.PedidoPDF = (function () {
         $("anaGrafTit").textContent = c ? "· " + c + " " + (r.nomes[c] || "") : "· todas as lojas";
       });
     });
+  }
+  // ---------------- ANÁLISE: FORNECEDORES e COMPARAÇÕES (05/11) ----------------
+  var anaForn = { tipo: "mes", chave: "", r: null, filtro: "", f: "", fa: null, prods: null, met: 1, todos: false };
+  var DIAS_SEM = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  function nomeDia(d) { var a = d.split("-"), dt = new Date(Number(a[0]), Number(a[1]) - 1, Number(a[2])); return a[2] + "/" + a[1] + "/" + a[0].slice(2) + " " + DIAS_SEM[dt.getDay()]; }
+  function nomePeriodo(tipo, k) { return !k ? "" : tipo === "ano" ? k : tipo === "mes" ? nomeMes(k) : nomeDia(k); }
+  function anoAntes(k) { return String(Number(String(k).slice(0, 4)) - 1) + String(k).slice(4); }
+  function pctTxt(x) { return x == null ? "—" : (Math.round(x * 10) / 10).toString().replace(".", ",") + "%"; }
+  function margemDe(v, c) { return v > 0 ? (v - c) / v * 100 : null; }
+  function corMargem(mg) { return mg == null ? "inherit" : mg < 15 ? "#c62828" : mg < 30 ? "#9a6b00" : "#2e7d32"; }
+  function variacao(a, b) {
+    if (!(b > 0)) return a > 0 ? '<span style="color:#2e7d32;font-weight:700">novo</span>' : "—";
+    var p = (a - b) / b * 100, r = Math.round(p);
+    return '<span style="color:' + (p >= 0 ? "#2e7d32" : "#c62828") + ';font-weight:700">' + (p >= 0 ? "▲ +" : "▼ ") + r + "%</span>";
+  }
+  function cxTxt(v) { return num(Math.round((Number(v) || 0) * 10) / 10); }
+  function cartoes(lista, cor) {
+    return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px">' + lista.map(function (x) {
+      return '<div style="background:' + (cor || "#f6f0e6") + ';border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b>" + (x[2] ? "<br><small>" + x[2] + "</small>" : "") + "</div>";
+    }).join("") + "</div>";
+  }
+  /** Gráfico de barras em PAR: período atual (vermelho) x mesmo período do ano anterior (cinza). a/b: números ou null. */
+  function graficoComp(rot, a, b, nomeA, nomeB, fmt, tit) {
+    var n = rot.length; if (!n) return "";
+    var W = 340, H = 140, top = 16, base = top + H, gw = W / n, bw = Math.max(2, (gw - 4) / 2);
+    var vals = a.concat(b).map(function (v) { return Number(v) || 0; }), maxv = Math.max.apply(null, vals.concat([1]));
+    var g = '<svg viewBox="0 0 ' + W + " " + (base + 18) + '" style="width:100%;height:auto;display:block" role="img" aria-label="' + esc(tit || "Comparação") + '">';
+    [0.5, 1].forEach(function (f) { var y = base - f * H; g += '<line x1="0" x2="' + W + '" y1="' + y + '" y2="' + y + '" stroke="#efe6d8"/>'; });
+    var cada = n <= 12 ? 1 : n <= 16 ? 2 : 5;
+    rot.forEach(function (lb, i) {
+      var x0 = i * gw + 2;
+      [[b[i], "#cdbfae", x0, nomeB], [a[i], "#c62828", x0 + bw, nomeA]].forEach(function (s) {
+        if (s[0] == null) return;
+        var v = Number(s[0]) || 0, h = Math.max(v > 0 ? 2 : 0, Math.round(v / maxv * H));
+        g += '<rect x="' + s[2] + '" y="' + (base - h) + '" width="' + bw + '" height="' + h + '" rx="2" fill="' + s[1] + '"><title>' + esc(lb + " " + s[3] + ": " + fmt(v)) + "</title></rect>";
+      });
+      if (n <= 12 && a[i] != null) g += '<text x="' + (x0 + bw * 1.5) + '" y="' + (base - Math.round((Number(a[i]) || 0) / maxv * H) - 3) + '" font-size="7.5" font-weight="700" text-anchor="middle" fill="#8e1b1b">' + esc(fmt(a[i], 1)) + "</text>";
+      if (i % cada === 0 || i === n - 1) g += '<text x="' + (x0 + bw) + '" y="' + (base + 11) + '" font-size="8" text-anchor="middle" fill="#7a6a5c">' + esc(lb) + "</text>";
+    });
+    g += '<line x1="0" x2="' + W + '" y1="' + base + '" y2="' + base + '" stroke="#cdbfae"/></svg>';
+    var sa = 0, sb = 0, temB = false; a.forEach(function (v, i) { if (v != null) { sa += Number(v) || 0; if (b[i] != null) { sb += Number(b[i]) || 0; temB = true; } } });
+    return '<div style="background:#fffaf2;border:1px solid #efe2cf;border-radius:12px;padding:10px 10px 8px;margin:0 0 10px">' +
+      '<div style="font-weight:700;margin:0 0 6px;color:#5b4636">' + esc(tit) + "</div>" + g +
+      '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:#6b5a4b;margin:6px 0 0">' +
+      '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#c62828;vertical-align:-1px"></i> ' + esc(nomeA) + " <b>" + esc(fmt(sa)) + "</b></span>" +
+      '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#cdbfae;vertical-align:-1px"></i> ' + esc(nomeB) + " <b>" + esc(fmt(sb)) + "</b></span>" +
+      (temB ? "<span>" + variacao(sa, sb) + "</span>" : "") + "</div></div>";
+  }
+  function fmtRs(v, curto) { v = Number(v) || 0; if (curto && v >= 1000) return "R$" + (Math.round(v / 100) / 10).toString().replace(".", ",") + "k"; return curto ? "R$" + num(Math.round(v)) : reais(v); }
+  function fmtCx(v, curto) { v = Number(v) || 0; if (curto && v >= 10000) return (Math.round(v / 100) / 10).toString().replace(".", ",") + "k"; return cxTxt(v); }
+  /** Comparações: mês a mês (ano mais novo x anterior), ano a ano, dia a dia. valMes(mes)/valDia(data) -> número ou null. */
+  function blocoComparacoes(meses, valMes, mesDias, valDia, fmt, un) {
+    var h = "", ms = meses.map(function (m) { return m.mes; }).sort();
+    if (ms.length) {
+      var Y = ms[ms.length - 1].slice(0, 4), Y1 = String(Number(Y) - 1), rot = [], a = [], b = [];
+      for (var i = 1; i <= 12; i++) {
+        var k = ("0" + i).slice(-2), ka = Y + "-" + k, kb = Y1 + "-" + k;
+        rot.push(MESES_NOME[i - 1]); a.push(ms.indexOf(ka) >= 0 ? valMes(ka) : null); b.push(ms.indexOf(kb) >= 0 ? valMes(kb) : null);
+      }
+      h += graficoComp(rot, a, b, Y, Y1, fmt, "Mês a mês: " + Y + " x " + Y1 + (un ? " (" + un + ")" : ""));
+      // ano a ano: o ano corrente só até o mês que já tem; o anterior cortado no mesmo mês para comparar igual
+      var anos = []; ms.forEach(function (m) { var y = m.slice(0, 4); if (anos.indexOf(y) < 0) anos.push(y); });
+      anos.sort().reverse();
+      var ultMes = ms[ms.length - 1].slice(5);
+      h += '<table class="tab-lojas tab-lj" style="margin:0 0 12px"><tr><th>Ano</th><th>Total</th><th>Até ' + MESES_NOME[Number(ultMes) - 1] + "</th><th>x ano anterior</th></tr>" + anos.map(function (y) {
+        var tot = 0, ate = 0, ateAnt = 0, temAnt = false;
+        ms.forEach(function (m) {
+          if (m.slice(0, 4) === y) { var v = Number(valMes(m)) || 0; tot += v; if (m.slice(5) <= ultMes) ate += v; }
+          if (m.slice(0, 4) === String(Number(y) - 1) && m.slice(5) <= ultMes) { ateAnt += Number(valMes(m)) || 0; temAnt = true; }
+        });
+        return "<tr><td><b>" + y + "</b></td><td>" + esc(fmt(tot)) + "</td><td>" + esc(fmt(ate)) + "</td><td>" + (temAnt ? variacao(ate, ateAnt) : "—") + "</td></tr>";
+      }).join("") + "</table>";
+    }
+    if (mesDias) {
+      var ant = anoAntes(mesDias), ad = Number(mesDias.slice(0, 4)), md = Number(mesDias.slice(5));
+      var nd = new Date(ad, md, 0).getDate(), rd = [], da = [], db = [];
+      for (var d = 1; d <= nd; d++) {
+        var dd = ("0" + d).slice(-2);
+        rd.push(String(d)); da.push(valDia(mesDias + "-" + dd)); db.push(valDia(ant + "-" + dd));
+      }
+      h += graficoComp(rd, da, db, nomeMes(mesDias), nomeMes(ant), fmt, "Dia a dia: " + nomeMes(mesDias) + " x " + nomeMes(ant) + (un ? " (" + un + ")" : ""));
+    }
+    return h;
+  }
+  function modoAnalise(m) {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-anamodo]"), function (b) { b.className = "btn" + (b.getAttribute("data-anamodo") === m ? "" : " btn-cinza"); });
+    $("anaProd").style.display = m === "prod" ? "" : "none";
+    $("anaForn").style.display = m === "forn" ? "" : "none";
+    if (m === "forn" && !anaForn.r) carregarRanking();
+  }
+  function carregarRanking() {
+    var box = $("anaForn"); if (!box) return;
+    box.innerHTML = '<div class="carregando"><div class="giro"></div>Somando as vendas dos fornecedores…</div>';
+    chamar("rankingFornecedores", [anaForn.tipo, anaForn.chave], function (r) {
+      anaForn.r = r; anaForn.tipo = r.tipo; anaForn.chave = r.chave; desenharRanking();
+    }, function (e) { box.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
+  function filtroPeriodo() {
+    var r = anaForn.r || {}, p = r.periodos || { anos: [], meses: [], dias: [] };
+    var lst = anaForn.tipo === "ano" ? p.anos : anaForn.tipo === "dia" ? p.dias : p.meses;
+    return '<div style="display:flex;gap:6px;margin:0 0 8px">' +
+      '<select id="fTipo" style="flex:0 0 96px;padding:8px;border-radius:8px;border:1px solid #d8c9b6">' +
+      [["ano", "Ano"], ["mes", "Mês"], ["dia", "Dia"]].map(function (o) { return '<option value="' + o[0] + '"' + (anaForn.tipo === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>" +
+      '<select id="fChave" style="flex:1;padding:8px;border-radius:8px;border:1px solid #d8c9b6">' +
+      (lst.length ? lst.map(function (k) { return '<option value="' + esc(k) + '"' + (k === anaForn.chave ? " selected" : "") + ">" + esc(nomePeriodo(anaForn.tipo, k)) + "</option>"; }).join("") : '<option value="">ainda sem dados</option>') +
+      "</select></div>";
+  }
+  function textoComparando(r) {
+    if (!r || !r.chave) return "";
+    var ant = nomePeriodo(r.tipo, r.ant);
+    if (r.tipo === "ano" && r.ateMes && r.ateMes < "12") ant += " (jan a " + MESES_NOME[Number(r.ateMes) - 1] + ")";
+    return '<p style="margin:0 0 8px"><small>Comparando <b>' + esc(nomePeriodo(r.tipo, r.chave)) + "</b> com <b>" + esc(ant) + "</b>. Caixas na embalagem de compra.</small></p>";
+  }
+  function desenharRanking() {
+    var box = $("anaForn"), r = anaForn.r; if (!box || !r) return;
+    var lista = r.lista || [], q = semAcento(anaForn.filtro || "").trim();
+    var tv = 0, tc = 0, tva = 0, tcx = 0; lista.forEach(function (x) { tv += x.v; tc += x.c; tva += x.vA; tcx += x.cx; });
+    var vis = q ? lista.filter(function (x) { return semAcento(x.f).indexOf(q) >= 0; }) : lista;
+    var h = filtroPeriodo() + textoComparando(r);
+    if (!lista.length) { box.innerHTML = h + '<div class="aviso">Ainda não há vendas carregadas para este período. O robô de dados busca no ERP aos poucos.</div>'; return; }
+    h += cartoes([["Vendido (todos)", reais(tv), variacao(tv, tva) + " x ano ant."], ["Margem", '<span style="color:' + corMargem(margemDe(tv, tc)) + '">' + pctTxt(margemDe(tv, tc)) + "</span>"],
+      ["Fornecedores com venda", num(lista.filter(function (x) { return x.v || x.cx; }).length)], ["Caixas", cxTxt(tcx)]], "#eaf3ee");
+    h += '<div class="campo" style="margin:0 0 8px"><input id="fBusca" type="search" autocomplete="off" placeholder="Filtrar fornecedor" value="' + esc(anaForn.filtro || "") + '"></div>';
+    h += '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:440px"><tr><th>#</th><th style="text-align:left">Fornecedor</th><th>Vendido R$</th><th>Margem</th><th>x ano ant.</th><th>CX</th></tr>' +
+      vis.slice(0, 300).map(function (x) {
+        var mg = margemDe(x.v, x.c);
+        return '<tr data-fnome="' + esc(x.f) + '" style="cursor:pointer"><td>' + (lista.indexOf(x) + 1) + '</td><td style="text-align:left"><b>' + esc(x.f) + "</b></td><td>" + reais(x.v) +
+          '</td><td style="color:' + corMargem(mg) + '">' + pctTxt(mg) + "</td><td>" + variacao(x.v, x.vA) + "</td><td>" + cxTxt(x.cx) + "</td></tr>";
+      }).join("") + "</table></div>" + (vis.length > 300 ? '<p><small>Mostrando 300 de ' + vis.length + " — use o filtro.</small></p>" : "") +
+      '<p style="margin:8px 0 0"><small>Toque no fornecedor para ver o total dele mês a mês, ano a ano, dia a dia, por loja e os produtos.</small></p>';
+    var foco = document.activeElement && document.activeElement.id === "fBusca";
+    box.innerHTML = h;
+    if (foco) { var ib = $("fBusca"); ib.focus(); ib.setSelectionRange(ib.value.length, ib.value.length); }
+  }
+  function abrirFornecedor(nome) {
+    var box = $("anaForn"); if (!box) return;
+    anaForn.f = nome; anaForn.fa = null; anaForn.prods = null; anaForn.todos = false;
+    box.innerHTML = '<div class="carregando"><div class="giro"></div>Calculando ' + esc(nome) + "…</div>";
+    var falha = function (e) { box.innerHTML = '<button class="btn btn-cinza" data-fvolta="1">&#8592; Fornecedores</button><div class="aviso erro">' + esc(e && e.message || e) + "</div>"; };
+    chamar("analiseFornecedor", [nome], function (r) { if (anaForn.f !== nome) return; anaForn.fa = r; desenharFornecedor(); }, falha);
+    chamar("produtosFornecedorVendas", [nome, anaForn.tipo, anaForn.chave], function (r) { if (anaForn.f !== nome) return; anaForn.prods = r; desenharFornecedor(); }, function () { anaForn.prods = { lista: [], erro: 1 }; desenharFornecedor(); });
+  }
+  function desenharFornecedor() {
+    var box = $("anaForn"), r = anaForn.fa, R0 = anaForn.r || {}; if (!box || !r) return;
+    var met = anaForn.met, fmt = met ? fmtRs : fmtCx, cods = r.lojas || [];
+    var linha = (R0.lista || []).filter(function (x) { return x.f === r.f; })[0] || { cx: 0, v: 0, c: 0, cxA: 0, vA: 0, cA: 0 };
+    function somaL(lj, i) { var s = 0; cods.forEach(function (c) { var x = lj && lj[c]; if (x) s += Number(x[i]) || 0; }); return s; }
+    var porMes = {}; (r.meses || []).forEach(function (m) { porMes[m.mes] = m.lojas; });
+    var h = '<button class="btn btn-cinza" style="margin:0 0 10px" data-fvolta="1">&#8592; Fornecedores</button>' +
+      '<div style="margin:0 0 8px"><b style="font-size:16px">' + esc(r.f) + "</b></div>" + textoComparando(R0);
+    var mg = margemDe(linha.v, linha.c), mgA = margemDe(linha.vA, linha.cA);
+    h += cartoes([["Vendido R$", reais(linha.v), variacao(linha.v, linha.vA) + " (antes " + reais(linha.vA) + ")"],
+      ["Caixas", cxTxt(linha.cx), variacao(linha.cx, linha.cxA) + " (antes " + cxTxt(linha.cxA) + ")"],
+      ["Margem", '<span style="color:' + corMargem(mg) + '">' + pctTxt(mg) + "</span>", "antes " + pctTxt(mgA)],
+      ["Lucro R$", reais(linha.v - linha.c), variacao(linha.v - linha.c, linha.vA - linha.cA)]], "#eaf3ee");
+    h += '<div style="display:flex;gap:6px;margin:0 0 8px">' + [[1, "R$ vendido"], [0, "Caixas"]].map(function (o) {
+      return '<button type="button" data-fmet="' + o[0] + '" style="cursor:pointer;border:1px solid #d8c9b6;border-radius:14px;padding:4px 12px;font-size:12px;background:' + (met === o[0] ? "#c62828;color:#fff" : "#fff;color:#5b4636") + '">' + o[1] + "</button>";
+    }).join("") + "</div>";
+    h += blocoComparacoes(r.meses || [], function (m) { return porMes[m] ? somaL(porMes[m], met) : 0; },
+      r.mesDias, function (d) { return r.dias && r.dias[d] ? somaL(r.dias[d], met) : null; }, fmt, met ? "" : "CX");
+    // loja a loja no período escolhido
+    if (cods.length > 1 && R0.chave) {
+      var pegar = function (k, ate) {
+        var out = {};
+        var junta = function (lj) { cods.forEach(function (c) { var x = lj && lj[c]; if (!x) return; var o = out[c] = out[c] || [0, 0, 0]; o[0] += x[0]; o[1] += x[1]; o[2] += x[2]; }); };
+        if (R0.tipo === "dia") junta(r.dias && r.dias[k]);
+        else if (R0.tipo === "mes") junta(porMes[k]);
+        else Object.keys(porMes).forEach(function (m) { if (m.slice(0, 4) === k && (!ate || m.slice(5) <= ate)) junta(porMes[m]); });
+        return out;
+      };
+      var pa = pegar(R0.chave), pb = pegar(R0.ant, R0.tipo === "ano" && R0.ateMes < "12" ? R0.ateMes : "");
+      var temDia = R0.tipo !== "dia" || (r.dias && r.dias[R0.chave]);
+      if (temDia) h += '<div style="font-weight:700;margin:4px 0 6px;color:#5b4636">Por loja · ' + esc(nomePeriodo(R0.tipo, R0.chave)) + "</div>" +
+        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:400px"><tr><th style="text-align:left">Loja</th><th>Vendido R$</th><th>Margem</th><th>x ano ant.</th><th>CX</th></tr>' +
+        cods.map(function (c) {
+          var x = pa[c] || [0, 0, 0], y = pb[c] || [0, 0, 0], m2 = margemDe(x[1], x[2]);
+          return '<tr><td style="text-align:left">' + esc(c) + " " + esc((r.nomes[c] || "").slice(0, 14)) + "</td><td>" + reais(x[1]) + '</td><td style="color:' + corMargem(m2) + '">' + pctTxt(m2) + "</td><td>" + variacao(x[1], y[1]) + "</td><td>" + cxTxt(x[0]) + "</td></tr>";
+        }).join("") + "</table></div>";
+    }
+    // produtos do fornecedor no período
+    var P = anaForn.prods;
+    h += '<div style="font-weight:700;margin:4px 0 6px;color:#5b4636">Produtos · ' + esc(nomePeriodo(R0.tipo, R0.chave)) + "</div>";
+    if (!P) h += '<div class="carregando"><div class="giro"></div>Somando os produtos…</div>';
+    else if (!P.lista.length) h += '<div class="vazio" style="padding:6px 0">' + (P.erro ? "Não consegui somar os produtos agora." : "Nenhum produto dele vendeu neste período.") + "</div>";
+    else {
+      var lp = anaForn.todos ? P.lista : P.lista.slice(0, 60);
+      h += '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="min-width:460px"><tr><th style="text-align:left">Produto</th><th>Vendido R$</th><th>Margem</th><th>x ano ant.</th><th>CX</th></tr>' +
+        lp.map(function (x) {
+          var m3 = margemDe(x.v, x.c);
+          return '<tr data-ana="' + esc(x.p) + '" data-anad="' + esc(x.d) + '" style="cursor:pointer"><td style="text-align:left">' + esc(x.d) + "<br><small>PLU " + esc(x.p) + (x.emb > 1 ? " · c/ " + num(x.emb) : "") + "</small></td><td>" + reais(x.v) +
+            '</td><td style="color:' + corMargem(m3) + '">' + pctTxt(m3) + "</td><td>" + variacao(x.v, x.vA) + "</td><td>" + cxTxt(x.cx) + "</td></tr>";
+        }).join("") + "</table></div>" +
+        (P.lista.length > lp.length ? '<button class="btn btn-cinza" style="margin:8px 0 0" data-fmais="1">Mostrar todos (' + P.lista.length + ")</button>" : "") +
+        '<p style="margin:8px 0 0"><small>Toque no produto para abrir a análise dele.</small></p>';
+    }
+    box.innerHTML = h;
   }
   // erro na tela do celular -> vai para o relatório (no máximo 5 por vez que o app abre, sem repetir)
   var errTelaN = 0, errTelaVistos = {};
@@ -4238,7 +4458,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-05.7";
+  var VERSAO_APP = "2026-11-05.8";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
