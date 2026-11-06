@@ -1475,6 +1475,17 @@ window.PedidoPDF = (function () {
     if (!e.target.closest("[data-bpw]")) Object.keys(BP).forEach(function (px) { var b = $(px + "FornLista"); if (b) b.hidden = true; });
   });
 
+  // 06/11 (Marcelo): QUALQUER lista de fornecedor aberta (Consulta, Pedido de compra, Lista da loja, Contagem, Análise)
+  // fecha ao tocar FORA dela (ou com Esc) - antes algumas só fechavam tocando dentro da tela de produtos.
+  function fecharListasForn(alvo) {
+    Array.prototype.forEach.call(document.querySelectorAll(".forn-lista"), function (l) {
+      if (l.hidden) return;
+      var w = l.closest(".forn-wrap") || l.parentElement;
+      if (!alvo || !w || !w.contains(alvo)) l.hidden = true;
+    });
+  }
+  document.addEventListener("pointerdown", function (e) { fecharListasForn(e.target); }, true);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") fecharListasForn(null); });
   function desenharLista() {
     carregarFotos();
     if (tela === "inicio") { desenharInicio(); return; }
@@ -4622,7 +4633,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-06.6";
+  var VERSAO_APP = "2026-11-06.7";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
