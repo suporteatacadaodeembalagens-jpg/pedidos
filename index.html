@@ -1700,7 +1700,10 @@ window.PedidoPDF = (function () {
       t.addEventListener("click", function (e) {
         var a = e.target.closest("[data-exp]"); if (!a) return;
         var k = a.getAttribute("data-exp"), v = a.getAttribute("data-v");
-        if (k === "sair") sairExpedicao();
+        if (k === "diag") { abrirDiagLeitor(); return; }
+        else if (k === "dgfechar") { fecharDiagLeitor(); return; }
+        else if (k === "dglimpar") { var dl = document.getElementById("dgLog"); if (dl) dl.textContent = ""; return; }
+        else if (k === "sair") sairExpedicao();
         else if (k === "fechar") fecharExpedicao();
         else if (k === "item") { abrirItemColeta(v, ""); return; }
         else if (k === "msalvar") salvarItemColeta("ok");
@@ -1779,7 +1782,7 @@ window.PedidoPDF = (function () {
   }
   function itemColeta(p) { var a = EXP.aberto; return a && a.itens ? a.itens.filter(function (x) { return x.p === p; })[0] : null; }
   function modalAberto() { var m = document.getElementById("expModal"); return !!(m && !m.hidden); }
-  function focoBip() { if (modalAberto()) return; var b = document.getElementById("expBip"); if (b) try { b.focus({ preventScroll: true }); } catch (e) { b.focus(); } }
+  function focoBip() { if (modalAberto() || EXP.diag) return; var b = document.getElementById("expBip"); if (b) try { b.focus({ preventScroll: true }); } catch (e) { b.focus(); } }
   function msgColeta(txt, tipo) { var m = document.getElementById("expMsg"); if (m) { m.className = "exp-msg " + (tipo || ""); m.textContent = txt; } }
   function codigoParaPlu(cod) {
     var a = EXP.aberto, dig = String(cod || "").replace(/\D/g, ""), p = null;
@@ -1822,6 +1825,30 @@ window.PedidoPDF = (function () {
     mo.hidden = false;
     setTimeout(function () { var i = document.getElementById("expMQ"); if (i) { i.focus(); try { i.select(); } catch (e) {} } }, 30);
   }
+  /* 09/11 (Marcelo): TESTE DO LEITOR (diagnóstico do coletor). Mostra tudo o que o botão de leitura manda para o app,
+     em 2 campos: A = sem teclado (como a conferência) e B = normal. Assim dá para ver onde a leitura se perde. */
+  function abrirDiagLeitor() {
+    var mo = document.getElementById("expDiag");
+    if (!mo) { mo = document.createElement("div"); mo.id = "expDiag"; mo.className = "exp-modal"; document.getElementById("telaExp").appendChild(mo); }
+    mo.innerHTML = '<div class="exp-modal-cx"><div class="exp-modal-t">Teste do leitor</div>' +
+      '<div class="exp-modal-info">1) Toque no campo A e aperte o botão de leitura num código de barras.<br>2) Depois toque no campo B e leia de novo.<br>3) Tire um print desta tela e mande para o suporte.</div>' +
+      '<label>A — sem teclado (igual à conferência)</label><input id="dgA" inputmode="none" autocomplete="off" placeholder="toque aqui e leia">' +
+      '<label>B — normal</label><input id="dgB" autocomplete="off" placeholder="toque aqui e leia">' +
+      '<div id="dgLog" style="margin-top:8px;max-height:38vh;overflow:auto;font:12px/1.35 monospace;background:#1e1e1e;color:#b8f5b8;border-radius:8px;padding:6px;white-space:pre-wrap"></div>' +
+      '<div class="exp-modal-b"><button data-exp="dglimpar" class="cinza">Limpar</button><button data-exp="dgfechar" class="laranja">Fechar</button></div></div>';
+    mo.hidden = false; EXP.diag = true;
+    var log = function (s) { var l = document.getElementById("dgLog"); if (!l) return; l.textContent = (new Date().toTimeString().slice(3, 8) + "." + ("00" + (Date.now() % 1000)).slice(-3) + " " + s + "\n" + l.textContent).slice(0, 6000); };
+    var alvo = function (e) { var t = e.target; return t && t.id === "dgA" ? "A" : t && t.id === "dgB" ? "B" : (t && (t.id || t.tagName) || "?"); };
+    if (!abrirDiagLeitor.lig) {
+      abrirDiagLeitor.lig = true;
+      ["keydown", "keyup", "keypress"].forEach(function (ty) { document.addEventListener(ty, function (e) { if (EXP.diag) log(ty + " [" + alvo(e) + "] key=" + JSON.stringify(e.key) + " code=" + e.code + " kc=" + e.keyCode + (e.isComposing ? " comp" : "")); }, true); });
+      ["beforeinput", "input"].forEach(function (ty) { document.addEventListener(ty, function (e) { if (EXP.diag) log(ty + " [" + alvo(e) + "] tipo=" + (e.inputType || "") + " data=" + JSON.stringify(e.data == null ? null : e.data) + " valor=" + JSON.stringify(e.target && e.target.value)); }, true); });
+      ["compositionstart", "compositionend", "focusin", "focusout", "paste"].forEach(function (ty) { document.addEventListener(ty, function (e) { if (EXP.diag) log(ty + " [" + alvo(e) + "]" + (e.data ? " data=" + JSON.stringify(e.data) : "")); }, true); });
+      document.addEventListener("visibilitychange", function () { if (EXP.diag) log("visibilidade=" + document.visibilityState); });
+    }
+    log("pronto · " + navigator.userAgent.replace(/^Mozilla\/5\.0 /, "").slice(0, 90));
+  }
+  function fecharDiagLeitor() { var mo = document.getElementById("expDiag"); if (mo) { mo.hidden = true; mo.innerHTML = ""; } EXP.diag = false; setTimeout(focoBip, 0); }
   function fecharItemColeta() { var mo = document.getElementById("expModal"); if (mo) { mo.hidden = true; mo.innerHTML = ""; } EXP.modal = null; setTimeout(focoBip, 0); }
   function msgModal(t) { var m = document.getElementById("expMMsg"); if (m) m.textContent = t; expSom(220, 250); }
   function salvarItemColeta(modo) {
@@ -1940,7 +1967,7 @@ window.PedidoPDF = (function () {
   function desenharExpedicao() {
     var t = document.getElementById("telaExp"), u = expUsuario(); if (!t || !u) return;
     var h = '<div class="exp-topo"><div><b>Expedição</b><span>' + esc(u.nome || u.email) + '</span></div>' +
-      '<div class="exp-btns"><button data-exp="atualizar">&#8635; Atualizar</button>' + (sessaoExp ? '<button data-exp="sair">Sair</button>' : '<button data-exp="fechar">&#10005; Fechar</button>') + '</div></div><div class="exp-corpo">' +
+      '<div class="exp-btns"><button data-exp="diag" title="Testar o leitor do coletor">&#128295;</button><button data-exp="atualizar">&#8635; Atualizar</button>' + (sessaoExp ? '<button data-exp="sair">Sair</button>' : '<button data-exp="fechar">&#10005; Fechar</button>') + '</div></div><div class="exp-corpo">' +
       '<div class="exp-mods">' + MODS_EXP.map(function (x) { return '<button data-exp="mod" data-v="' + x[0] + '" class="' + (EXP.mod === x[0] ? "ativo" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>";
     if (EXP.mod !== "conferencia") {
       var nm = MODS_EXP.filter(function (x) { return x[0] === EXP.mod; })[0];
@@ -1950,7 +1977,7 @@ window.PedidoPDF = (function () {
     var a = EXP.aberto;
     if (a) {   // 09/11 (Marcelo): conferência aberta = TELA À PARTE (sem as abas da Expedição), para focar na coleta
       var hc = '<div class="exp-topo exp-topo-col"><button data-exp="voltar" class="exp-volta" title="Voltar">&#8592;</button><div><b>Conferência</b><span>' + esc(a.loja || "") + (a.nome ? " · " + esc(a.nome) : "") + "</span></div>" +
-        '<div class="exp-btns"><button data-exp="desfazer">&#8630; Desfazer</button></div></div><div class="exp-corpo">';
+        '<div class="exp-btns"><button data-exp="diag" title="Testar o leitor do coletor">&#128295;</button><button data-exp="desfazer">&#8630; Desfazer</button></div></div><div class="exp-corpo">';
       desenharColeta(t, hc); return;
     }
     if (false) {
@@ -1992,7 +2019,7 @@ window.PedidoPDF = (function () {
   var expBuf = { s: "", t: 0, tm: null };
   document.addEventListener("keydown", function (e) {
     var tel = document.getElementById("telaExp");
-    if (!tel || tel.hidden || !EXP.aberto || !EXP.aberto.itens || modalAberto()) return;
+    if (!tel || tel.hidden || !EXP.aberto || !EXP.aberto.itens || modalAberto() || EXP.diag) return;
     var ae = document.activeElement; if (ae && (ae.id === "expBip" || ae.id === "expMQ" || ae.id === "expMJ" || ae.tagName === "SELECT")) return;
     var agora = Date.now();
     if (e.key === "Enter" || e.keyCode === 13) { if (expBuf.s.length >= 4) { e.preventDefault(); var v = expBuf.s; expBuf.s = ""; bipar(v); focoBip(); } return; }
@@ -5168,7 +5195,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.17";
+  var VERSAO_APP = "2026-11-09.18";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
