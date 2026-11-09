@@ -1929,8 +1929,8 @@ window.PedidoPDF = (function () {
       h += ' <button class="btn btn-cinza" style="margin-top:8px;padding:9px 14px" id="btnErpDescons" type="button">Desconsiderar divergência</button>';
     return h + "</div>";
   }
-  function excluirPendente() {
-    var x = mgr.aberto; if (!x) return;
+  function excluirPendente(alvo) {   // alvo = pedido da LISTA (botão ao lado do Abrir); sem alvo = o pedido aberto
+    var x = alvo || mgr.aberto; if (!x) return;
     modal("Excluir pedido", "<p>Excluir o pedido <b>" + esc(x.nome || "") + "</b> da loja <b>" + esc(x.loja || "") + "</b>, que está aguardando aprovação?</p>" +
       "<p><small>Ele sai do app (fica guardada uma cópia e o registro de quem excluiu). Digite a <b>sua senha</b> para confirmar.</small></p>" +
       '<div class="campo"><input id="exSenha" type="password" autocomplete="current-password" placeholder="Sua senha"></div><div id="exErro" class="aviso erro" hidden></div>' +
@@ -1942,7 +1942,7 @@ window.PedidoPDF = (function () {
       var s = $("exSenha").value; if (!s) { $("exSenha").focus(); return; }
       $("exConfirma").disabled = true;
       chamar("excluirPedidoPendente", [x.id, s], function () {
-        fecharModal(); toast("Pedido excluído."); mgr.lista = null; voltarMgr();
+        fecharModal(); toast("Pedido excluído."); mgr.lista = null; if (alvo) desenharManager(); else voltarMgr();
       }, function (err) { $("exConfirma").disabled = false; var b = $("exErro"); b.hidden = false; b.textContent = String(err && err.message || err); $("exSenha").select(); });
     };
     $("exConfirma").onclick = ir;
@@ -2078,7 +2078,10 @@ window.PedidoPDF = (function () {
         (typeof x.valor === "number" ? '<br><b style="color:var(--texto);font-size:14px">Valor total: ' + reais(x.valor) + "</b> <small>(" + (x.direto && !x.n ? "valor no ERP" : "custo CD") + (x.semCusto ? " · " + x.semCusto + " sem custo" : "") + ")</small>" : "") +   // 03/11
         (x.fat && x.fat.valor ? '<br><small>Valor da NF: <b>' + reais(x.fat.valor) + "</b></small>" : "") +
         "</span></div>" +
-        '<button class="ver" data-abrir="' + esc(x.id) + '">Abrir</button></div></div>';
+        // 09/11 (Marcelo): pedido aguardando aprovação -> botão Excluir ao lado do Abrir (Administração e Diretoria, com senha)
+        (x.status === "pendente" && ehMgrLogin() ? '<div style="display:flex;flex-direction:column;gap:8px"><button class="ver" data-abrir="' + esc(x.id) + '">Abrir</button>' +
+          '<button class="ver" style="background:#fdecec;color:#c62828" data-excpend="' + esc(x.id) + '" data-exnome="' + esc(x.nome) + '" data-exloja="' + esc(x.loja) + '">Excluir</button></div>'
+          : '<button class="ver" data-abrir="' + esc(x.id) + '">Abrir</button>') + "</div></div>";
     });
     $("lista").innerHTML = html;
   }
@@ -3201,6 +3204,13 @@ window.PedidoPDF = (function () {
        ["Últimos 3 meses x 3 anteriores", tend == null ? "—" : (tend > 0 ? "+" : "") + tend + "%"],
        ["Melhor mês", melhor ? nomeMes(melhor.mes) + " (" + cx(tot(melhor)) + " " + esc(un) + ")" : "—"]].map(function (x) {
         return '<div style="background:#f6f0e6;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
+      }).join("") + "</div>";
+    // 09/11 (Marcelo): preço de VAREJO (unidade) e o preço da EMBALAGEM (CX/FD/DP...) logo abaixo dos cartões
+    var tabPv = ehMgrLogin() ? cons.precos : cons.precosLoja, pVar = (tabPv && tabPv[plu] && Number(tabPv[plu][0])) || (r && r.atual && Number(r.atual.preco)) || 0;
+    if (!tabPv && !ehMgrLogin() && typeof buscarPrecosLoja === "function") { try { buscarPrecosLoja(); } catch (e) {} }
+    if (pVar > 0) resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
+      [["Preço varejo (UN)", reais(pVar)], ["Preço " + esc(q > 1 ? t + " c/ " + num(q) : "UN"), reais(pVar * (q > 1 ? q : 1))]].map(function (x) {
+        return '<div style="background:#fff4d6;border-radius:8px;padding:7px 9px"><small>' + x[0] + "</small><br><b>" + x[1] + "</b></div>";
       }).join("") + "</div>";
     // 05/11 (Marcelo): R$ VENDIDO e MARGEM (%) - do relatório ABC de Vendas Individual (robô), das lojas que a pessoa vê
     function rs(m) { var v = 0, c = 0; cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { v += Number(x[0]) || 0; c += Number(x[1]) || 0; } }); return [v, c]; }
@@ -4430,6 +4440,7 @@ window.PedidoPDF = (function () {
     }
     if (ehManager()) {
       var sf = e.target.closest("[data-subfat]"); if (sf) { mgr.sub = sf.getAttribute("data-subfat"); desenharManager(); window.scrollTo(0, 0); return; }
+      var xp = e.target.closest("[data-excpend]"); if (xp) { excluirPendente({ id: xp.getAttribute("data-excpend"), nome: xp.getAttribute("data-exnome"), loja: xp.getAttribute("data-exloja") }); return; }
       var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
       var cl = e.target.closest("[data-comoloja]"); if (cl) { entrarComoLoja(cl.getAttribute("data-comoloja")); return; }
       var xm = e.target.closest("[data-excmgr]"); if (xm) { excluirSalvoMgr(xm); return; }
@@ -4706,7 +4717,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.2";
+  var VERSAO_APP = "2026-11-09.3";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
