@@ -1690,6 +1690,7 @@ window.PedidoPDF = (function () {
         "#expModal label{display:block;font-size:12.5px;font-weight:700;color:var(--marrom);margin:6px 0 3px}#expModal input{width:100%;font-size:18px;padding:10px;border-radius:10px;border:2px solid var(--linha)}#expModal #expMQ{font-size:26px;text-align:center;font-weight:800;border-color:var(--ouro)}" +
         "#expModal .exp-modal-b{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}#expModal .exp-modal-b button{border:0;border-radius:10px;padding:13px 8px;font-weight:800;font-size:14.5px}" +
         "#expModal .verde{grid-column:1/-1;background:#1a7f45;color:#fff;font-size:17px}#expModal .laranja{background:#e07b00;color:#fff}#expModal .cinza{background:#6b5d55;color:#fff}#expModal .link{grid-column:1/-1;background:none;color:var(--sub)}" +
+        "#expModal .exp-vinc{max-height:50vh;overflow:auto;display:flex;flex-direction:column;gap:6px}#expModal .exp-vinc button{text-align:left;border:1px solid var(--linha);background:#fff;border-radius:10px;padding:9px 10px;font-size:14px;color:var(--texto)}#expModal .exp-vinc small{display:block;color:var(--sub);font-size:12px}" +
         "#expModal .exp-modal-msg{color:#b42226;font-weight:700;font-size:13.5px;margin-top:8px;min-height:1em}" +
         "@media print{body>*:not(#telaExp){display:none!important}#telaExp{position:static;overflow:visible}#telaExp .exp-topo,#telaExp .exp-mods,#telaExp .nao-imprime{display:none!important}}";
       document.head.appendChild(st);
@@ -1706,6 +1707,7 @@ window.PedidoPDF = (function () {
         else if (k === "sair") sairExpedicao();
         else if (k === "fechar") fecharExpedicao();
         else if (k === "item") { abrirItemColeta(v, ""); return; }
+        else if (k === "vinc") { vincularCodigo(v); return; }
         else if (k === "msalvar") salvarItemColeta("ok");
         else if (k === "mparcial") salvarItemColeta("parcial");
         else if (k === "mnao") salvarItemColeta("nao");
@@ -1789,6 +1791,10 @@ window.PedidoPDF = (function () {
       var p6 = ("000000" + dig).slice(-6);
       a.itens.forEach(function (it) { if (("000000" + String(it.p).replace(/\D/g, "")).slice(-6) === p6) p = it.p; });
     }
+    if (!p && dig.length === 14) {   // 09/11: DUN-14 da CAIXA = 1 dígito + os 12 primeiros do EAN da unidade + verificador
+      var nucleo = dig.slice(1, 13);
+      Object.keys(a.eans || {}).forEach(function (k) { if (!p && ("0000000000000" + k).slice(-13).slice(0, 12) === nucleo) p = a.eans[k]; });
+    }
     if (!p && /[a-z]/i.test(String(cod || ""))) {   // digitou o NOME: acha pela descrição (1 resultado abre direto)
       var sa = function (s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }, pal = sa(cod).split(/\s+/).filter(Boolean);
       var ach = a.itens.filter(function (it) { var d = sa(it.d + " " + (it.m || "")); return pal.every(function (w) { return d.indexOf(w) >= 0; }); });
@@ -1802,8 +1808,28 @@ window.PedidoPDF = (function () {
     cod = String(cod || "").trim(); if (!cod) return;
     var p = codigoParaPlu(cod);
     if (!p && EXP.multi) { var nm = EXP.multi; EXP.multi = 0; msgColeta(nm + " produtos com \"" + cod + "\": escreva mais do nome ou toque no produto da lista.", "aviso"); desenharExpedicao(); return; }
+    var dg = cod.replace(/\D/g, "");
+    if (!p && dg.length >= 8) { expSom(600, 260); try { navigator.vibrate && navigator.vibrate(200); } catch (e) {} abrirVincular(cod, dg); return; }   // código de embalagem não cadastrado
     if (!p) { expSom(220, 450); try { navigator.vibrate && navigator.vibrate(300); } catch (e) {} msgColeta("✕ " + cod + " NÃO está neste pedido", "erro"); return; }
     expSom(1100, 70); abrirItemColeta(p, cod);
+  }
+  function abrirVincular(cod, dig) {   // 09/11: código que o cadastro não traz (ex.: EAN da CAIXA/FARDO) -> o conferente diz de qual produto é
+    var a = EXP.aberto; if (!a || !a.itens) return;
+    var mo = document.getElementById("expModal");
+    if (!mo) { mo = document.createElement("div"); mo.id = "expModal"; mo.className = "exp-modal"; document.getElementById("telaExp").appendChild(mo); }
+    EXP.modal = null; EXP.vinc = dig;
+    var its = a.itens.slice().sort(function (x, y) { var rx = respConf(x, a.conf[x.p]) ? 1 : 0, ry = respConf(y, a.conf[y.p]) ? 1 : 0; return rx - ry || (x.d || "").localeCompare(y.d || ""); });
+    mo.innerHTML = '<div class="exp-modal-cx"><div class="exp-modal-t">Código não cadastrado</div>' +
+      '<div class="exp-modal-info">O código <b>' + esc(cod) + '</b> não está no cadastro dos produtos deste pedido (pode ser o código da <b>caixa/fardo</b>).<br>Toque no produto dele: o app guarda e da próxima vez já reconhece.</div>' +
+      '<div class="exp-vinc">' + its.map(function (it) { return '<button data-exp="vinc" data-v="' + esc(it.p) + '"><b>' + esc(it.d || "PLU " + it.p) + "</b><small>PLU " + esc(it.p) + " · " + esc((it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "")) + "</small></button>"; }).join("") + "</div>" +
+      '<div class="exp-modal-b"><button data-exp="mcancelar" class="link">Não é deste pedido / Cancelar</button></div></div>';
+    mo.hidden = false;
+  }
+  function vincularCodigo(p) {
+    var a = EXP.aberto, dig = EXP.vinc; if (!a || !dig) return;
+    EXP.vinc = null; a.eans = a.eans || {}; a.eans[dig.replace(/^0+/, "")] = p;
+    expChamar("confVincular", [a.id, dig, p], function () { msgColeta("Código " + dig + " ligado a " + ((itemColeta(p) || {}).d || p) + ".", "ok"); }, function (e) { msgColeta("Não consegui guardar o código: " + String(e && e.message || e), "erro"); });
+    abrirItemColeta(p, dig);
   }
   function abrirItemColeta(p, cod) {
     var a = EXP.aberto, it = itemColeta(p); if (!it) return;
@@ -5193,7 +5219,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.20";
+  var VERSAO_APP = "2026-11-09.21";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
