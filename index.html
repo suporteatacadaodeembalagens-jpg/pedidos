@@ -1704,7 +1704,7 @@ window.PedidoPDF = (function () {
         else if (k === "mcancelar") fecharItemColeta();
         else if (k === "desfazer") desfazerColeta();
         else if (k === "fecharconf") fecharConferencia();
-        else if (k === "digitar") { var b = document.getElementById("expBip"); if (b) { b.setAttribute("inputmode", b.getAttribute("inputmode") === "none" ? "numeric" : "none"); b.blur(); setTimeout(function () { b.focus(); }, 50); } return; }
+        else if (k === "digitar") { var b = document.getElementById("expBip"); if (b) { b.setAttribute("inputmode", "numeric"); b.blur(); setTimeout(function () { b.focus(); }, 50); } return; }
         else if (k === "camera") { abrirLeitor(function (cod) { setTimeout(function () { bipar(cod); focoBip(); }, 50); }); return; }
         else if (k === "mod") { EXP.mod = v; EXP.aberto = null; desenharExpedicao(); if (v === "conferencia" && !EXP.lista) carregarExpedicao(); }
         else if (k === "atualizar") { EXP.lista = null; if (EXP.aberto) abrirPedidoExp(EXP.aberto.id); carregarExpedicao(); }
@@ -1714,6 +1714,11 @@ window.PedidoPDF = (function () {
         else if (k === "imprimir") window.print();
         if (EXP.aberto && EXP.aberto.itens) setTimeout(focoBip, 0);
       });
+      t.addEventListener("click", function (e) {   // 09/11: TOCAR no campo de bipar abre o teclado (o foco automático segue sem teclado)
+        var b = e.target && e.target.id === "expBip" ? e.target : null;
+        if (b && b.getAttribute("inputmode") === "none") { b.setAttribute("inputmode", "text"); b.blur(); setTimeout(function () { b.focus(); }, 30); }
+      });
+      t.addEventListener("focusout", function (e) { if (e.target && e.target.id === "expBip") e.target.setAttribute("inputmode", "none"); });
       t.addEventListener("keydown", function (e) {   // gatilho do coletor: código + Enter
         if (e.target && e.target.id === "expBip" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); var v = e.target.value; e.target.value = ""; bipar(v); }
         else if (e.target && e.target.id === "expMQ" && (e.key === "Enter" || e.keyCode === 13)) {   // bipou com a ficha aberta = outro produto
@@ -1770,13 +1775,20 @@ window.PedidoPDF = (function () {
       var p6 = ("000000" + dig).slice(-6);
       a.itens.forEach(function (it) { if (("000000" + String(it.p).replace(/\D/g, "")).slice(-6) === p6) p = it.p; });
     }
+    if (!p && /[a-z]/i.test(String(cod || ""))) {   // digitou o NOME: acha pela descrição (1 resultado abre direto)
+      var sa = function (s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }, pal = sa(cod).split(/\s+/).filter(Boolean);
+      var ach = a.itens.filter(function (it) { var d = sa(it.d + " " + (it.m || "")); return pal.every(function (w) { return d.indexOf(w) >= 0; }); });
+      if (ach.length === 1) p = ach[0].p;
+      else if (ach.length > 1) { EXP.multi = ach.length; EXP.destaque = ach[0].p; }
+    }
     return p;
   }
   function bipar(cod) {
     var a = EXP.aberto; if (!a || !a.itens) return;
     cod = String(cod || "").trim(); if (!cod) return;
     var p = codigoParaPlu(cod);
-    if (!p) { expSom(220, 450); try { navigator.vibrate && navigator.vibrate(300); } catch (e) {} msgColeta("✕ Código " + cod + " NÃO está neste pedido", "erro"); return; }
+    if (!p && EXP.multi) { var nm = EXP.multi; EXP.multi = 0; msgColeta(nm + " produtos com \"" + cod + "\": escreva mais do nome ou toque no produto da lista.", "aviso"); desenharExpedicao(); return; }
+    if (!p) { expSom(220, 450); try { navigator.vibrate && navigator.vibrate(300); } catch (e) {} msgColeta("✕ " + cod + " NÃO está neste pedido", "erro"); return; }
     expSom(1100, 70); abrirItemColeta(p, cod);
   }
   function abrirItemColeta(p, cod) {
@@ -1790,7 +1802,7 @@ window.PedidoPDF = (function () {
       (cod ? '<br><small>Código lido: ' + esc(cod) + "</small>" : "") + "</div>" +
       '<div class="exp-modal-qs"><div><span>Pedido</span><b>' + num(it.qtd) + "</b><small>" + esc(it.t || "UN") + '</small></div><div><span>Já coletado</span><b>' + num(c.st === "nao" ? 0 : q) + "</b><small>" + esc(it.t || "UN") + "</small></div></div>" +
       (c.st ? '<div class="exp-modal-st">' + (c.st === "nao" ? "Marcado como NÃO ATENDIDO" : "Marcado como PARCIAL") + (c.just ? ": " + esc(c.just) : "") + "</div>" : "") +
-      '<label for="expMQ">Quantidade coletada (' + esc(it.t || "UN") + ')</label><input id="expMQ" type="number" min="0" inputmode="numeric" value="' + (q > 0 && c.st !== "nao" ? q : it.qtd) + '">' +
+      '<label for="expMQ">Quantidade coletada (' + esc(it.t || "UN") + ')</label><input id="expMQ" type="number" min="0" inputmode="numeric" value="" placeholder="Digite a quantidade">' +
       '<label for="expMJ">Justificativa (parcial ou não atendido)</label><input id="expMJ" maxlength="120" autocomplete="off" placeholder="Ex.: só tinha 2 / sem estoque" value="' + esc(c.just || "") + '">' +
       '<div class="exp-modal-b"><button data-exp="msalvar" class="verde">&#10004; Salvar</button><button data-exp="mparcial" class="laranja">Atender parcialmente</button>' +
       '<button data-exp="mnao" class="cinza">Não atendido</button><button data-exp="mcancelar" class="link">Cancelar</button></div><div id="expMMsg" class="exp-modal-msg"></div></div>';
@@ -1805,6 +1817,7 @@ window.PedidoPDF = (function () {
     var c = a.conf[p] || (a.conf[p] = { q: 0, st: "", just: "" });
     var qi = document.getElementById("expMQ"), ji = document.getElementById("expMJ");
     var nq = Math.max(0, Math.round(Number(qi && qi.value) || 0)), just = String(ji && ji.value || "").trim();
+    if (modo !== "nao" && qi && String(qi.value).trim() === "") { msgModal("Digite a quantidade coletada."); qi.focus(); return; }   // 09/11: o campo vem vazio
     if (modo === "ok" && nq !== it.qtd) { msgModal("A quantidade (" + num(nq) + ") é diferente do pedido (" + num(it.qtd) + "): use Atender parcialmente."); return; }
     if (modo === "parcial") {
       if (nq === it.qtd) { msgModal("A quantidade bate com o pedido: use Salvar."); return; }
@@ -1880,7 +1893,7 @@ window.PedidoPDF = (function () {
     if (!document.getElementById("expBip")) {
       t.innerHTML = h + '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn btn-cinza" data-exp="voltar" style="flex:1">&#8592; Voltar</button>' +
         '<button class="btn btn-cinza" data-exp="desfazer" style="flex:1">&#8630; Desfazer último</button></div><div id="expCab"></div>' +
-        '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="none" placeholder="Bipe o código de barras">' +
+        '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="none" placeholder="Bipe o código (ou toque para digitar código, PLU ou nome)">' +
         '<button data-exp="digitar" title="Digitar o código ou o PLU">&#9000;</button><button data-exp="camera" title="Ler com a câmera">&#128247;</button></div>' +
         '<div id="expMsg" class="exp-msg">Bipe o produto: abre a ficha dele para lançar a quantidade. Também dá para tocar no produto da lista.</div><div id="expLista"></div><div id="expPe"></div></div>';
       setTimeout(focoBip, 0);
@@ -5111,7 +5124,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.12";
+  var VERSAO_APP = "2026-11-09.14";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
