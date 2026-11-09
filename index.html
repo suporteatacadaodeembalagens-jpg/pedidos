@@ -1627,16 +1627,20 @@ window.PedidoPDF = (function () {
   /* ================= 09/11 (Marcelo): cargo EXPEDIÇÃO =================
      Login próprio (Perfil "Expedição" na planilha). Vê SÓ os pedidos APROVADOS das lojas para separar
      (sem valores) e, depois, o módulo Coletor. Tela própria por cima de tudo; o resto do app nem carrega. */
-  var EXP = { lista: null, aberto: null, loja: "", ver: "separar" };
+  var EXP = { lista: null, aberto: null, loja: "", ver: "separar", mod: "conferencia" };
+  // 09/11: módulo Expedição = 4 opções (Conferência, Recebimento, Contagem de estoque, Validade). Abre para o login
+  // Expedição e, no início, para o Marcelo (mestre), que fecha e volta ao app.
+  var MODS_EXP = [["conferencia", "Conferência"], ["recebimento", "Recebimento"], ["contagem", "Contagem de estoque"], ["validade", "Validade"]];
+  function expUsuario() { return sessaoExp || (sessao && ehMestre() ? sessao : null); }
   function expChamar(fn, args, ok) {
-    if (!sessaoExp) return;
+    if (!expUsuario()) return;
     var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
       var m = String(e && e.message || e);
-      if (m.indexOf("LOGIN:") >= 0) { sairExpedicao(m.replace(/^.*LOGIN:\s*/, "")); return; }
+      if (m.indexOf("LOGIN:") >= 0) { if (sessaoExp) sairExpedicao(m.replace(/^.*LOGIN:\s*/, "")); else { fecharExpedicao(); erroLogin(e); } return; }
       toast(m);
       if (fn === "pedidosExpedicao") { EXP.lista = EXP.lista || []; desenharExpedicao(); }
     });
-    r[fn].apply(r, [sessaoExp.token].concat(args || []));
+    r[fn].apply(r, [expUsuario().token].concat(args || []));
   }
   function abrirExpedicao() {
     if (!document.getElementById("expCss")) {
@@ -1647,8 +1651,9 @@ window.PedidoPDF = (function () {
         "#telaExp .exp-topo .exp-btns{margin-left:auto;display:flex;gap:8px}" +
         "#telaExp .exp-topo button{border:0;border-radius:9px;padding:8px 12px;background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:13px}" +
         "#telaExp .exp-corpo{max-width:900px;margin:0 auto;padding:12px}" +
-        "#telaExp .exp-mods{display:flex;gap:8px;margin-bottom:10px}#telaExp .exp-mods button{flex:1;border:0;border-radius:10px;padding:11px;font-weight:800;font-size:14px}" +
-        "#telaExp .exp-mods .ativo{background:var(--marrom);color:#fff;border:2px solid var(--ouro)}#telaExp .exp-mods .breve{background:#e9e4da;color:#8a7d70}" +
+        "#telaExp .exp-mods{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}@media (max-width:560px){#telaExp .exp-mods{grid-template-columns:1fr 1fr}}" +
+        "#telaExp .exp-mods button{border:2px solid transparent;border-radius:10px;padding:11px 6px;font-weight:800;font-size:13.5px;background:#fff;color:var(--marrom);box-shadow:0 1px 2px rgba(63,31,30,.08)}" +
+        "#telaExp .exp-mods .ativo{background:var(--marrom);color:#fff;border-color:var(--ouro)}#telaExp .exp-breve{background:#fff;border-radius:12px;padding:22px 16px;text-align:center;color:var(--sub)}#telaExp .exp-breve b{display:block;color:var(--marrom);font-size:17px;margin-bottom:6px}" +
         "#telaExp .exp-filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}" +
         "#telaExp .exp-filtros button{border:0;border-radius:999px;padding:8px 12px;font-weight:700;background:#efe6d8;color:var(--marrom)}#telaExp .exp-filtros button.on{background:var(--marrom);color:#fff}" +
         "#telaExp .exp-filtros select{padding:8px;border-radius:9px;border:1px solid var(--linha);font-size:14px;max-width:100%}" +
@@ -1669,12 +1674,13 @@ window.PedidoPDF = (function () {
         var a = e.target.closest("[data-exp]"); if (!a) return;
         var k = a.getAttribute("data-exp"), v = a.getAttribute("data-v");
         if (k === "sair") sairExpedicao();
+        else if (k === "fechar") fecharExpedicao();
+        else if (k === "mod") { EXP.mod = v; EXP.aberto = null; desenharExpedicao(); if (v === "conferencia" && !EXP.lista) carregarExpedicao(); }
         else if (k === "atualizar") { EXP.lista = null; if (EXP.aberto) abrirPedidoExp(EXP.aberto.id); carregarExpedicao(); }
         else if (k === "ver") { EXP.ver = v; desenharExpedicao(); }
         else if (k === "abrir") abrirPedidoExp(v);
         else if (k === "voltar") { EXP.aberto = null; desenharExpedicao(); }
         else if (k === "imprimir") window.print();
-        else if (k === "coletor") toast("Coletor: em breve");
       });
       t.addEventListener("change", function (e) { if (e.target.id === "expLoja") { EXP.loja = e.target.value; desenharExpedicao(); } });
     }
@@ -1689,17 +1695,26 @@ window.PedidoPDF = (function () {
     EXP.aberto = { id: id, carregando: true }; desenharExpedicao();
     expChamar("pedidoExpedicao", [id], function (r) { if (EXP.aberto && EXP.aberto.id === id) { EXP.aberto = r; desenharExpedicao(); window.scrollTo(0, 0); } });
   }
+  function fecharExpedicao() {   // Marcelo: fecha a Expedição e volta ao app
+    var t = document.getElementById("telaExp"); if (t) { t.hidden = true; t.innerHTML = ""; }
+    EXP.aberto = null;
+  }
   function sairExpedicao(msg) {
-    sessaoExp = null; EXP = { lista: null, aberto: null, loja: "", ver: "separar" };
+    sessaoExp = null; EXP = { lista: null, aberto: null, loja: "", ver: "separar", mod: "conferencia" };
     LS.set("sessao", null);
     var t = document.getElementById("telaExp"); if (t) { t.hidden = true; t.innerHTML = ""; }
     abrirLogin(msg || "");
   }
   function desenharExpedicao() {
-    var t = document.getElementById("telaExp"); if (!t || !sessaoExp) return;
-    var h = '<div class="exp-topo"><div><b>Expedição</b><span>' + esc(sessaoExp.nome || sessaoExp.email) + '</span></div>' +
-      '<div class="exp-btns"><button data-exp="atualizar">&#8635; Atualizar</button><button data-exp="sair">Sair</button></div></div><div class="exp-corpo">' +
-      '<div class="exp-mods"><button class="ativo">Pedidos aprovados</button><button class="breve" data-exp="coletor">Coletor (em breve)</button></div>';
+    var t = document.getElementById("telaExp"), u = expUsuario(); if (!t || !u) return;
+    var h = '<div class="exp-topo"><div><b>Expedição</b><span>' + esc(u.nome || u.email) + '</span></div>' +
+      '<div class="exp-btns"><button data-exp="atualizar">&#8635; Atualizar</button>' + (sessaoExp ? '<button data-exp="sair">Sair</button>' : '<button data-exp="fechar">&#10005; Fechar</button>') + '</div></div><div class="exp-corpo">' +
+      '<div class="exp-mods">' + MODS_EXP.map(function (x) { return '<button data-exp="mod" data-v="' + x[0] + '" class="' + (EXP.mod === x[0] ? "ativo" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>";
+    if (EXP.mod !== "conferencia") {
+      var nm = MODS_EXP.filter(function (x) { return x[0] === EXP.mod; })[0];
+      t.innerHTML = h + '<div class="exp-breve"><b>' + esc(nm ? nm[1] : "") + "</b>Em breve: este módulo ainda vai ser montado.</div></div>"; return;
+    }
+    h += '<div style="font-weight:800;color:var(--marrom);margin:2px 0 8px">Conferência · pedidos aprovados das lojas</div>';
     var a = EXP.aberto;
     if (a) {
       h += '<div class="nao-imprime" style="display:flex;gap:8px;margin-bottom:10px"><button class="btn btn-cinza" data-exp="voltar" style="flex:1">&#8592; Voltar</button>' +
@@ -2887,6 +2902,7 @@ window.PedidoPDF = (function () {
       t.push(tile("analise", "Análise de vendas", "Vendas mês a mês de cada produto, por loja", ICO.grafico));
       t.push(tile("contagem", "Contagem de estoque", "Itens pedidos para contar e análise por loja", ICO.lista));
       if (ehMestre()) t.push(tile("erros", "Relatório de erros", "Tudo que deu erro: ERP, login, pedidos, app", ICO.lista));
+      if (ehMestre()) t.push(tile("expedicao", "Expedição", "Conferência, recebimento, contagem de estoque e validade", ICO.caminhao));   // 09/11: só o Marcelo (e o login Expedição)
     } else {
       var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
       t.push(tile("lj:lista", "Novo pedido", atual ? "Continuar: " + atual.nome : "Começar ou continuar um pedido", ICO.carrinho, "destaque"));
@@ -3719,6 +3735,7 @@ window.PedidoPDF = (function () {
   function irPara(acao) {
     if (acao === "bloq") { avisoBloqueio(); return; }
     if (acao === "erros") { abrirErrosErp(); return; }
+    if (acao === "expedicao") { EXP.aberto = null; abrirExpedicao(); return; }
     if (acao === "contagem") { abrirContagem(); return; }
     if (acao === "analise") { if (!dados) { toast("Aguarde a lista de estoque carregar"); return; } abrirAnalise(); return; }
     if (acao === "consulta" || acao === "compra") { tela = acao; $("busca").value = ""; desenharLista(); window.scrollTo(0, 0); return; }
@@ -4886,7 +4903,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.8";
+  var VERSAO_APP = "2026-11-09.9";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
