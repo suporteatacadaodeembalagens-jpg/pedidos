@@ -1679,6 +1679,7 @@ window.PedidoPDF = (function () {
         "#telaExp .exp-it-d small{display:block;color:var(--sub);font-size:12px}#telaExp .exp-it-d small.j{color:#9a5b00;font-weight:700}" +
         "#telaExp .exp-it-q{text-align:right;white-space:nowrap}#telaExp .exp-it-q b{font-size:22px}#telaExp .exp-it-q span{display:block;font-size:12px;color:var(--sub)}" +
         "#telaExp .exp-it-b{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}#telaExp .exp-it-b button{border:1px solid var(--linha);background:#fff;border-radius:8px;padding:6px 12px;font-weight:800;font-size:15px;color:var(--marrom)}#telaExp .exp-it-b button.lg{font-size:12.5px}" +
+        "#telaExp .exp-topo-col{flex-wrap:nowrap}#telaExp .exp-topo-col>div:nth-child(2){min-width:0}#telaExp .exp-topo-col span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#telaExp .exp-topo .exp-volta{font-size:22px;padding:4px 12px;line-height:1}" +
         "#telaExp .exp-it{cursor:pointer}#telaExp .exp-it-d small.ok{color:#1a7f45;font-weight:700}" +
         "#expModal{position:fixed;inset:0;z-index:5;background:rgba(30,15,15,.55);display:flex;align-items:flex-start;justify-content:center;padding:60px 12px 12px;overflow:auto}#expModal[hidden]{display:none}" +
         "#expModal .exp-modal-cx{background:#fff;border-radius:14px;padding:14px;width:100%;max-width:480px;border-top:5px solid var(--ouro);box-shadow:0 10px 30px rgba(0,0,0,.3)}" +
@@ -1723,6 +1724,14 @@ window.PedidoPDF = (function () {
         if (b && b.getAttribute("inputmode") === "none") { b.setAttribute("inputmode", "text"); b.blur(); setTimeout(function () { b.focus(); }, 30); }
       });
       t.addEventListener("focusout", function (e) { if (e.target && e.target.id === "expBip") e.target.setAttribute("inputmode", "none"); });
+      // 09/11: coletor que NÃO manda Enter no fim: 8+ dígitos chegando em rajada (< 0,35 s) no campo = leitura -> bipa sozinho
+      t.addEventListener("input", function (e) {
+        if (!e.target || e.target.id !== "expBip") return;
+        var b = e.target, v = String(b.value || ""), agora = Date.now();
+        if (v.length <= 1) b._ini = agora;
+        clearTimeout(b._tm);
+        if (/^\d{8,}$/.test(v) && agora - (b._ini || agora) < 350) b._tm = setTimeout(function () { if (b.value === v) { b.value = ""; bipar(v); } }, 120);
+      });
       t.addEventListener("keydown", function (e) {   // gatilho do coletor: código + Enter
         if (e.target && e.target.id === "expBip" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); var v = e.target.value; e.target.value = ""; bipar(v); }
         else if (e.target && e.target.id === "expMQ" && (e.key === "Enter" || e.keyCode === 13)) {   // bipou com a ficha aberta = outro produto
@@ -1895,8 +1904,7 @@ window.PedidoPDF = (function () {
     var a = EXP.aberto;
     if (!a.itens) { t.innerHTML = h + '<button class="btn btn-cinza" data-exp="voltar" style="width:100%;margin-bottom:8px">&#8592; Voltar</button><div class="carregando"><div class="giro"></div>Abrindo a conferência…</div></div>'; return; }
     if (!document.getElementById("expBip")) {
-      t.innerHTML = h + '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn btn-cinza" data-exp="voltar" style="flex:1">&#8592; Voltar</button>' +
-        '<button class="btn btn-cinza" data-exp="desfazer" style="flex:1">&#8630; Desfazer último</button></div><div id="expCab"></div>' +
+      t.innerHTML = h + '<div id="expCab"></div>' +
         '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="none" placeholder="Bipe o código (ou toque para digitar código, PLU ou nome)">' +
         '<button data-exp="digitar" title="Digitar o código ou o PLU">&#9000;</button><button data-exp="camera" title="Ler com a câmera">&#128247;</button></div>' +
         '<div id="expMsg" class="exp-msg">Bipe o produto: abre a ficha dele para lançar a quantidade. Também dá para tocar no produto da lista.</div><div id="expLista"></div><div id="expPe"></div></div>';
@@ -1912,8 +1920,8 @@ window.PedidoPDF = (function () {
         (r === "parcial" ? '<small class="j">Parcial: ' + esc(c.just) + "</small>" : r === "nao" ? '<small class="j">Não atendido: ' + esc(c.just) + "</small>" : r === "ok" ? '<small class="ok">Coletado</small>' : "") + "</div>" +
         '<div class="exp-it-q"><b>' + num(r === "nao" ? 0 : q) + '</b><span>de ' + num(it.qtd) + "</span></div></div>";
     });
-    document.getElementById("expCab").innerHTML = '<div style="margin-bottom:6px"><b style="font-size:17px">' + esc(a.loja) + "</b> · " + esc(a.nome) + (a.num ? '<span class="exp-tag">ERP ' + esc(a.num) + "</span>" : "") +
-      '<br><small style="color:var(--sub)">' + resp + " de " + a.itens.length + " itens respondidos" + (a.quem && a.quem.length ? " · conferindo: " + esc(a.quem.join(", ")) : "") + (EXP.fila.length || EXP.enviando ? " · enviando…" : "") + "</small></div>";
+    document.getElementById("expCab").innerHTML = '<div style="margin-bottom:6px">' + (a.num ? '<span class="exp-tag" style="margin-left:0">ERP ' + esc(a.num) + "</span> " : "") +
+      '<small style="color:var(--sub)">' + resp + " de " + a.itens.length + " itens respondidos" + (a.quem && a.quem.length ? " · conferindo: " + esc(a.quem.join(", ")) : "") + (EXP.fila.length || EXP.enviando ? " · enviando…" : "") + "</small></div>";
     document.getElementById("expLista").innerHTML = hl;
     document.getElementById("expPe").innerHTML = '<button class="btn ' + (resp === a.itens.length ? "btn-verde" : "btn-cinza") + '" data-exp="fecharconf" style="width:100%;margin-top:12px">' +
       (resp === a.itens.length ? "&#10004; Fechar conferência" : "Fechar conferência (faltam " + (a.itens.length - resp) + ")") + "</button>";
@@ -1940,7 +1948,11 @@ window.PedidoPDF = (function () {
     }
     h += '<div style="font-weight:800;color:var(--marrom);margin:2px 0 8px">Conferência · pedidos aprovados das lojas</div>';
     var a = EXP.aberto;
-    if (a) { desenharColeta(t, h); return; }
+    if (a) {   // 09/11 (Marcelo): conferência aberta = TELA À PARTE (sem as abas da Expedição), para focar na coleta
+      var hc = '<div class="exp-topo exp-topo-col"><button data-exp="voltar" class="exp-volta" title="Voltar">&#8592;</button><div><b>Conferência</b><span>' + esc(a.loja || "") + (a.nome ? " · " + esc(a.nome) : "") + "</span></div>" +
+        '<div class="exp-btns"><button data-exp="desfazer">&#8630; Desfazer</button></div></div><div class="exp-corpo">';
+      desenharColeta(t, hc); return;
+    }
     if (false) {
       h += '<div class="nao-imprime" style="display:flex;gap:8px;margin-bottom:10px"><button class="btn btn-cinza" data-exp="voltar" style="flex:1">&#8592; Voltar</button>' +
         (a.itens ? '<button class="btn btn-cinza" data-exp="imprimir" style="flex:1">&#128424; Imprimir</button>' : "") + "</div>";
@@ -1976,6 +1988,21 @@ window.PedidoPDF = (function () {
     });
     t.innerHTML = h + "</div>";
   }
+  // 09/11: o gatilho do coletor "digita" mesmo se o campo perdeu o foco: guarda as teclas e bipa no Enter (ou na pausa)
+  var expBuf = { s: "", t: 0, tm: null };
+  document.addEventListener("keydown", function (e) {
+    var tel = document.getElementById("telaExp");
+    if (!tel || tel.hidden || !EXP.aberto || !EXP.aberto.itens || modalAberto()) return;
+    var ae = document.activeElement; if (ae && (ae.id === "expBip" || ae.id === "expMQ" || ae.id === "expMJ" || ae.tagName === "SELECT")) return;
+    var agora = Date.now();
+    if (e.key === "Enter" || e.keyCode === 13) { if (expBuf.s.length >= 4) { e.preventDefault(); var v = expBuf.s; expBuf.s = ""; bipar(v); focoBip(); } return; }
+    if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (agora - expBuf.t > 300) expBuf.s = "";
+      expBuf.s += e.key; expBuf.t = agora; e.preventDefault();
+      clearTimeout(expBuf.tm); expBuf.tm = setTimeout(function () { if (/^\d{8,}$/.test(expBuf.s)) { var v = expBuf.s; expBuf.s = ""; bipar(v); focoBip(); } }, 200);
+    }
+  }, true);
+  window.addEventListener("focus", function () { setTimeout(function () { if (EXP.aberto && EXP.aberto.itens) focoBip(); }, 50); });
   function chamar(fn, args, ok, falha) {   // servidor (ou modo demonstração)
     if (!EM_APPS_SCRIPT) { var res; try { res = demo[fn].apply(null, args); } catch (e) { (falha || function (x) { toast(String(x && x.message || x)); })(e); return; } ok(res); return; }
     var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { if (erroLogin(e)) return; (falha || function (x) { toast(String(x && x.message || x)); })(e); });
@@ -5141,7 +5168,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.15";
+  var VERSAO_APP = "2026-11-09.17";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
