@@ -2529,7 +2529,7 @@ window.PedidoPDF = (function () {
       ETAPAS_COR.map(function (e) { return '<span style="display:inline-flex;align-items:center;gap:5px"><i style="width:14px;height:14px;border-radius:4px;background:' + e.cor + ';display:inline-block"></i>' + e.nome + "</span>"; }).join("") + "</div>";
   }
   function botaoLiberar(x) {
-    if (x.status === "pendente" || x.conf || nivelNum() < 4) return "";   // só a Diretoria libera
+    if (x.status === "pendente" || x.conf || (nivelNum() < 4 && !ehMestre())) return "";   // só a Diretoria e o Marcelo liberam
     return x.lib ? '<button class="ver" style="background:#fff1df;color:#b35c00;font-size:12px" data-liberar="' + esc(x.id) + '" data-lib="0">&#10004; Liberado<br><small>desfazer</small></button>'
       : '<button class="ver" style="background:#e67700;color:#fff;font-size:12px" data-liberar="' + esc(x.id) + '" data-lib="1">Liberar p/ expedição</button>';
   }
@@ -5422,7 +5422,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.26";
+  var VERSAO_APP = "2026-11-09.27";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
