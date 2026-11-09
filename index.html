@@ -1095,14 +1095,33 @@ window.PedidoPDF = (function () {
   // ---------------- carregar dados ----------------
   // Estoque e vendas da última semana por loja, direto no cartão do produto (o servidor manda só o que o nível pode ver)
   var RES = null;
-  function carregarResumoLojas() {
-    chamar("lojasResumo", [], function (r) {
-      if (!r || !r.d) return;
-      r.idx = {}; (r.lojas || []).forEach(function (c, i) { r.idx[c] = i; });
-      RES = r;
-      if (dados) desenharLista();
-    }, function () {});
+  /* 09/11 (Marcelo): "Vendas 7 dias" demorava a aparecer -> mostra NA HORA a última cópia guardada no aparelho
+     e atualiza por trás; quando chega, redesenha a tela aberta (lista, Consulta ou Compra), não só a lista. */
+  function chaveRes() { return "resCache_" + String(sessao && sessao.email || "").toLowerCase() + "_" + String(sessao && sessao.perfil || ""); }
+  function usarRes(r) {
+    r.idx = {}; (r.lojas || []).forEach(function (c, i) { r.idx[c] = i; });
+    RES = r;
+    try {
+      if (dados && tela === "app") desenharLista();
+      else if (tela === "consulta") resultadosConsulta();
+      else if (tela === "compra") atualizarCmp();
+      else if (dados) desenharLista();
+    } catch (e) {}
   }
+  function carregarResumoLojas() {
+    if (!RES && sessao) { var c = LS.get(chaveRes(), null); if (c && c.d) usarRes(c); }
+    if (carregarResumoLojas.indo) return; carregarResumoLojas.indo = true;
+    chamar("lojasResumo", [], function (r) {
+      carregarResumoLojas.indo = false;
+      if (!r || !r.d) return;
+      carregarResumoLojas.quando = Date.now();
+      usarRes(r);
+      try { localStorage.removeItem(chaveRes()); var cp = {}; for (var k in r) if (k !== "idx") cp[k] = r[k]; LS.set(chaveRes(), cp); } catch (e) {}
+    }, function () { carregarResumoLojas.indo = false; });
+  }
+  document.addEventListener("visibilitychange", function () {   // voltou para o app depois de 10 min: atualiza as vendas por trás
+    if (document.visibilityState === "visible" && sessao && EM_APPS_SCRIPT && Date.now() - (carregarResumoLojas.quando || 0) > 600000) carregarResumoLojas();
+  });
   function codLoja(nome) { var m = String(nome || "").match(/(\d{1,3})/); return m ? ("000" + m[1]).slice(-3) : ""; }
   /** Bloco "lojas" do cartão. so = código de UMA loja (conferência do pedido: só a loja do pedido). */
   /** Quantidade na EMBALAGEM DE COMPRA, com quebrado (ex.: 360 UN em CX c/ 240 = "1,5"). Sem embalagem: em UN. */
@@ -3774,7 +3793,9 @@ window.PedidoPDF = (function () {
     var emb = it.t ? it.t + (it.q > 1 ? " c/ " + num(it.q) : "") : "—";
     // 29/10: PLU, embalagem e setor já aparecem embaixo do nome do produto -> não repete na ficha
     var fic = [["EAN", it.b || "—"], ["Marca", it.m || "—"], ["Fornecedor", it.f || "—"]];
-    fic.push(["Preço varejo", pr && pr[0] ? reais(pr[0]) : tabP ? "—" : "…"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : tabP ? "—" : "…"]);
+    // 09/11 (Marcelo): loja vê o preço da PRÓPRIA loja; Diretoria/Administração veem o MAIOR preço e podem abrir o preço por loja
+    fic.push(m && pr && pr[0] ? ["Preço varejo", reais(pr[0]) + ' <small style="color:#667">(maior)</small> <button type="button" class="btn-link" data-prlojas="' + esc(it.p) + '" style="border:0;background:none;color:#1565c0;font-weight:600;padding:0 2px;cursor:pointer">' + (cons.prAberto === it.p ? "fechar ▴" : "ver por loja ▾") + "</button>" + htmlPrecoLojas(it.p), true]
+      : ["Preço varejo", pr && pr[0] ? reais(pr[0]) : tabP ? "—" : "…"], ["Preço atacado", pr && pr[1] ? reais(pr[1]) : tabP ? "—" : "…"]);
     // 04/11 (Marcelo): Diretoria/Administração veem o custo do CD; a Gerência vê só o custo da PRÓPRIA loja
     if (m) fic.push(["Custo CD", txtCusto(it.fora ? it.cu : (pr ? pr[2] : 0), it.t, it.q)]);   // it.c da lista é a quantidade de CX, não custo
     else if (nivelNum() >= 2) fic.push(["Custo loja", cons.custoLoja ? txtCusto(cons.custoLoja[it.p], it.t, it.q) : "…"]);
@@ -3797,8 +3818,27 @@ window.PedidoPDF = (function () {
     return '<div class="item cons' + (!m && pedido[it.p] ? " com-pedido" : "") + selCls(it.p) + '" data-plu="' + esc(it.p) + '"' + (fl ? ' style="border:2px solid #c62828;background:#fdecec"' : "") + '>' +
       (fl ? '<div style="background:#c62828;color:#fff;font-weight:800;font-size:12px;letter-spacing:.5px;border-radius:6px;padding:4px 8px;margin:0 0 6px;display:inline-block">&#9888; PRODUTO FORA DE LINHA</div>' : "") +
       '<div class="desc"' + (fl ? ' style="color:#b71c1c"' : "") + '>' + miniFoto(it.p) + (it.n ? '<span class="tag-novo">NOVO</span>' : "") + esc(it.d) + "</div>" +
-      subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>"; }).join("") + "</dl>" +
+      subItem(it.p, it.t, it.q, it.dep) + est + '<dl class="ficha">' + fic.map(function (l) { return "<dt>" + l[0] + "</dt><dd>" + (l[2] ? l[1] : esc(l[1])) + "</dd>"; }).join("") + "</dl>" +
       '<div class="acao-cons">' + acao + "</div></div>";
+  }
+  /** 09/11: tabela Loja | Preço varejo (só Diretoria/Administração), aberta pelo "ver por loja". */
+  function htmlPrecoLojas(plu) {
+    if (cons.prAberto !== plu) return "";
+    var d = (cons.prLojas || {})[plu];
+    if (!d) return '<div class="carregando" style="margin-top:6px"><div class="giro"></div>Buscando preços por loja…</div>';
+    if (d.erro) return '<div style="margin-top:6px;color:#b00">' + esc(d.erro) + "</div>";
+    if (!d.lojas || !d.lojas.length) return '<div style="margin-top:6px;color:#667">Sem preço nas lojas.</div>';
+    return '<table style="margin-top:6px;border-collapse:collapse;font-size:13px;width:100%">' + d.lojas.map(function (l) {
+      return '<tr><td style="padding:3px 6px;border-bottom:1px solid #e3e8ef">' + esc(l.nome || l.cod) + '</td><td style="padding:3px 6px;border-bottom:1px solid #e3e8ef;text-align:right;font-weight:600">' + (l.preco > 0 ? reais(l.preco) : "—") + "</td></tr>";
+    }).join("") + "</table>";
+  }
+  function precosPorLojaToggle(plu) {
+    cons.prLojas = cons.prLojas || {};
+    if (cons.prAberto === plu) { cons.prAberto = null; resultadosConsulta(); return; }
+    cons.prAberto = plu; resultadosConsulta();
+    if (cons.prLojas[plu] && !cons.prLojas[plu].erro) return;
+    chamar("precosPorLoja", [plu], function (r) { cons.prLojas[plu] = r || { lojas: [] }; if (tela === "consulta") resultadosConsulta(); },
+      function (e) { cons.prLojas[plu] = { erro: String(e && e.message || e) }; if (tela === "consulta") resultadosConsulta(); });
   }
   function consultaParaPedido(plu) {   // loja sem pedido aberto: escolhe/começa um pedido e o produto entra nele
     pendenteConsulta = plu; tela = "app"; $("busca").value = "";
@@ -4118,8 +4158,8 @@ window.PedidoPDF = (function () {
       '<div class="rodape-item"><div class="stepper"><button class="seta menos" data-cq="-1" aria-label="Diminuir">&#9660;</button><div class="qtd" data-cq="ed"><b>' + q + "</b><small>" + esc(un) +
       '</small></div><button class="seta mais" data-cq="1" aria-label="Aumentar">&#9650;</button></div></div>' + precos +
       // 09/11 (Marcelo): no pedido de compra também 'Pedir contagem de estoque' e 'Análise de vendas' (abre embaixo do produto)
-      (detalhe ? "" : '<div class="linha-acao" style="margin-top:10px"><button class="btn btn-cont" type="button" data-cmpcont="' + esc(x.p) + '">Pedir contagem de estoque</button>' +
-        '<button class="btn btn-ana" type="button" data-cmpana="' + esc(x.p) + '" data-anad="' + esc(x.d) + '">&#128200; Análise de vendas</button></div>') + "</div>" +
+      (detalhe ? "" : '<div class="linha-acao" style="margin-top:10px;gap:12px"><button class="btn btn-cont" type="button" style="background:var(--marrom);color:#fff;border:2px solid var(--ouro)" data-cmpcont="' + esc(x.p) + '">Pedir contagem de estoque</button>' +
+        '<button class="btn btn-ana" type="button" style="background:#e6eef8;color:#1d4e89;border:1px solid #b8cff5" data-cmpana="' + esc(x.p) + '" data-anad="' + esc(x.d) + '">&#128200; Análise de vendas</button></div>') + "</div>" +
       (detalhe ? "" : '<div class="ana-inline" id="anaIn_' + esc(x.p) + '" hidden style="margin:-4px 0 12px;padding:12px;border:2px solid #efe2cf;border-radius:12px;background:#fffaf2"></div>');
   }
   document.addEventListener("click", function (e) {   // 09/11: botões do produto no pedido de compra
@@ -4426,6 +4466,7 @@ window.PedidoPDF = (function () {
       var cp = e.target.closest("[data-cped]"); if (cp) { consultaParaPedido(cp.getAttribute("data-cped")); return; }
       var fv = e.target.closest("[data-fav]"); if (fv) { favoritoClique(fv.getAttribute("data-fav")); return; }
       var af = e.target.closest("[data-anafechar]"); if (af) { var bf = $("anaIn_" + af.getAttribute("data-anafechar")); if (bf) { bf.hidden = true; bf.innerHTML = ""; try { bf.parentElement.scrollIntoView({ block: "nearest" }); } catch (x) {} } return; }
+      var pl = e.target.closest("[data-prlojas]"); if (pl) { precosPorLojaToggle(pl.getAttribute("data-prlojas")); return; }
       var ac = e.target.closest("[data-anacons]"); if (ac) { anaInline(ac.getAttribute("data-anacons"), ac.getAttribute("data-anad")); return; }
       if (e.target.closest("[data-anabloq]")) { avisoBloqueio(); return; }
       var ctb = e.target.closest("[data-cont]"); if (ctb) { contagemClique(ctb.getAttribute("data-cont")); return; }
@@ -4727,7 +4768,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.4";
+  var VERSAO_APP = "2026-11-09.7";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
