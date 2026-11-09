@@ -331,6 +331,10 @@
      (sombra escura no texto para dar leitura no amarelo). Publicado de novo (2): deploy anterior do GitHub travou. */
   .grupo.marca{background:var(--ouro);color:#fff;font-size:21px;line-height:1.15;font-weight:900;letter-spacing:.8px;padding:6px 12px;margin:16px 0 8px;text-align:center;
     border-radius:8px;text-shadow:0 1px 2px rgba(63,31,30,.75),0 0 1px rgba(63,31,30,.9)}
+  .conf-res{margin-top:6px;font-size:13px;color:var(--texto);background:#fff8ee;border:1px solid #f0d9b5;border-radius:8px;padding:6px 8px}
+  .conf-res.ok{background:#eef8f0;border-color:#cde9d3;color:#1a7f45;font-weight:700}
+  .conf-res summary{cursor:pointer}.conf-res .cr-nao{color:#b42226}.conf-res .cr-parc{color:#b56200}
+  .conf-res table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px;background:#fff}.conf-res th{text-align:left;background:#f3ebdd;padding:4px 6px}.conf-res td{padding:4px 6px;border-top:1px solid #f0e8dc;vertical-align:top}
   .item{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;
     box-shadow:0 1px 2px rgba(63,31,30,.08);border:2px solid transparent}
   .item.com-pedido{background:#eaf7ea;border-color:#b9dfb9}   /* com quantidade: verde bem claro */
@@ -2271,6 +2275,18 @@ window.PedidoPDF = (function () {
   }
   /** 03/11: pedido já FATURADO no ERP (a revisão do robô achou a Nota Fiscal de transferência). */
   function notaDe(x) { return x && x.fat && x.fat.nf ? x.fat : (x && x.erp && x.erp.nf ? { nf: x.erp.nf, data: x.erp.nfData } : null); }
+  /** 09/11 (Marcelo): relatório da CONFERÊNCIA (Expedição) no cartão do pedido aprovado/faturado: não atendidos e parciais. */
+  function htmlConfResumo(x) {
+    var c = x && x.conf; if (!c) return "";
+    var cab = "Conferência" + (c.por ? " por " + esc(c.por) : "") + (c.em ? " em " + esc(c.em) : "");
+    if (!c.itens || !c.itens.length) return '<div class="conf-res ok">&#10004; ' + cab + ": tudo atendido</div>";
+    return '<details class="conf-res"><summary>' + cab + ": " + (c.nao ? '<b class="cr-nao">' + c.nao + " não atendido" + (c.nao > 1 ? "s" : "") + "</b>" : "") +
+      (c.nao && c.parc ? " · " : "") + (c.parc ? '<b class="cr-parc">' + c.parc + " parcia" + (c.parc > 1 ? "is" : "l") + "</b>" : "") + ' <small>(ver)</small></summary>' +
+      '<table><tr><th>Produto</th><th>Pedido</th><th>Atendido</th><th>Motivo</th></tr>' + c.itens.map(function (i) {
+        return '<tr class="' + (i.st === "nao" ? "cr-nao" : "cr-parc") + '"><td>' + esc(i.d || "PLU " + i.p) + "<br><small>PLU " + esc(i.p) + "</small></td><td>" + num(i.pedido) + " " + esc(i.t || "") +
+          "</td><td><b>" + num(i.st === "nao" ? 0 : i.q) + "</b></td><td>" + (i.st === "nao" ? "Não atendido" : "Parcial") + (i.just ? ": " + esc(i.just) : "") + "</td></tr>";
+      }).join("") + "</table></details>";
+  }
   function chipFat(x) { var f = notaDe(x); return f ? '<span class="chip fat">Faturado · NF nº ' + esc(f.nf) + (f.data ? " em " + esc(f.data) : "") + "</span>" : ""; }
   var ERP_TXT = { fila: "ERP: na fila do robô", digitando: "ERP: robô digitando…", digitado: "ERP: digitado", erro: "ERP: erro", verificar: "ERP: conferir" };
   function chipErp(e) {
@@ -2446,6 +2462,7 @@ window.PedidoPDF = (function () {
         "<br>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · " + (x.direto ? "feito direto no ERP" : x.feitoPor ? "feito pelo manager " + esc(x.feitoPor) : esc(x.email)) + "<br>" + chipStatus(x) +
         (typeof x.valor === "number" ? '<br><b style="color:var(--texto);font-size:14px">Valor total: ' + reais(x.valor) + "</b> <small>(" + (x.direto && !x.n ? "valor no ERP" : "custo CD") + (x.semCusto ? " · " + x.semCusto + " sem custo" : "") + ")</small>" : "") +   // 03/11
         (x.fat && x.fat.valor ? '<br><small>Valor da NF: <b>' + reais(x.fat.valor) + "</b></small>" : "") +
+        htmlConfResumo(x) +   // 09/11: relatório da conferência (não atendidos / parciais)
         "</span></div>" +
         // 09/11 (Marcelo): pedido aguardando aprovação -> botão Excluir ao lado do Abrir (Administração e Diretoria, com senha)
         (x.status === "pendente" && ehMgrLogin() ? '<div style="display:flex;flex-direction:column;gap:8px"><button class="ver" data-abrir="' + esc(x.id) + '">Abrir</button>' +
@@ -5124,7 +5141,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.14";
+  var VERSAO_APP = "2026-11-09.15";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
