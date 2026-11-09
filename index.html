@@ -1632,11 +1632,12 @@ window.PedidoPDF = (function () {
   // Expedição e, no início, para o Marcelo (mestre), que fecha e volta ao app.
   var MODS_EXP = [["conferencia", "Conferência"], ["recebimento", "Recebimento"], ["contagem", "Contagem de estoque"], ["validade", "Validade"]];
   function expUsuario() { return sessaoExp || (sessao && ehMestre() ? sessao : null); }
-  function expChamar(fn, args, ok) {
+  function expChamar(fn, args, ok, falha) {
     if (!expUsuario()) return;
     var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
       var m = String(e && e.message || e);
       if (m.indexOf("LOGIN:") >= 0) { if (sessaoExp) sairExpedicao(m.replace(/^.*LOGIN:\s*/, "")); else { fecharExpedicao(); erroLogin(e); } return; }
+      if (falha) { falha(e); return; }
       toast(m);
       if (fn === "pedidosExpedicao") { EXP.lista = EXP.lista || []; desenharExpedicao(); }
     });
@@ -1664,6 +1665,16 @@ window.PedidoPDF = (function () {
         "#telaExp table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;font-size:14px}" +
         "#telaExp th{background:#f3ebdd;text-align:left;padding:7px 8px;font-size:12.5px}#telaExp td{padding:7px 8px;border-top:1px solid #f0e8dc;vertical-align:top}" +
         "#telaExp td.q{text-align:right;font-weight:800;white-space:nowrap}#telaExp tr.setor td{background:#faf6ee;font-weight:800;color:var(--marrom)}" +
+        ".toast{z-index:97}#telaLeitor{z-index:96}" +
+        "#telaExp .exp-bip{display:flex;gap:6px;position:sticky;top:62px;z-index:1;background:var(--fundo);padding:4px 0}#telaExp .exp-bip input{font-size:17px;padding:11px;border-radius:10px;border:2px solid var(--ouro);min-width:0}" +
+        "#telaExp #expBip{flex:1}#telaExp #expQtd{width:64px;text-align:center}#telaExp .exp-bip button{border:0;border-radius:10px;background:var(--marrom);color:#fff;font-size:18px;width:46px}" +
+        "#telaExp .exp-msg{margin:6px 0 10px;padding:9px 11px;border-radius:10px;background:#fff;font-weight:700;font-size:14px}#telaExp .exp-msg.ok{background:#dff3e3;color:#1a7f45}#telaExp .exp-msg.aviso{background:#fff1d6;color:#9a5b00}#telaExp .exp-msg.erro{background:#fde2e1;color:#b42226}" +
+        "#telaExp .exp-setor{margin:12px 0 4px;font-weight:800;color:var(--marrom);font-size:13px}" +
+        "#telaExp .exp-it{display:grid;grid-template-columns:1fr auto;gap:6px 10px;background:#fff;border-radius:10px;padding:9px 10px;margin-bottom:6px;border-left:6px solid #d8cfc2}" +
+        "#telaExp .exp-it.ok{border-left-color:#1a7f45;background:#f1faf3}#telaExp .exp-it.falta{border-left-color:#e0a100}#telaExp .exp-it.mais{border-left-color:#b42226;background:#fff4f3}#telaExp .exp-it.parc{border-left-color:#e07b00;background:#fff8ee}#telaExp .exp-it.nao{border-left-color:#7a6a62;background:#f1eeea;opacity:.85}#telaExp .exp-it.dest{outline:3px solid var(--ouro)}" +
+        "#telaExp .exp-it-d small{display:block;color:var(--sub);font-size:12px}#telaExp .exp-it-d small.j{color:#9a5b00;font-weight:700}" +
+        "#telaExp .exp-it-q{text-align:right;white-space:nowrap}#telaExp .exp-it-q b{font-size:22px}#telaExp .exp-it-q span{display:block;font-size:12px;color:var(--sub)}" +
+        "#telaExp .exp-it-b{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}#telaExp .exp-it-b button{border:1px solid var(--linha);background:#fff;border-radius:8px;padding:6px 12px;font-weight:800;font-size:15px;color:var(--marrom)}#telaExp .exp-it-b button.lg{font-size:12.5px}" +
         "@media print{body>*:not(#telaExp){display:none!important}#telaExp{position:static;overflow:visible}#telaExp .exp-topo,#telaExp .exp-mods,#telaExp .nao-imprime{display:none!important}}";
       document.head.appendChild(st);
     }
@@ -1675,12 +1686,24 @@ window.PedidoPDF = (function () {
         var k = a.getAttribute("data-exp"), v = a.getAttribute("data-v");
         if (k === "sair") sairExpedicao();
         else if (k === "fechar") fecharExpedicao();
+        else if (k === "cmais" || k === "cmenos") somarColeta(v, k === "cmais" ? 1 : -1, true);
+        else if (k === "parcial" || k === "nao") marcarColeta(v, k);
+        else if (k === "limpar") marcarColeta(v, "");
+        else if (k === "desfazer") { var u = EXP.ultimos.pop(); if (u) somarColeta(u.p, -u.n, false); else msgColeta("Nada para desfazer.", ""); }
+        else if (k === "fecharconf") fecharConferencia();
+        else if (k === "digitar") { var b = document.getElementById("expBip"); if (b) { b.setAttribute("inputmode", b.getAttribute("inputmode") === "none" ? "numeric" : "none"); b.blur(); setTimeout(function () { b.focus(); }, 50); } return; }
+        else if (k === "camera") { abrirLeitor(function (cod) { setTimeout(function () { bipar(cod); focoBip(); }, 50); }); return; }
         else if (k === "mod") { EXP.mod = v; EXP.aberto = null; desenharExpedicao(); if (v === "conferencia" && !EXP.lista) carregarExpedicao(); }
         else if (k === "atualizar") { EXP.lista = null; if (EXP.aberto) abrirPedidoExp(EXP.aberto.id); carregarExpedicao(); }
         else if (k === "ver") { EXP.ver = v; desenharExpedicao(); }
         else if (k === "abrir") abrirPedidoExp(v);
-        else if (k === "voltar") { EXP.aberto = null; desenharExpedicao(); }
+        else if (k === "voltar") { voltarColeta(); return; }
         else if (k === "imprimir") window.print();
+        if (EXP.aberto && EXP.aberto.itens) setTimeout(focoBip, 0);
+      });
+      t.addEventListener("keydown", function (e) {   // gatilho do coletor: código + Enter
+        if (e.target && e.target.id === "expBip" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); var v = e.target.value; e.target.value = ""; bipar(v); }
+        else if (e.target && e.target.id === "expQtd" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); focoBip(); }
       });
       t.addEventListener("change", function (e) { if (e.target.id === "expLoja") { EXP.loja = e.target.value; desenharExpedicao(); } });
     }
@@ -1692,8 +1715,151 @@ window.PedidoPDF = (function () {
     expChamar("pedidosExpedicao", [], function (r) { EXP.lista = (r && r.pedidos) || []; desenharExpedicao(); });
   }
   function abrirPedidoExp(id) {
-    EXP.aberto = { id: id, carregando: true }; desenharExpedicao();
-    expChamar("pedidoExpedicao", [id], function (r) { if (EXP.aberto && EXP.aberto.id === id) { EXP.aberto = r; desenharExpedicao(); window.scrollTo(0, 0); } });
+    clearInterval(EXP.tPoll);
+    EXP.aberto = { id: id, carregando: true }; EXP.fila = []; EXP.ultimos = []; EXP.enviando = null; EXP.depois = null; EXP.destaque = null; desenharExpedicao();
+    expChamar("confPedido", [id], function (r) { if (EXP.aberto && EXP.aberto.id === id) { EXP.aberto = r; r.conf = r.conf || {}; desenharExpedicao(); window.scrollTo(0, 0); } },
+      function (e) { if (EXP.aberto && EXP.aberto.id === id) { EXP.aberto = null; desenharExpedicao(); } toast(String(e && e.message || e)); });
+    EXP.tPoll = setInterval(function () {   // o que os outros conferentes bipam aparece aqui
+      var a = EXP.aberto; if (!a || a.id !== id) { clearInterval(EXP.tPoll); return; }
+      if (!a.itens || EXP.fila.length || EXP.enviando || document.hidden) return;
+      expChamar("confPedido", [id], function (r) { var b = EXP.aberto; if (b && b.id === id && b.itens && !EXP.fila.length && !EXP.enviando && (r.rev || 0) !== (b.rev || 0)) aplicarEstadoConf(r); }, function () {});
+    }, 6000);
+  }
+  /* ===== 09/11 (Marcelo): CONFERÊNCIA COM COLETOR =====
+     O gatilho do coletor Android "digita" o código + Enter no campo #expBip. Cada leitura soma 1 CX/FD
+     (ou a quantidade do campo ao lado). Vários conferentes no mesmo pedido: cada leitura vai como SOMA
+     para o servidor. Cada item precisa de resposta (coletado, parcial com justificativa ou não atendido)
+     para liberar o "Fechar conferência". */
+  var expAudio = null;
+  function expSom(f, ms) {
+    try { expAudio = expAudio || new (window.AudioContext || window.webkitAudioContext)();
+      var o = expAudio.createOscillator(), g = expAudio.createGain(); o.frequency.value = f; o.connect(g); g.connect(expAudio.destination);
+      g.gain.value = 0.18; o.start(); o.stop(expAudio.currentTime + ms / 1000); } catch (e) {}
+  }
+  function respConf(it, c) {
+    c = c || {};
+    if (c.st === "nao") return "nao";
+    if (c.st === "parcial" && c.just) return "parcial";
+    return Number(c.q || 0) === Number(it.qtd) ? "ok" : "";
+  }
+  function itemColeta(p) { var a = EXP.aberto; return a && a.itens ? a.itens.filter(function (x) { return x.p === p; })[0] : null; }
+  function focoBip() { var b = document.getElementById("expBip"); if (b && document.activeElement !== document.getElementById("expQtd")) try { b.focus({ preventScroll: true }); } catch (e) { b.focus(); } }
+  function msgColeta(txt, tipo) { var m = document.getElementById("expMsg"); if (m) { m.className = "exp-msg " + (tipo || ""); m.textContent = txt; } }
+  function bipar(cod) {
+    var a = EXP.aberto; if (!a || !a.itens) return;
+    cod = String(cod || "").trim(); if (!cod) return;
+    var dig = cod.replace(/\D/g, ""), p = null;
+    if (dig) p = (a.eans || {})[dig.replace(/^0+/, "")] || null;
+    if (!p && dig && dig.length <= 6) {
+      var p6 = ("000000" + dig).slice(-6);
+      a.itens.forEach(function (it) { if (("000000" + String(it.p).replace(/\D/g, "")).slice(-6) === p6) p = it.p; });
+    }
+    if (!p) { expSom(220, 450); try { navigator.vibrate && navigator.vibrate(300); } catch (e) {} msgColeta("✕ Código " + cod + " NÃO está neste pedido", "erro"); return; }
+    var qi = document.getElementById("expQtd"), n = Math.max(1, Math.round(Number(qi && qi.value) || 1)); if (qi) qi.value = 1;
+    somarColeta(p, n, true);
+  }
+  function somarColeta(p, n, leitura) {
+    var a = EXP.aberto, it = itemColeta(p); if (!it) return;
+    var c = a.conf[p] || (a.conf[p] = { q: 0, st: "", just: "" });
+    c.q = Math.max(0, (Number(c.q) || 0) + n);
+    EXP.fila.push({ p: p, d: n }); if (leitura) EXP.ultimos.push({ p: p, n: n });
+    var un = (it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "");
+    if (c.q > it.qtd) { expSom(600, 260); msgColeta("⚠ A MAIS: " + (it.d || it.p) + " → " + num(c.q) + " de " + num(it.qtd) + " " + un, "aviso"); }
+    else if (n > 0) { expSom(c.q === it.qtd ? 1500 : 1100, 90); msgColeta((c.q === it.qtd ? "✔ COMPLETO: " : "+" + num(n) + " ") + (it.d || it.p) + " → " + num(c.q) + " de " + num(it.qtd) + " " + un, c.q === it.qtd ? "ok" : ""); }
+    else msgColeta("↶ " + (it.d || it.p) + " → " + num(c.q) + " de " + num(it.qtd), "");
+    EXP.destaque = p; desenharExpedicao(); agendarEnvio();
+  }
+  function marcarColeta(p, st) {
+    var a = EXP.aberto, it = itemColeta(p); if (!it) return;
+    var c = a.conf[p] || (a.conf[p] = { q: 0, st: "", just: "" }), just = "";
+    if (st === "parcial") {
+      if (Number(c.q || 0) === it.qtd) { msgColeta("A quantidade já bate com o pedido: não precisa de parcial.", "aviso"); return; }
+      just = window.prompt("Coletado " + num(c.q || 0) + " de " + num(it.qtd) + ". Justificativa da quantidade diferente:", c.st === "parcial" ? c.just : "");
+      if (just == null) return; just = just.trim(); if (!just) { msgColeta("A justificativa é obrigatória.", "erro"); return; }
+    } else if (st === "nao") {
+      just = window.prompt("Não atendido: não encontrado ou sem estoque? (escreva o motivo)", "Sem estoque");
+      if (just == null) return; just = just.trim() || "Não encontrado";
+    }
+    c.st = st; c.just = just;
+    EXP.fila.push({ p: p, st: st, just: just }); EXP.destaque = p; desenharExpedicao(); agendarEnvio();
+  }
+  function agendarEnvio() { clearTimeout(EXP.tEnvio); EXP.tEnvio = setTimeout(function () { enviarColeta(); }, 700); }
+  function enviarColeta(cb) {
+    var a = EXP.aberto; if (cb) EXP.depois = cb;
+    if (!a || EXP.enviando) return;
+    if (!EXP.fila.length) { var d0 = EXP.depois; EXP.depois = null; if (d0) d0(); return; }
+    var ops = EXP.fila.splice(0, 400), id = a.id; EXP.enviando = ops;
+    expChamar("confRegistrar", [id, ops], function (r) {
+      EXP.enviando = null;
+      if (EXP.aberto && EXP.aberto.id === id && r) aplicarEstadoConf(r);
+      if (EXP.fila.length) enviarColeta(); else { var d = EXP.depois; EXP.depois = null; if (d) d(); }
+    }, function (e) {
+      EXP.enviando = null; var m = String(e && e.message || e);
+      if (/fechada/i.test(m)) { EXP.fila = []; EXP.depois = null; msgColeta(m, "erro"); return; }
+      EXP.fila = ops.concat(EXP.fila); msgColeta("Sem conexão: as leituras ficam guardadas e vão de novo sozinhas.", "erro");
+      setTimeout(function () { enviarColeta(); }, 4000);
+    });
+  }
+  /** Estado do servidor + o que ainda não foi enviado deste aparelho. */
+  function aplicarEstadoConf(r) {
+    var a = EXP.aberto; if (!a) return;
+    a.conf = r.conf || {}; a.quem = r.quem || []; a.rev = r.rev || 0;
+    EXP.fila.forEach(function (o) {
+      var c = a.conf[o.p] || (a.conf[o.p] = { q: 0, st: "", just: "" });
+      if (o.d != null) c.q = Math.max(0, (Number(c.q) || 0) + o.d);
+      if (o.st != null) { c.st = o.st; c.just = o.just || ""; }
+    });
+    desenharExpedicao();
+  }
+  function fecharConferencia() {
+    var a = EXP.aberto; if (!a || !a.itens) return;
+    var falta = a.itens.filter(function (it) { return !respConf(it, a.conf[it.p]); }).length;
+    if (falta) { msgColeta("Ainda falta responder " + falta + (falta === 1 ? " item." : " itens."), "erro"); return; }
+    var dif = a.itens.filter(function (it) { var c = a.conf[it.p] || {}; return respConf(it, c) !== "ok"; }).length;
+    if (!window.confirm("Fechar a conferência de " + a.loja + "?" + (dif ? "\n" + dif + " item(ns) com quantidade diferente ou não atendidos: o pedido será ajustado no ERP." : "\nTudo coletado conforme o pedido."))) return;
+    msgColeta("Enviando…", "");
+    enviarColeta(function () {
+      expChamar("confFechar", [a.id], function () {
+        clearInterval(EXP.tPoll); EXP.aberto = null; EXP.lista = null; desenharExpedicao(); carregarExpedicao();
+        expSom(1500, 120); setTimeout(function () { expSom(1800, 160); }, 140);
+      }, function (e) { msgColeta(String(e && e.message || e), "erro"); });
+    });
+  }
+  function voltarColeta() {
+    msgColeta("Enviando as leituras…", "");
+    enviarColeta(function () { clearInterval(EXP.tPoll); EXP.aberto = null; desenharExpedicao(); carregarExpedicao(); });
+  }
+  function desenharColeta(t, h) {
+    var a = EXP.aberto;
+    if (!a.itens) { t.innerHTML = h + '<button class="btn btn-cinza" data-exp="voltar" style="width:100%;margin-bottom:8px">&#8592; Voltar</button><div class="carregando"><div class="giro"></div>Abrindo a conferência…</div></div>'; return; }
+    if (!document.getElementById("expBip")) {
+      t.innerHTML = h + '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn btn-cinza" data-exp="voltar" style="flex:1">&#8592; Voltar</button>' +
+        '<button class="btn btn-cinza" data-exp="desfazer" style="flex:1">&#8630; Desfazer última leitura</button></div><div id="expCab"></div>' +
+        '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="none" placeholder="Bipe o código de barras">' +
+        '<input id="expQtd" type="number" min="1" value="1" inputmode="numeric" title="Quantas embalagens por leitura">' +
+        '<button data-exp="digitar" title="Digitar o código ou o PLU">&#9000;</button><button data-exp="camera" title="Ler com a câmera">&#128247;</button></div>' +
+        '<div id="expMsg" class="exp-msg">Pronto para bipar. Cada leitura soma 1 embalagem (ou a quantidade do campo ao lado).</div><div id="expLista"></div><div id="expPe"></div></div>';
+      setTimeout(focoBip, 0);
+    }
+    var resp = 0, its = a.itens.slice().sort(function (x, y) { return (x.dep || "").localeCompare(y.dep || "") || (x.d || "").localeCompare(y.d || ""); }), dep = null, hl = "";
+    its.forEach(function (it) {
+      var c = a.conf[it.p] || {}, r = respConf(it, c), q = Number(c.q) || 0; if (r) resp++;
+      var cls = r === "ok" ? "ok" : r === "parcial" ? "parc" : r === "nao" ? "nao" : q > it.qtd ? "mais" : q > 0 ? "falta" : "";
+      if ((it.dep || "") !== dep) { dep = it.dep || ""; hl += '<div class="exp-setor">' + esc(dep || "Sem setor") + "</div>"; }
+      var un = (it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "");
+      hl += '<div class="exp-it ' + cls + (EXP.destaque === it.p ? " dest" : "") + '" id="expIt_' + esc(it.p) + '"><div class="exp-it-d"><b>' + esc(it.d || "PLU " + it.p) + "</b><small>PLU " + esc(it.p) + " · " + esc(un) + "</small>" +
+        (r === "parcial" ? '<small class="j">Parcial: ' + esc(c.just) + "</small>" : r === "nao" ? '<small class="j">Não atendido: ' + esc(c.just) + "</small>" : "") + "</div>" +
+        '<div class="exp-it-q"><b>' + num(r === "nao" ? 0 : q) + '</b><span>de ' + num(it.qtd) + "</span></div>" +
+        '<div class="exp-it-b"><button data-exp="cmenos" data-v="' + esc(it.p) + '">&#8722;</button><button data-exp="cmais" data-v="' + esc(it.p) + '">+</button>' +
+        (c.st ? '<button data-exp="limpar" data-v="' + esc(it.p) + '" class="lg">Desmarcar</button>'
+          : '<button data-exp="parcial" data-v="' + esc(it.p) + '" class="lg">Parcial</button><button data-exp="nao" data-v="' + esc(it.p) + '" class="lg">Não atendido</button>') + "</div></div>";
+    });
+    document.getElementById("expCab").innerHTML = '<div style="margin-bottom:6px"><b style="font-size:17px">' + esc(a.loja) + "</b> · " + esc(a.nome) + (a.num ? '<span class="exp-tag">ERP ' + esc(a.num) + "</span>" : "") +
+      '<br><small style="color:var(--sub)">' + resp + " de " + a.itens.length + " itens respondidos" + (a.quem && a.quem.length ? " · conferindo: " + esc(a.quem.join(", ")) : "") + (EXP.fila.length || EXP.enviando ? " · enviando…" : "") + "</small></div>";
+    document.getElementById("expLista").innerHTML = hl;
+    document.getElementById("expPe").innerHTML = '<button class="btn ' + (resp === a.itens.length ? "btn-verde" : "btn-cinza") + '" data-exp="fecharconf" style="width:100%;margin-top:12px">' +
+      (resp === a.itens.length ? "&#10004; Fechar conferência" : "Fechar conferência (faltam " + (a.itens.length - resp) + ")") + "</button>";
+    if (EXP.destaque) { var d = document.getElementById("expIt_" + EXP.destaque); if (d) try { d.scrollIntoView({ block: "nearest" }); } catch (e) {} }
   }
   function fecharExpedicao() {   // Marcelo: fecha a Expedição e volta ao app
     var t = document.getElementById("telaExp"); if (t) { t.hidden = true; t.innerHTML = ""; }
@@ -1716,7 +1882,8 @@ window.PedidoPDF = (function () {
     }
     h += '<div style="font-weight:800;color:var(--marrom);margin:2px 0 8px">Conferência · pedidos aprovados das lojas</div>';
     var a = EXP.aberto;
-    if (a) {
+    if (a) { desenharColeta(t, h); return; }
+    if (false) {
       h += '<div class="nao-imprime" style="display:flex;gap:8px;margin-bottom:10px"><button class="btn btn-cinza" data-exp="voltar" style="flex:1">&#8592; Voltar</button>' +
         (a.itens ? '<button class="btn btn-cinza" data-exp="imprimir" style="flex:1">&#128424; Imprimir</button>' : "") + "</div>";
       if (!a.itens) h += '<div class="carregando"><div class="giro"></div>Abrindo o pedido…</div>';
@@ -1737,17 +1904,17 @@ window.PedidoPDF = (function () {
     }
     var L = EXP.lista;
     if (!L) { t.innerHTML = h + '<div class="carregando"><div class="giro"></div>Buscando os pedidos aprovados…</div></div>'; return; }
+    L = L.filter(function (p) { return !p.nf; });   // 09/11 (Marcelo): na Conferência só os aprovados AINDA NÃO faturados
     var lojas = []; L.forEach(function (p) { if (lojas.indexOf(p.loja) < 0) lojas.push(p.loja); }); lojas.sort();
-    var nSep = L.filter(function (p) { return !p.nf; }).length, nFat = L.length - nSep;
-    h += '<div class="exp-filtros"><button data-exp="ver" data-v="separar" class="' + (EXP.ver === "separar" ? "on" : "") + '">A separar (' + nSep + ")</button>" +
-      '<button data-exp="ver" data-v="faturados" class="' + (EXP.ver === "faturados" ? "on" : "") + '">Já faturados (' + nFat + ")</button>" +
+    h += '<div class="exp-filtros"><b style="color:var(--marrom)">A separar (' + L.length + ")</b>" +
       '<select id="expLoja"><option value="">Todas as lojas</option>' + lojas.map(function (l) { return '<option' + (l === EXP.loja ? " selected" : "") + ">" + esc(l) + "</option>"; }).join("") + "</select></div>";
-    var vis = L.filter(function (p) { return (EXP.ver === "faturados" ? !!p.nf : !p.nf) && (!EXP.loja || p.loja === EXP.loja); });
+    var vis = L.filter(function (p) { return !EXP.loja || p.loja === EXP.loja; });
     if (!vis.length) h += '<div class="vazio" style="padding:14px">Nenhum pedido aqui.</div>';
     vis.forEach(function (p) {
       h += '<div class="exp-card" data-exp="abrir" data-v="' + esc(p.id) + '"><b>' + esc(p.loja) + "</b> · " + esc(p.nome) +
         (p.num ? '<span class="exp-tag">ERP ' + esc(p.num) + "</span>" : "") + (p.nf ? '<span class="exp-tag nf">NF ' + esc(p.nf) + "</span>" : "") +
-        "<br><small>Aprovado " + esc(p.aprovadoEm || p.quando || "") + " · " + p.n + " itens</small></div>";
+        "<br><small>Aprovado " + esc(p.aprovadoEm || p.quando || "") + " · " + p.n + " itens" +
+        (p.conferindo != null ? ' · <b style="color:#9a5b00">Conferindo: ' + p.conferindo + "/" + p.n + "</b>" + ((p.conferentes || []).length ? " (" + esc(p.conferentes.join(", ")) + ")" : "") : "") + "</small></div>";
     });
     t.innerHTML = h + "</div>";
   }
@@ -4903,7 +5070,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.9";
+  var VERSAO_APP = "2026-11-09.11";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
