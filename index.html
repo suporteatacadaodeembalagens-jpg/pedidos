@@ -3210,7 +3210,7 @@ window.PedidoPDF = (function () {
     if (!tabPv && !ehMgrLogin() && typeof buscarPrecosLoja === "function") { try { buscarPrecosLoja(); } catch (e) {} }
     if (pVar > 0) resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
       [["Preço varejo (UN)", reais(pVar)], ["Preço " + esc(q > 1 ? t + " c/ " + num(q) : "UN"), reais(pVar * (q > 1 ? q : 1))]].map(function (x) {
-        return '<div style="background:#fff4d6;border-radius:8px;padding:7px 9px"><small>' + x[0] + "</small><br><b>" + x[1] + "</b></div>";
+        return '<div style="background:#e3eefb;border:1px solid #c4d8f2;border-radius:8px;padding:7px 9px;color:#1f4f7a"><small>' + x[0] + "</small><br><b>" + x[1] + "</b></div>";
       }).join("") + "</div>";
     // 05/11 (Marcelo): R$ VENDIDO e MARGEM (%) - do relatório ABC de Vendas Individual (robô), das lojas que a pessoa vê
     function rs(m) { var v = 0, c = 0; cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { v += Number(x[0]) || 0; c += Number(x[1]) || 0; } }); return [v, c]; }
@@ -4116,8 +4116,18 @@ window.PedidoPDF = (function () {
       (x.f && x.f !== compra.fornecedor ? '<br><small>' + esc(x.f) + "</small>" : "") +
       (!c && x.c ? "<br>Custo CD: " + reais(x.c) + " un" : "") + "</div>" +
       '<div class="rodape-item"><div class="stepper"><button class="seta menos" data-cq="-1" aria-label="Diminuir">&#9660;</button><div class="qtd" data-cq="ed"><b>' + q + "</b><small>" + esc(un) +
-      '</small></div><button class="seta mais" data-cq="1" aria-label="Aumentar">&#9650;</button></div></div>' + precos + "</div>";
+      '</small></div><button class="seta mais" data-cq="1" aria-label="Aumentar">&#9650;</button></div></div>' + precos +
+      // 09/11 (Marcelo): no pedido de compra também 'Pedir contagem de estoque' e 'Análise de vendas' (abre embaixo do produto)
+      (detalhe ? "" : '<div class="linha-acao" style="margin-top:10px"><button class="btn btn-cont" type="button" data-cmpcont="' + esc(x.p) + '">Pedir contagem de estoque</button>' +
+        '<button class="btn btn-ana" type="button" data-cmpana="' + esc(x.p) + '" data-anad="' + esc(x.d) + '">&#128200; Análise de vendas</button></div>') + "</div>" +
+      (detalhe ? "" : '<div class="ana-inline" id="anaIn_' + esc(x.p) + '" hidden style="margin:-4px 0 12px;padding:12px;border:2px solid #efe2cf;border-radius:12px;background:#fffaf2"></div>');
   }
+  document.addEventListener("click", function (e) {   // 09/11: botões do produto no pedido de compra
+    if (tela !== "compra") return;
+    var a = e.target.closest("[data-cmpcont]"); if (a) { e.stopPropagation(); contagemClique(a.getAttribute("data-cmpcont")); return; }
+    var b = e.target.closest("[data-cmpana]"); if (b) { e.stopPropagation(); anaInline(b.getAttribute("data-cmpana"), b.getAttribute("data-anad")); return; }
+    var f = e.target.closest("[data-anafechar]"); if (f) { e.stopPropagation(); var bx = $("anaIn_" + f.getAttribute("data-anafechar")); if (bx) { bx.hidden = true; bx.innerHTML = ""; try { bx.previousElementSibling.scrollIntoView({ block: "nearest" }); } catch (x) {} } }
+  }, true);
   function textoTotItem(c) {
     var k = PedidoPDF.calcItem(c);
     return (c.preco ? "Custo líq. " + reais(k.liq) + " · " : '<span style="color:var(--vermelho)">Sem preço</span> · ') + "Total <b>" + reais(k.total) + "</b>";
@@ -4717,7 +4727,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.3";
+  var VERSAO_APP = "2026-11-09.4";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
