@@ -1706,6 +1706,7 @@ window.PedidoPDF = (function () {
         else if (k === "dglimpar") { var dl = document.getElementById("dgLog"); if (dl) dl.textContent = ""; return; }
         else if (k === "sair") sairExpedicao();
         else if (k === "fechar") fecharExpedicao();
+        else if (k === "setor") { EXP.abertos = EXP.abertos || {}; EXP.abertos[v] = !EXP.abertos[v]; desenharExpedicao(); return; }
         else if (k === "item") { abrirItemColeta(v, ""); return; }
         else if (k === "vinc") { vincularCodigo(v); return; }
         else if (k === "msalvar") salvarItemColeta("ok");
@@ -1755,7 +1756,7 @@ window.PedidoPDF = (function () {
   }
   function abrirPedidoExp(id) {
     clearInterval(EXP.tPoll);
-    EXP.aberto = { id: id, carregando: true }; EXP.fila = []; EXP.ultimos = []; EXP.enviando = null; EXP.depois = null; EXP.destaque = null; desenharExpedicao();
+    EXP.aberto = { id: id, carregando: true }; EXP.fila = []; EXP.ultimos = []; EXP.enviando = null; EXP.depois = null; EXP.destaque = null; EXP.abertos = {}; desenharExpedicao();
     expChamar("confPedido", [id], function (r) { if (EXP.aberto && EXP.aberto.id === id) { EXP.aberto = r; r.conf = r.conf || {}; desenharExpedicao(); window.scrollTo(0, 0); } },
       function (e) { if (EXP.aberto && EXP.aberto.id === id) { EXP.aberto = null; desenharExpedicao(); } toast(String(e && e.message || e)); });
     EXP.tPoll = setInterval(function () {   // o que os outros conferentes bipam aparece aqui
@@ -1836,7 +1837,7 @@ window.PedidoPDF = (function () {
     var c = a.conf[p] || {}, q = Number(c.q) || 0, un = (it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "");
     var mo = document.getElementById("expModal");
     if (!mo) { mo = document.createElement("div"); mo.id = "expModal"; mo.className = "exp-modal"; document.getElementById("telaExp").appendChild(mo); }
-    EXP.modal = { p: p };
+    EXP.modal = { p: p }; EXP.abertos = EXP.abertos || {}; EXP.abertos[it.dep || "OUTROS"] = true;   // o setor do produto bipado fica aberto
     mo.innerHTML = '<div class="exp-modal-cx"><div class="exp-modal-t">' + esc(it.d || "PLU " + p) + "</div>" +
       '<div class="exp-modal-info">PLU <b>' + esc(p) + "</b>" + (it.m ? " · " + esc(it.m) : "") + "<br>" + (it.dep ? esc(it.dep) + " · " : "") + esc(un) +
       (cod ? '<br><small>Código lido: ' + esc(cod) + "</small>" : "") + "</div>" +
@@ -1961,15 +1962,29 @@ window.PedidoPDF = (function () {
         '<div id="expMsg" class="exp-msg">Bipe o produto: abre a ficha dele para lançar a quantidade. Também dá para tocar no produto da lista.</div><div id="expLista"></div><div id="expPe"></div></div>';
       setTimeout(focoBip, 0);
     }
-    var resp = 0, its = a.itens.slice().sort(function (x, y) { return (x.dep || "").localeCompare(y.dep || "") || (x.d || "").localeCompare(y.d || ""); }), dep = null, hl = "";
-    its.forEach(function (it) {
-      var c = a.conf[it.p] || {}, r = respConf(it, c), q = Number(c.q) || 0; if (r) resp++;
-      var cls = r === "ok" ? "ok" : r === "parcial" ? "parc" : r === "nao" ? "nao" : q > it.qtd ? "mais" : q > 0 ? "falta" : "";
-      if ((it.dep || "") !== dep) { dep = it.dep || ""; hl += '<div class="exp-setor">' + esc(dep || "Sem setor") + "</div>"; }
-      var un = (it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "");
-      hl += '<div class="exp-it ' + cls + (EXP.destaque === it.p ? " dest" : "") + '" id="expIt_' + esc(it.p) + '" data-exp="item" data-v="' + esc(it.p) + '"><div class="exp-it-d"><b>' + esc(it.d || "PLU " + it.p) + "</b><small>PLU " + esc(it.p) + " · " + esc(un) + "</small>" +
-        (r === "parcial" ? '<small class="j">Parcial: ' + esc(c.just) + "</small>" : r === "nao" ? '<small class="j">Não atendido: ' + esc(c.just) + "</small>" : r === "ok" ? '<small class="ok">Coletado</small>' : "") + "</div>" +
-        '<div class="exp-it-q"><b>' + num(r === "nao" ? 0 : q) + '</b><span>de ' + num(it.qtd) + "</span></div></div>";
+    // 09/11 (Marcelo): igual à conferência de pedidos do painel: "N produtos no pedido" + SETORES que abrem/fecham
+    // (mesma ordem da lista da loja) e, dentro do setor, agrupado por marca.
+    var resp = 0, ordem = [], porDep = {}, hl = "";
+    EXP.abertos = EXP.abertos || {};
+    a.itens.forEach(function (it) { var dp = it.dep || "OUTROS"; if (!porDep[dp]) { porDep[dp] = []; ordem.push(dp); } porDep[dp].push(it); });
+    if (dados && dados.departamentos) { var od = dados.departamentos.map(function (d) { return d.nome; }); ordem.sort(function (x, y) { var ix = od.indexOf(x), iy = od.indexOf(y); return (ix < 0 ? 999 : ix) - (iy < 0 ? 999 : iy); }); }
+    hl += '<div class="aviso aviso-total"><b>' + a.itens.length + (a.itens.length === 1 ? " produto" : " produtos") + "</b> no pedido</div>";
+    ordem.forEach(function (dp) {
+      var l = porDep[dp].slice().sort(function (x, y) { return (x.m || "") === (y.m || "") ? (x.d || "").localeCompare(y.d || "") : (x.m || "").localeCompare(y.m || ""); });
+      var feitos = 0, linhas = "", marca = null;
+      l.forEach(function (it) {
+        var c = a.conf[it.p] || {}, r = respConf(it, c), q = Number(c.q) || 0; if (r) { resp++; feitos++; }
+        var cls = r === "ok" ? "ok" : r === "parcial" ? "parc" : r === "nao" ? "nao" : q > it.qtd ? "mais" : q > 0 ? "falta" : "";
+        if ((it.m || "") !== marca) { marca = it.m || ""; linhas += '<div class="grupo marca">' + esc(marca || "Sem marca") + "</div>"; }
+        var un = (it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "");
+        linhas += '<div class="exp-it ' + cls + (EXP.destaque === it.p ? " dest" : "") + '" id="expIt_' + esc(it.p) + '" data-exp="item" data-v="' + esc(it.p) + '"><div class="exp-it-d"><b>' + esc(it.d || "PLU " + it.p) + "</b><small>PLU " + esc(it.p) + " · " + esc(un) + "</small>" +
+          (r === "parcial" ? '<small class="j">Parcial: ' + esc(c.just) + "</small>" : r === "nao" ? '<small class="j">Não atendido: ' + esc(c.just) + "</small>" : r === "ok" ? '<small class="ok">Coletado</small>' : "") + "</div>" +
+          '<div class="exp-it-q"><b>' + num(r === "nao" ? 0 : q) + '</b><span>de ' + num(it.qtd) + "</span></div></div>";
+      });
+      var fechado = !EXP.abertos[dp];
+      hl += '<div class="setor-mgr' + (fechado ? " fechado" : "") + '" data-exp="setor" data-v="' + esc(dp) + '"><b><i>' + (fechado ? "▸" : "▾") + "</i>" + esc(nomeAba(dp)) + "</b><span>" +
+        (feitos ? feitos + "/" : "") + l.length + (l.length === 1 ? " item" : " itens") + "</span></div>" +
+        '<div class="setor-corpo"' + (fechado ? " hidden" : "") + ">" + linhas + "</div>";
     });
     document.getElementById("expCab").innerHTML = '<div style="margin-bottom:6px">' + (a.num ? '<span class="exp-tag" style="margin-left:0">ERP ' + esc(a.num) + "</span> " : "") +
       '<small style="color:var(--sub)">' + resp + " de " + a.itens.length + " itens respondidos" + (a.quem && a.quem.length ? " · conferindo: " + esc(a.quem.join(", ")) : "") + (EXP.fila.length || EXP.enviando ? " · enviando…" : "") + "</small></div>";
@@ -5219,7 +5234,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.21";
+  var VERSAO_APP = "2026-11-09.22";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
