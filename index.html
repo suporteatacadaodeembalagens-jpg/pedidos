@@ -1722,11 +1722,9 @@ window.PedidoPDF = (function () {
         else if (k === "imprimir") window.print();
         if (EXP.aberto && EXP.aberto.itens) setTimeout(focoBip, 0);
       });
-      t.addEventListener("click", function (e) {   // 09/11: TOCAR no campo de bipar abre o teclado (o foco automático segue sem teclado)
-        var b = e.target && e.target.id === "expBip" ? e.target : null;
-        if (b && b.getAttribute("inputmode") === "none") { b.setAttribute("inputmode", "text"); b.blur(); setTimeout(function () { b.focus(); }, 30); }
-      });
-      t.addEventListener("focusout", function (e) { if (e.target && e.target.id === "expBip") e.target.setAttribute("inputmode", "none"); });
+      // 09/11 (EDA52): o campo de bipar é um campo NORMAL. Antes ele usava inputmode="none" (sem teclado) e, no Honeywell,
+      // o leitor não conseguia escrever nele e o toque não abria o teclado (o focusout voltava para "none").
+      // Foco automático (sem toque) não abre o teclado no Android; tocar no campo abre normalmente.
       // 09/11: coletor que NÃO manda Enter no fim: 8+ dígitos chegando em rajada (< 0,35 s) no campo = leitura -> bipa sozinho
       t.addEventListener("input", function (e) {
         if (!e.target || e.target.id !== "expBip") return;
@@ -1932,7 +1930,7 @@ window.PedidoPDF = (function () {
     if (!a.itens) { t.innerHTML = h + '<button class="btn btn-cinza" data-exp="voltar" style="width:100%;margin-bottom:8px">&#8592; Voltar</button><div class="carregando"><div class="giro"></div>Abrindo a conferência…</div></div>'; return; }
     if (!document.getElementById("expBip")) {
       t.innerHTML = h + '<div id="expCab"></div>' +
-        '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="none" placeholder="Bipe o código (ou toque para digitar código, PLU ou nome)">' +
+        '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Bipe o código (ou toque para digitar código, PLU ou nome)">' +
         '<button data-exp="digitar" title="Digitar o código ou o PLU">&#9000;</button><button data-exp="camera" title="Ler com a câmera">&#128247;</button></div>' +
         '<div id="expMsg" class="exp-msg">Bipe o produto: abre a ficha dele para lançar a quantidade. Também dá para tocar no produto da lista.</div><div id="expLista"></div><div id="expPe"></div></div>';
       setTimeout(focoBip, 0);
@@ -5195,7 +5193,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.18";
+  var VERSAO_APP = "2026-11-09.19";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
