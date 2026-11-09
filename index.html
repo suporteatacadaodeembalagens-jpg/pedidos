@@ -1691,6 +1691,8 @@ window.PedidoPDF = (function () {
         "#expModal .exp-modal-b{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}#expModal .exp-modal-b button{border:0;border-radius:10px;padding:13px 8px;font-weight:800;font-size:14.5px}" +
         "#expModal .verde{grid-column:1/-1;background:#1a7f45;color:#fff;font-size:17px}#expModal .laranja{background:#e07b00;color:#fff}#expModal .cinza{background:#6b5d55;color:#fff}#expModal .link{grid-column:1/-1;background:none;color:var(--sub)}" +
         "#expModal .exp-vinc{max-height:50vh;overflow:auto;display:flex;flex-direction:column;gap:6px}#expModal .exp-vinc button{text-align:left;border:1px solid var(--linha);background:#fff;border-radius:10px;padding:9px 10px;font-size:14px;color:var(--texto)}#expModal .exp-vinc small{display:block;color:var(--sub);font-size:12px}" +
+        "#expModal .exp-nomes{display:grid;grid-template-columns:1fr 1fr;gap:8px}#expModal .exp-nomes button{border:2px solid var(--linha);background:#fff;border-radius:10px;padding:14px 8px;font-weight:800;font-size:16px;color:var(--marrom)}#expModal .exp-nomes button.on{border-color:var(--ouro);background:#fff6d1}" +
+        "#telaExp .exp-it.car{border-left-color:#1f5a97;background:#eef4fb}#telaExp [data-exp=trocanome]{cursor:pointer}" +
         "#expModal .exp-modal-msg{color:#b42226;font-weight:700;font-size:13.5px;margin-top:8px;min-height:1em}" +
         "@media print{body>*:not(#telaExp){display:none!important}#telaExp{position:static;overflow:visible}#telaExp .exp-topo,#telaExp .exp-mods,#telaExp .nao-imprime{display:none!important}}";
       document.head.appendChild(st);
@@ -1709,7 +1711,7 @@ window.PedidoPDF = (function () {
         else if (k === "setor") { EXP.abertos = EXP.abertos || {}; EXP.abertos[v] = !EXP.abertos[v]; desenharExpedicao(); return; }
         else if (k === "item") { abrirItemColeta(v, ""); return; }
         else if (k === "vinc") { vincularCodigo(v); return; }
-        else if (k === "msalvar") salvarItemColeta("ok");
+        else if (k === "msalvar") salvarItemColeta("soma");
         else if (k === "mparcial") salvarItemColeta("parcial");
         else if (k === "mnao") salvarItemColeta("nao");
         else if (k === "mcancelar") fecharItemColeta();
@@ -1720,7 +1722,12 @@ window.PedidoPDF = (function () {
         else if (k === "mod") { EXP.mod = v; EXP.aberto = null; desenharExpedicao(); if (v === "conferencia" && !EXP.lista) carregarExpedicao(); }
         else if (k === "atualizar") { EXP.lista = null; if (EXP.aberto) abrirPedidoExp(EXP.aberto.id); carregarExpedicao(); }
         else if (k === "ver") { EXP.ver = v; desenharExpedicao(); }
-        else if (k === "abrir") abrirPedidoExp(v);
+        else if (k === "abrir") { escolherConferente(v); return; }
+        else if (k === "nomeconf") { nomeEscolhido(v); return; }
+        else if (k === "trocanome") { escolherConferente(null); return; }
+        else if (k === "etl") { EXP.etapaLista = v; desenharExpedicao(); return; }
+        else if (k === "mzerar") salvarItemColeta("zerar");
+        else if (k === "maceitar") salvarItemColeta("aceito");
         else if (k === "voltar") { voltarColeta(); return; }
         else if (k === "imprimir") window.print();
         if (EXP.aberto && EXP.aberto.itens) setTimeout(focoBip, 0);
@@ -1740,9 +1747,9 @@ window.PedidoPDF = (function () {
         if (e.target && e.target.id === "expBip" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); var v = e.target.value; e.target.value = ""; bipar(v); }
         else if (e.target && e.target.id === "expMQ" && (e.key === "Enter" || e.keyCode === 13)) {   // bipou com a ficha aberta = outro produto
           e.preventDefault(); var vq = String(e.target.value || "").replace(/\D/g, "");
-          if (vq.length >= 7) { fecharItemColeta(); bipar(vq); } else salvarItemColeta("ok");
+          if (vq.length >= 7) { fecharItemColeta(); bipar(vq); } else salvarItemColeta("soma");
         }
-        else if (e.target && e.target.id === "expMJ" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); salvarItemColeta(EXP.modal && Number((document.getElementById("expMQ") || {}).value) === 0 ? "nao" : "parcial"); }
+        else if (e.target && e.target.id === "expMJ" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); salvarItemColeta(EXP.aberto && EXP.aberto.etapa === "car" ? "aceito" : "parcial"); }
         else if (e.key === "Escape" && modalAberto()) fecharItemColeta();
       });
       t.addEventListener("change", function (e) { if (e.target.id === "expLoja") { EXP.loja = e.target.value; desenharExpedicao(); } });
@@ -1832,21 +1839,26 @@ window.PedidoPDF = (function () {
     expChamar("confVincular", [a.id, dig, p], function () { msgColeta("Código " + dig + " ligado a " + ((itemColeta(p) || {}).d || p) + ".", "ok"); }, function (e) { msgColeta("Não consegui guardar o código: " + String(e && e.message || e), "erro"); });
     abrirItemColeta(p, dig);
   }
-  function abrirItemColeta(p, cod) {
+  function abrirItemColeta(p, cod) {   // 09/11: SEPARAÇÃO (soma, parcial, não atendido) ou CARREGAMENTO às cegas (soma)
     var a = EXP.aberto, it = itemColeta(p); if (!it) return;
-    var c = a.conf[p] || {}, q = Number(c.q) || 0, un = (it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "");
+    var car = a.etapa === "car", c = a.conf[p] || {}, q = Number(c.q) || 0, un = (it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "");
+    var pend = car && (a.pend || []).indexOf(p) >= 0;
     var mo = document.getElementById("expModal");
     if (!mo) { mo = document.createElement("div"); mo.id = "expModal"; mo.className = "exp-modal"; document.getElementById("telaExp").appendChild(mo); }
-    EXP.modal = { p: p }; EXP.abertos = EXP.abertos || {}; EXP.abertos[it.dep || "OUTROS"] = true;   // o setor do produto bipado fica aberto
+    EXP.modal = { p: p }; EXP.abertos = EXP.abertos || {}; EXP.abertos[it.dep || "OUTROS"] = true;
+    var qs = car ? '<div class="exp-modal-qs" style="grid-template-columns:1fr"><div><span>Já carregado</span><b>' + num(q) + "</b><small>" + esc(it.t || "UN") + "</small></div></div>"
+      : '<div class="exp-modal-qs"><div><span>Pedido</span><b>' + num(it.qtd) + "</b><small>" + esc(it.t || "UN") + '</small></div><div><span>Já separado</span><b>' + num(c.st === "nao" ? 0 : q) + "</b><small>" + esc(it.t || "UN") + "</small></div></div>";
+    var st = c.st === "nao" ? "Marcado como NÃO ATENDIDO" : c.st === "parcial" ? "Marcado como PARCIAL" : c.st === "aceito" ? "Carregado ACEITO" : "";
     mo.innerHTML = '<div class="exp-modal-cx"><div class="exp-modal-t">' + esc(it.d || "PLU " + p) + "</div>" +
-      '<div class="exp-modal-info">PLU <b>' + esc(p) + "</b>" + (it.m ? " · " + esc(it.m) : "") + "<br>" + (it.dep ? esc(it.dep) + " · " : "") + esc(un) +
-      (cod ? '<br><small>Código lido: ' + esc(cod) + "</small>" : "") + "</div>" +
-      '<div class="exp-modal-qs"><div><span>Pedido</span><b>' + num(it.qtd) + "</b><small>" + esc(it.t || "UN") + '</small></div><div><span>Já coletado</span><b>' + num(c.st === "nao" ? 0 : q) + "</b><small>" + esc(it.t || "UN") + "</small></div></div>" +
-      (c.st ? '<div class="exp-modal-st">' + (c.st === "nao" ? "Marcado como NÃO ATENDIDO" : "Marcado como PARCIAL") + (c.just ? ": " + esc(c.just) : "") + "</div>" : "") +
-      '<label for="expMQ">Quantidade coletada (' + esc(it.t || "UN") + ')</label><input id="expMQ" type="number" min="0" inputmode="numeric" value="" placeholder="Digite a quantidade">' +
-      '<label for="expMJ">Justificativa (parcial ou não atendido)</label><input id="expMJ" maxlength="120" autocomplete="off" placeholder="Ex.: só tinha 2 / sem estoque" value="' + esc(c.just || "") + '">' +
-      '<div class="exp-modal-b"><button data-exp="msalvar" class="verde">&#10004; Salvar</button><button data-exp="mparcial" class="laranja">Atender parcialmente</button>' +
-      '<button data-exp="mnao" class="cinza">Não atendido</button><button data-exp="mcancelar" class="link">Cancelar</button></div><div id="expMMsg" class="exp-modal-msg"></div></div>';
+      '<div class="exp-modal-info">PLU <b>' + esc(p) + "</b>" + (it.m ? " · " + esc(it.m) : "") + "<br>" + (it.dep ? esc(nomeAba(it.dep)) + " · " : "") + esc(un) +
+      (cod ? '<br><small>Código lido: ' + esc(cod) + "</small>" : "") + "</div>" + qs +
+      (pend ? '<div class="exp-modal-st" style="background:#fde2e1;color:#b42226">Não bateu com a separação: zere e conte de novo, ou aceite o carregado com justificativa.</div>' : "") +
+      (st ? '<div class="exp-modal-st">' + st + (c.just ? ": " + esc(c.just) : "") + "</div>" : "") +
+      '<label for="expMQ">' + (car ? "Carregado agora" : "Separado agora") + " (" + esc(it.t || "UN") + ') — soma ao que já tem</label><input id="expMQ" type="number" min="0" inputmode="numeric" value="" placeholder="Digite a quantidade">' +
+      '<label for="expMJ">Justificativa' + (car ? " (para aceitar o carregado)" : " (parcial ou não atendido)") + '</label><input id="expMJ" maxlength="120" autocomplete="off" placeholder="' + (car ? "Ex.: 1 caixa avariada" : "Ex.: só tinha 2 / sem estoque") + '" value="' + esc(c.just || "") + '">' +
+      '<div class="exp-modal-b"><button data-exp="msalvar" class="verde">&#10133; Somar</button>' +
+      (car ? (pend ? '<button data-exp="maceitar" class="laranja">Aceitar o carregado</button>' : "") : '<button data-exp="mparcial" class="laranja">Atender parcialmente</button><button data-exp="mnao" class="cinza">Não atendido</button>') +
+      '<button data-exp="mzerar" class="cinza">Zerar contagem</button><button data-exp="mcancelar" class="link">Cancelar</button></div><div id="expMMsg" class="exp-modal-msg"></div></div>';
     mo.hidden = false;
     setTimeout(function () { var i = document.getElementById("expMQ"); if (i) { i.focus(); try { i.select(); } catch (e) {} } }, 30);
   }
@@ -1874,29 +1886,54 @@ window.PedidoPDF = (function () {
     log("pronto · " + navigator.userAgent.replace(/^Mozilla\/5\.0 /, "").slice(0, 90));
   }
   function fecharDiagLeitor() { var mo = document.getElementById("expDiag"); if (mo) { mo.hidden = true; mo.innerHTML = ""; } EXP.diag = false; setTimeout(focoBip, 0); }
-  function fecharItemColeta() { var mo = document.getElementById("expModal"); if (mo) { mo.hidden = true; mo.innerHTML = ""; } EXP.modal = null; setTimeout(focoBip, 0); }
+  // 09/11 (Marcelo): ao abrir um pedido, escolhe QUEM está coletando (vai em cada lançamento)
+  var CONFERENTES_EXP = ["Antonio", "Henrique", "J. J. Junior", "Marcelo", "Alexandre", "Gilmar", "Galegão"];
+  function escolherConferente(id) {
+    var mo = document.getElementById("expModal");
+    if (!mo) { mo = document.createElement("div"); mo.id = "expModal"; mo.className = "exp-modal"; document.getElementById("telaExp").appendChild(mo); }
+    EXP.modal = null; EXP.abrirId = id || null;
+    mo.innerHTML = '<div class="exp-modal-cx"><div class="exp-modal-t">Quem está coletando?</div><div class="exp-modal-info">O nome vai junto com cada quantidade lançada.</div>' +
+      '<div class="exp-nomes">' + CONFERENTES_EXP.map(function (n) { return '<button data-exp="nomeconf" data-v="' + esc(n) + '"' + (EXP.nome === n ? ' class="on"' : "") + ">" + esc(n) + "</button>"; }).join("") + "</div>" +
+      '<div class="exp-modal-b"><button data-exp="mcancelar" class="link">Cancelar</button></div></div>';
+    mo.hidden = false;
+  }
+  function nomeEscolhido(n) {
+    EXP.nome = n; var id = EXP.abrirId; EXP.abrirId = null;
+    var mo = document.getElementById("expModal"); if (mo) { mo.hidden = true; mo.innerHTML = ""; }
+    if (id) abrirPedidoExp(id); else { desenharExpedicao(); setTimeout(focoBip, 0); }
+  }
+  function fecharItemColeta() { var mo = document.getElementById("expModal"); if (mo) { mo.hidden = true; mo.innerHTML = ""; } EXP.modal = null; EXP.abrirId = null; setTimeout(focoBip, 0); }
   function msgModal(t) { var m = document.getElementById("expMMsg"); if (m) m.textContent = t; expSom(220, 250); }
-  function salvarItemColeta(modo) {
+  function salvarItemColeta(modo) {   // modo: soma | parcial | nao | zerar | aceito
     var a = EXP.aberto, md = EXP.modal; if (!a || !md) return;
     var p = md.p, it = itemColeta(p); if (!it) return;
-    var c = a.conf[p] || (a.conf[p] = { q: 0, st: "", just: "" });
+    var car = a.etapa === "car", c = a.conf[p] || (a.conf[p] = { q: 0, st: "", just: "" });
     var qi = document.getElementById("expMQ"), ji = document.getElementById("expMJ");
-    var nq = Math.max(0, Math.round(Number(qi && qi.value) || 0)), just = String(ji && ji.value || "").trim();
-    if (modo !== "nao" && qi && String(qi.value).trim() === "") { msgModal("Digite a quantidade coletada."); qi.focus(); return; }   // 09/11: o campo vem vazio
-    if (modo === "ok" && nq !== it.qtd) { msgModal("A quantidade (" + num(nq) + ") é diferente do pedido (" + num(it.qtd) + "): use Atender parcialmente."); return; }
-    if (modo === "parcial") {
-      if (nq === it.qtd) { msgModal("A quantidade bate com o pedido: use Salvar."); return; }
+    var txt = String(qi && qi.value || "").trim(), add = txt === "" ? 0 : Math.max(0, Math.round(Number(txt) || 0)), just = String(ji && ji.value || "").trim();
+    var q0 = Number(c.q) || 0, antes = { p: p, q: q0, st: c.st || "", just: c.just || "" }, nq = q0, st = c.st || "", nj = c.just || "";
+    if (modo === "soma") { if (!add) { msgModal("Digite a quantidade coletada agora."); if (qi) qi.focus(); return; } nq = q0 + add; if (!car && st === "nao") { st = ""; nj = ""; } }
+    else if (modo === "zerar") { nq = 0; st = ""; nj = ""; }
+    else if (modo === "nao") { nq = 0; st = "nao"; nj = just || "Não encontrado / sem estoque"; }
+    else if (modo === "parcial") {
+      nq = q0 + add;
+      if (nq === it.qtd) { msgModal("Com essa quantidade bate com o pedido: use Somar."); return; }
       if (!just) { msgModal("Escreva a justificativa da quantidade diferente."); if (ji) ji.focus(); return; }
+      st = "parcial"; nj = just;
+    } else if (modo === "aceito") {
+      if (!just) { msgModal("Escreva a justificativa para aceitar o carregado."); if (ji) ji.focus(); return; }
+      nq = q0 + add; st = "aceito"; nj = just;
     }
-    if (modo === "nao") { if (!just) just = "Não encontrado / sem estoque"; nq = 0; }
-    var antes = { p: p, q: Number(c.q) || 0, st: c.st || "", just: c.just || "" };
-    var d = nq - (Number(c.q) || 0);
-    if (d) { c.q = nq; EXP.fila.push({ p: p, d: d }); }
-    var st = modo === "ok" ? "" : modo;
-    if (st !== (c.st || "") || (st && just !== (c.just || ""))) { c.st = st; c.just = st ? just : ""; EXP.fila.push({ p: p, st: st, just: c.just }); }
+    if (nq !== q0) { c.q = nq; EXP.fila.push({ p: p, d: nq - q0 }); }
+    if (st !== (c.st || "") || nj !== (c.just || "")) { c.st = st; c.just = st ? nj : ""; EXP.fila.push({ p: p, st: st, just: c.just }); }
     EXP.ultimos.push(antes);
-    expSom(modo === "ok" ? 1500 : modo === "parcial" ? 900 : 500, 110);
-    msgColeta((modo === "ok" ? "✔ COLETADO: " : modo === "parcial" ? "◐ PARCIAL: " : "✕ NÃO ATENDIDO: ") + (it.d || p) + " → " + num(nq) + " de " + num(it.qtd), modo === "ok" ? "ok" : modo === "parcial" ? "aviso" : "erro");
+    var nome = it.d || p, msg, tipo;
+    if (car) { msg = modo === "zerar" ? "↺ ZERADO: " + nome : modo === "aceito" ? "◐ ACEITO: " + nome + " → " + num(nq) : "+" + num(add) + " " + nome + " → " + num(nq) + " carregado"; tipo = modo === "aceito" ? "aviso" : "ok"; }
+    else if (modo === "nao") { msg = "✕ NÃO ATENDIDO: " + nome; tipo = "erro"; }
+    else if (modo === "zerar") { msg = "↺ ZERADO: " + nome; tipo = ""; }
+    else if (modo === "parcial") { msg = "◐ PARCIAL: " + nome + " → " + num(nq) + " de " + num(it.qtd); tipo = "aviso"; }
+    else { msg = (nq === it.qtd ? "✔ COMPLETO: " : nq > it.qtd ? "⚠ A MAIS: " : "+" + num(add) + " ") + nome + " → " + num(nq) + " de " + num(it.qtd); tipo = nq === it.qtd ? "ok" : nq > it.qtd ? "aviso" : ""; }
+    expSom(tipo === "ok" ? 1500 : tipo === "erro" ? 500 : 900, 110);
+    msgColeta(msg, tipo);
     EXP.destaque = p; fecharItemColeta(); desenharExpedicao(); agendarEnvio();
   }
   function desfazerColeta() {
@@ -1912,13 +1949,13 @@ window.PedidoPDF = (function () {
     if (!a || EXP.enviando) return;
     if (!EXP.fila.length) { var d0 = EXP.depois; EXP.depois = null; if (d0) d0(); return; }
     var ops = EXP.fila.splice(0, 400), id = a.id; EXP.enviando = ops;
-    expChamar("confRegistrar", [id, ops], function (r) {
+    expChamar("confRegistrar", [id, ops, EXP.nome, a.etapa], function (r) {
       EXP.enviando = null;
       if (EXP.aberto && EXP.aberto.id === id && r) aplicarEstadoConf(r);
       if (EXP.fila.length) enviarColeta(); else { var d = EXP.depois; EXP.depois = null; if (d) d(); }
     }, function (e) {
       EXP.enviando = null; var m = String(e && e.message || e);
-      if (/fechada/i.test(m)) { EXP.fila = []; EXP.depois = null; msgColeta(m, "erro"); return; }
+      if (/fechada|CARREGAMENTO|SEPARAÇÃO|não cadastrado/i.test(m)) { EXP.fila = []; EXP.depois = null; msgColeta(m, "erro"); return; }
       EXP.fila = ops.concat(EXP.fila); msgColeta("Sem conexão: as leituras ficam guardadas e vão de novo sozinhas.", "erro");
       setTimeout(function () { enviarColeta(); }, 4000);
     });
@@ -1926,7 +1963,7 @@ window.PedidoPDF = (function () {
   /** Estado do servidor + o que ainda não foi enviado deste aparelho. */
   function aplicarEstadoConf(r) {
     var a = EXP.aberto; if (!a) return;
-    a.conf = r.conf || {}; a.quem = r.quem || []; a.rev = r.rev || 0;
+    a.conf = r.conf || {}; a.quem = r.quem || []; a.rev = r.rev || 0; if (r.pend) a.pend = r.pend; if (r.etapa) a.etapa = r.etapa;
     EXP.fila.forEach(function (o) {
       var c = a.conf[o.p] || (a.conf[o.p] = { q: 0, st: "", just: "" });
       if (o.d != null) c.q = Math.max(0, (Number(c.q) || 0) + o.d);
@@ -1936,14 +1973,26 @@ window.PedidoPDF = (function () {
   }
   function fecharConferencia() {
     var a = EXP.aberto; if (!a || !a.itens) return;
-    var falta = a.itens.filter(function (it) { return !respConf(it, a.conf[it.p]); }).length;
-    if (falta) { msgColeta("Ainda falta responder " + falta + (falta === 1 ? " item." : " itens."), "erro"); return; }
-    var dif = a.itens.filter(function (it) { var c = a.conf[it.p] || {}; return respConf(it, c) !== "ok"; }).length;
-    if (!window.confirm("Fechar a conferência de " + a.loja + "?" + (dif ? "\n" + dif + " item(ns) com quantidade diferente ou não atendidos: o pedido será ajustado no ERP." : "\nTudo coletado conforme o pedido."))) return;
+    var car = a.etapa === "car";
+    if (!car) {
+      var falta = a.itens.filter(function (it) { return !respConf(it, a.conf[it.p]); }).length;
+      if (falta) { msgColeta("Ainda falta responder " + falta + (falta === 1 ? " item." : " itens."), "erro"); return; }
+      if (!window.confirm("Fechar a SEPARAÇÃO de " + a.loja + "?\nO pedido vai para o CARREGAMENTO, para ser coletado de novo (às cegas).")) return;
+    } else if (!window.confirm("Fechar o CARREGAMENTO de " + a.loja + "?\nO app confere se cada item bate com a separação.")) return;
     msgColeta("Enviando…", "");
     enviarColeta(function () {
-      expChamar("confFechar", [a.id], function () {
-        clearInterval(EXP.tPoll); EXP.aberto = null; EXP.lista = null; desenharExpedicao(); carregarExpedicao();
+      expChamar("confFechar", [a.id, EXP.nome], function (r) {
+        if (r && r.ok === false && r.pendentes) {
+          a.pend = r.pendentes.map(function (i) { return i.p; });
+          EXP.abertos = EXP.abertos || {}; a.itens.forEach(function (it) { if (a.pend.indexOf(it.p) >= 0) EXP.abertos[it.dep || "OUTROS"] = true; });
+          expSom(220, 450);
+          msgColeta(r.pendentes.length + (r.pendentes.length === 1 ? " item não bateu" : " itens não bateram") + " com a separação (em vermelho): zere e conte de novo, ou aceite o carregado com justificativa. Depois feche de novo.", "erro");
+          desenharExpedicao(); return;
+        }
+        clearInterval(EXP.tPoll); EXP.aberto = null; EXP.lista = null;
+        if (r && r.etapa === "car") EXP.etapaLista = "sep";
+        desenharExpedicao(); carregarExpedicao();
+        toast(r && r.etapa === "car" ? "Separação fechada: o pedido foi para o Carregamento" : "Carregamento fechado: conferência concluída");
         expSom(1500, 120); setTimeout(function () { expSom(1800, 160); }, 140);
       }, function (e) { msgColeta(String(e && e.message || e), "erro"); });
     });
@@ -1963,23 +2012,33 @@ window.PedidoPDF = (function () {
       setTimeout(focoBip, 0);
     }
     // 09/11 (Marcelo): igual à conferência de pedidos do painel: "N produtos no pedido" + SETORES que abrem/fecham
-    // (mesma ordem da lista da loja) e, dentro do setor, agrupado por marca.
+    // (mesma ordem da lista da loja) e, dentro do setor, agrupado por marca. No CARREGAMENTO não aparece quantidade.
+    var car = a.etapa === "car", pend = car ? (a.pend || []) : [];
     var resp = 0, ordem = [], porDep = {}, hl = "";
     EXP.abertos = EXP.abertos || {};
     a.itens.forEach(function (it) { var dp = it.dep || "OUTROS"; if (!porDep[dp]) { porDep[dp] = []; ordem.push(dp); } porDep[dp].push(it); });
     if (dados && dados.departamentos) { var od = dados.departamentos.map(function (d) { return d.nome; }); ordem.sort(function (x, y) { var ix = od.indexOf(x), iy = od.indexOf(y); return (ix < 0 ? 999 : ix) - (iy < 0 ? 999 : iy); }); }
-    hl += '<div class="aviso aviso-total"><b>' + a.itens.length + (a.itens.length === 1 ? " produto" : " produtos") + "</b> no pedido</div>";
+    hl += '<div class="aviso aviso-total"><b>' + a.itens.length + (a.itens.length === 1 ? " produto" : " produtos") + "</b> " + (car ? "para carregar (conte sem ver o separado)" : "no pedido") + "</div>";
     ordem.forEach(function (dp) {
       var l = porDep[dp].slice().sort(function (x, y) { return (x.m || "") === (y.m || "") ? (x.d || "").localeCompare(y.d || "") : (x.m || "").localeCompare(y.m || ""); });
       var feitos = 0, linhas = "", marca = null;
       l.forEach(function (it) {
-        var c = a.conf[it.p] || {}, r = respConf(it, c), q = Number(c.q) || 0; if (r) { resp++; feitos++; }
-        var cls = r === "ok" ? "ok" : r === "parcial" ? "parc" : r === "nao" ? "nao" : q > it.qtd ? "mais" : q > 0 ? "falta" : "";
+        var c = a.conf[it.p] || {}, q = Number(c.q) || 0, r, cls, extra = "", direita;
+        if (car) {
+          var pd = pend.indexOf(it.p) >= 0;
+          if (q > 0 || c.st) { resp++; feitos++; }
+          cls = pd ? "mais" : c.st === "aceito" ? "parc" : q > 0 ? "car" : "";
+          extra = pd ? '<small class="j" style="color:#b42226">Não bateu com a separação</small>' : c.st === "aceito" ? '<small class="j">Aceito: ' + esc(c.just) + "</small>" : "";
+          direita = '<div class="exp-it-q"><b>' + num(q) + "</b><span>carregado</span></div>";
+        } else {
+          r = respConf(it, c); if (r) { resp++; feitos++; }
+          cls = r === "ok" ? "ok" : r === "parcial" ? "parc" : r === "nao" ? "nao" : q > it.qtd ? "mais" : q > 0 ? "falta" : "";
+          extra = r === "parcial" ? '<small class="j">Parcial: ' + esc(c.just) + "</small>" : r === "nao" ? '<small class="j">Não atendido: ' + esc(c.just) + "</small>" : r === "ok" ? '<small class="ok">Separado</small>' : "";
+          direita = '<div class="exp-it-q"><b>' + num(r === "nao" ? 0 : q) + '</b><span>de ' + num(it.qtd) + "</span></div>";
+        }
         if ((it.m || "") !== marca) { marca = it.m || ""; linhas += '<div class="grupo marca">' + esc(marca || "Sem marca") + "</div>"; }
         var un = (it.t || "UN") + (it.q > 1 ? " c/ " + num(it.q) : "");
-        linhas += '<div class="exp-it ' + cls + (EXP.destaque === it.p ? " dest" : "") + '" id="expIt_' + esc(it.p) + '" data-exp="item" data-v="' + esc(it.p) + '"><div class="exp-it-d"><b>' + esc(it.d || "PLU " + it.p) + "</b><small>PLU " + esc(it.p) + " · " + esc(un) + "</small>" +
-          (r === "parcial" ? '<small class="j">Parcial: ' + esc(c.just) + "</small>" : r === "nao" ? '<small class="j">Não atendido: ' + esc(c.just) + "</small>" : r === "ok" ? '<small class="ok">Coletado</small>' : "") + "</div>" +
-          '<div class="exp-it-q"><b>' + num(r === "nao" ? 0 : q) + '</b><span>de ' + num(it.qtd) + "</span></div></div>";
+        linhas += '<div class="exp-it ' + cls + (EXP.destaque === it.p ? " dest" : "") + '" id="expIt_' + esc(it.p) + '" data-exp="item" data-v="' + esc(it.p) + '"><div class="exp-it-d"><b>' + esc(it.d || "PLU " + it.p) + "</b><small>PLU " + esc(it.p) + " · " + esc(un) + "</small>" + extra + "</div>" + direita + "</div>";
       });
       var fechado = !EXP.abertos[dp];
       hl += '<div class="setor-mgr' + (fechado ? " fechado" : "") + '" data-exp="setor" data-v="' + esc(dp) + '"><b><i>' + (fechado ? "▸" : "▾") + "</i>" + esc(nomeAba(dp)) + "</b><span>" +
@@ -1987,10 +2046,11 @@ window.PedidoPDF = (function () {
         '<div class="setor-corpo"' + (fechado ? " hidden" : "") + ">" + linhas + "</div>";
     });
     document.getElementById("expCab").innerHTML = '<div style="margin-bottom:6px">' + (a.num ? '<span class="exp-tag" style="margin-left:0">ERP ' + esc(a.num) + "</span> " : "") +
-      '<small style="color:var(--sub)">' + resp + " de " + a.itens.length + " itens respondidos" + (a.quem && a.quem.length ? " · conferindo: " + esc(a.quem.join(", ")) : "") + (EXP.fila.length || EXP.enviando ? " · enviando…" : "") + "</small></div>";
+      '<span class="exp-tag" style="margin-left:0;background:#fff1d6;color:#9a5b00" data-exp="trocanome">&#128100; ' + esc(EXP.nome || "escolher conferente") + " (trocar)</span> " +
+      '<small style="color:var(--sub)">' + resp + " de " + a.itens.length + (car ? " itens carregados" : " itens respondidos") + (pend.length ? " · " + pend.length + " não bateram" : "") + (a.quem && a.quem.length ? " · conferindo: " + esc(a.quem.join(", ")) : "") + (EXP.fila.length || EXP.enviando ? " · enviando…" : "") + "</small></div>";
     document.getElementById("expLista").innerHTML = hl;
-    document.getElementById("expPe").innerHTML = '<button class="btn ' + (resp === a.itens.length ? "btn-verde" : "btn-cinza") + '" data-exp="fecharconf" style="width:100%;margin-top:12px">' +
-      (resp === a.itens.length ? "&#10004; Fechar conferência" : "Fechar conferência (faltam " + (a.itens.length - resp) + ")") + "</button>";
+    document.getElementById("expPe").innerHTML = '<button class="btn ' + (car || resp === a.itens.length ? "btn-verde" : "btn-cinza") + '" data-exp="fecharconf" style="width:100%;margin-top:12px">' +
+      (car ? "&#10004; Fechar carregamento" : resp === a.itens.length ? "&#10004; Fechar separação" : "Fechar separação (faltam " + (a.itens.length - resp) + ")") + "</button>";
     if (EXP.destaque) { var d = document.getElementById("expIt_" + EXP.destaque); if (d) try { d.scrollIntoView({ block: "nearest" }); } catch (e) {} }
   }
   function fecharExpedicao() {   // Marcelo: fecha a Expedição e volta ao app
@@ -2015,7 +2075,7 @@ window.PedidoPDF = (function () {
     h += '<div style="font-weight:800;color:var(--marrom);margin:2px 0 8px">Conferência · pedidos aprovados das lojas</div>';
     var a = EXP.aberto;
     if (a) {   // 09/11 (Marcelo): conferência aberta = TELA À PARTE (sem as abas da Expedição), para focar na coleta
-      var hc = '<div class="exp-topo exp-topo-col"><button data-exp="voltar" class="exp-volta" title="Voltar">&#8592;</button><div><b>Conferência</b><span>' + esc(a.loja || "") + (a.nome ? " · " + esc(a.nome) : "") + "</span></div>" +
+      var hc = '<div class="exp-topo exp-topo-col"><button data-exp="voltar" class="exp-volta" title="Voltar">&#8592;</button><div><b>' + (a.etapa === "car" ? "Carregamento" : a.etapa === "sep" ? "Separação" : "Conferência") + "</b><span>" + esc(a.loja || "") + (a.nome ? " · " + esc(a.nome) : "") + "</span></div>" +
         '<div class="exp-btns"><button data-exp="diag" title="Testar o leitor do coletor">&#128295;</button><button data-exp="desfazer">&#8630; Desfazer</button></div></div><div class="exp-corpo">';
       desenharColeta(t, hc); return;
     }
@@ -2041,8 +2101,10 @@ window.PedidoPDF = (function () {
     var L = EXP.lista;
     if (!L) { t.innerHTML = h + '<div class="carregando"><div class="giro"></div>Buscando os pedidos aprovados…</div></div>'; return; }
     L = L.filter(function (p) { return !p.nf; });   // 09/11 (Marcelo): na Conferência só os aprovados AINDA NÃO faturados
+    var nSep = L.filter(function (p) { return p.etapa !== "car"; }).length, nCar = L.length - nSep, etl = EXP.etapaLista === "car" ? "car" : "sep";   // 09/11: abas
+    L = L.filter(function (p) { return etl === "car" ? p.etapa === "car" : p.etapa !== "car"; });
     var lojas = []; L.forEach(function (p) { if (lojas.indexOf(p.loja) < 0) lojas.push(p.loja); }); lojas.sort();
-    h += '<div class="exp-filtros"><b style="color:var(--marrom)">A separar (' + L.length + ")</b>" +
+    h += '<div class="exp-filtros"><button data-exp="etl" data-v="sep" class="' + (etl === "sep" ? "on" : "") + '">Separação (' + nSep + ')</button><button data-exp="etl" data-v="car" class="' + (etl === "car" ? "on" : "") + '">Carregamento (' + nCar + ")</button>" +
       '<select id="expLoja"><option value="">Todas as lojas</option>' + lojas.map(function (l) { return '<option' + (l === EXP.loja ? " selected" : "") + ">" + esc(l) + "</option>"; }).join("") + "</select></div>";
     var vis = L.filter(function (p) { return !EXP.loja || p.loja === EXP.loja; });
     if (!vis.length) h += '<div class="vazio" style="padding:14px">Nenhum pedido aqui.</div>';
@@ -2050,7 +2112,8 @@ window.PedidoPDF = (function () {
       h += '<div class="exp-card" data-exp="abrir" data-v="' + esc(p.id) + '"><b>' + esc(p.loja) + "</b> · " + esc(p.nome) +
         (p.num ? '<span class="exp-tag">ERP ' + esc(p.num) + "</span>" : "") + (p.nf ? '<span class="exp-tag nf">NF ' + esc(p.nf) + "</span>" : "") +
         "<br><small>Aprovado " + esc(p.aprovadoEm || p.quando || "") + " · " + p.n + " itens" +
-        (p.conferindo != null ? ' · <b style="color:#9a5b00">Conferindo: ' + p.conferindo + "/" + p.n + "</b>" + ((p.conferentes || []).length ? " (" + esc(p.conferentes.join(", ")) + ")" : "") : "") + "</small></div>";
+        (p.pend ? ' · <b style="color:#b42226">' + p.pend + " não bateram</b>" : "") +
+        (p.conferindo != null ? ' · <b style="color:#9a5b00">' + (p.etapa === "car" ? "Carregando: " : "Separando: ") + p.conferindo + "/" + p.n + "</b>" + ((p.conferentes || []).length ? " (" + esc(p.conferentes.join(", ")) + ")" : "") : "") + "</small></div>";
     });
     t.innerHTML = h + "</div>";
   }
@@ -5234,7 +5297,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.22";
+  var VERSAO_APP = "2026-11-09.23";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
