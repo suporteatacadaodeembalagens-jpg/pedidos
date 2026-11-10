@@ -1907,16 +1907,16 @@ window.PedidoPDF = (function () {
     EXP.modal = { p: p }; EXP.abertos = EXP.abertos || {}; EXP.abertos[it.dep || "OUTROS"] = true;
     var qs = car ? '<div class="exp-modal-qs" style="grid-template-columns:1fr"><div><span>Já carregado</span><b>' + num(q) + "</b><small>" + esc(it.t || "UN") + "</small></div></div>"
       : '<div class="exp-modal-qs"><div><span>Pedido</span><b>' + num(it.qtd) + "</b><small>" + esc(it.t || "UN") + '</small></div><div><span>Já separado</span><b>' + num(c.st === "nao" ? 0 : q) + "</b><small>" + esc(it.t || "UN") + "</small></div></div>";
-    var st = c.st === "nao" ? "Marcado como NÃO ATENDIDO" : c.st === "parcial" ? "Marcado como PARCIAL" : c.st === "aceito" ? "Carregado ACEITO" : "";
+    var st = c.st === "nao" ? (car ? "Marcado como NÃO CARREGADO" : "Marcado como NÃO ATENDIDO") : c.st === "parcial" ? "Marcado como PARCIAL" : c.st === "aceito" ? "Carregado ACEITO" : "";
     mo.innerHTML = '<div class="exp-modal-cx"><div class="exp-modal-t">' + esc(it.d || "PLU " + p) + "</div>" +
       '<div class="exp-modal-info">PLU <b>' + esc(p) + "</b>" + (it.m ? " · " + esc(it.m) : "") + "<br>" + (it.dep ? esc(nomeAba(it.dep)) + " · " : "") + esc(un) +
       (cod ? '<br><small>Código lido: ' + esc(cod) + "</small>" : "") + "</div>" + qs +
-      (pend ? '<div class="exp-modal-st" style="background:#fde2e1;color:#b42226">Não bateu com a separação: zere e conte de novo, ou aceite o carregado com justificativa.</div>' : "") +
+      (pend ? '<div class="exp-modal-st" style="background:#fde2e1;color:#b42226">Não bateu com a separação: zere e conte de novo, ou use Atender parcialmente / Não atendido com justificativa.</div>' : "") +
       (st ? '<div class="exp-modal-st">' + st + (c.just ? ": " + esc(c.just) : "") + "</div>" : "") +
       '<label for="expMQ">' + (car ? "Carregado agora" : "Separado agora") + " (" + esc(it.t || "UN") + ') — soma ao que já tem</label><input id="expMQ" type="number" min="0" inputmode="numeric" value="" placeholder="Digite a quantidade">' +
-      '<label for="expMJ">Justificativa' + (car ? " (para aceitar o carregado)" : " (parcial ou não atendido)") + '</label><input id="expMJ" maxlength="120" autocomplete="off" placeholder="' + (car ? "Ex.: 1 caixa avariada" : "Ex.: só tinha 2 / sem estoque") + '" value="' + esc(c.just || "") + '">' +
+      '<label for="expMJ">Justificativa (parcial ou não atendido)</label><input id="expMJ" maxlength="120" autocomplete="off" placeholder="' + (car ? "Ex.: 1 caixa avariada / não coube" : "Ex.: só tinha 2 / sem estoque") + '" value="' + esc(c.just || "") + '">' +
       '<div class="exp-modal-b"><button data-exp="msalvar" class="verde">&#10133; Somar</button>' +
-      (car ? (pend ? '<button data-exp="maceitar" class="laranja">Aceitar o carregado</button>' : "") : '<button data-exp="mparcial" class="laranja">Atender parcialmente</button><button data-exp="mnao" class="cinza">Não atendido</button>') +
+      '<button data-exp="mparcial" class="laranja">Atender parcialmente</button><button data-exp="mnao" class="cinza">Não atendido</button>' +   // 10/11: carregamento = mesma ficha da separação (às cegas)
       '<button data-exp="mzerar" class="cinza">Zerar contagem</button><button data-exp="mcancelar" class="link">Cancelar</button></div><div id="expMMsg" class="exp-modal-msg"></div></div>';
     mo.hidden = false;
     setTimeout(function () { var i = document.getElementById("expMQ"); if (i) { i.focus(); try { i.select(); } catch (e) {} } }, 30);
@@ -2020,7 +2020,7 @@ window.PedidoPDF = (function () {
     else if (modo === "nao") { nq = 0; st = "nao"; nj = just || "Não encontrado / sem estoque"; }
     else if (modo === "parcial") {
       nq = q0 + add;
-      if (nq === it.qtd) { msgModal("Com essa quantidade bate com o pedido: use Somar."); return; }
+      if (!car && nq === it.qtd) { msgModal("Com essa quantidade bate com o pedido: use Somar."); return; }
       if (!just) { msgModal("Escreva a justificativa da quantidade diferente."); if (ji) ji.focus(); return; }
       st = "parcial"; nj = just;
     } else if (modo === "aceito") {
@@ -2031,7 +2031,7 @@ window.PedidoPDF = (function () {
     if (st !== (c.st || "") || nj !== (c.just || "")) { c.st = st; c.just = st ? nj : ""; EXP.fila.push({ p: p, st: st, just: c.just, et: a.etapa }); }
     EXP.ultimos.push(antes);
     var nome = it.d || p, msg, tipo;
-    if (car) { msg = modo === "zerar" ? "↺ ZERADO: " + nome : modo === "aceito" ? "◐ ACEITO: " + nome + " → " + num(nq) : "+" + num(add) + " " + nome + " → " + num(nq) + " carregado"; tipo = modo === "aceito" ? "aviso" : "ok"; }
+    if (car) { msg = modo === "zerar" ? "↺ ZERADO: " + nome : modo === "nao" ? "✕ NÃO CARREGADO: " + nome : (modo === "aceito" || modo === "parcial") ? "◐ PARCIAL: " + nome + " → " + num(nq) : "+" + num(add) + " " + nome + " → " + num(nq) + " carregado"; tipo = modo === "nao" ? "erro" : (modo === "aceito" || modo === "parcial") ? "aviso" : "ok"; }
     else if (modo === "nao") { msg = "✕ NÃO ATENDIDO: " + nome; tipo = "erro"; }
     else if (modo === "zerar") { msg = "↺ ZERADO: " + nome; tipo = ""; }
     else if (modo === "parcial") { msg = "◐ PARCIAL: " + nome + " → " + num(nq) + " de " + num(it.qtd); tipo = "aviso"; }
@@ -2057,6 +2057,9 @@ window.PedidoPDF = (function () {
     expChamar("confRegistrar", [id, ops, EXP.ct, a.etapa], function (r) {
       EXP.enviando = null;
       if (EXP.aberto && EXP.aberto.id === id && r) aplicarEstadoConf(r);
+      if (r && r.recusados && r.recusados.length) {   // 10/11: carregamento acima do separado: o servidor não aceita
+        expSom(220, 500); msgColeta("✕ " + r.recusados.map(function (x) { return x.d || x.p; }).join(", ") + ": carregado passa do que foi SEPARADO. Reconte (não foi somado).", "erro");
+      }
       if (EXP.fila.length) enviarColeta(); else { var d = EXP.depois; EXP.depois = null; if (d) d(); }
     }, function (e) {
       EXP.enviando = null; var m = String(e && e.message || e);
@@ -5523,7 +5526,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.12";
+  var VERSAO_APP = "2026-11-10.13";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
