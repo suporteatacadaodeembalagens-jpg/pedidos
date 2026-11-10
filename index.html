@@ -1856,7 +1856,12 @@ window.PedidoPDF = (function () {
   }
   function itemColeta(p) { var a = EXP.aberto; return a && a.itens ? a.itens.filter(function (x) { return x.p === p; })[0] : null; }
   function modalAberto() { var m = document.getElementById("expModal"); return !!(m && !m.hidden); }
-  function focoBip() { if (modalAberto() || EXP.diag) return; var b = document.getElementById("expBip"); if (b) try { b.focus({ preventScroll: true }); } catch (e) { b.focus(); } }
+  function focoBip() { if (modalAberto() || EXP.diag) return; var b = document.getElementById("expBip"); if (!b) return;
+    // 10/11 (Marcelo): modo só leitor - foca SEM abrir o teclado: campo "só leitura" na hora do foco (o Android não abre o
+    // teclado) e volta a ser normal logo depois, para o leitor do EDA52 escrever (ele não escreve em campo inputmode none).
+    var so = b.getAttribute("data-sotecla") && !b._dig;
+    if (so && document.activeElement !== b) { b.readOnly = true; clearTimeout(b._ro); b._ro = setTimeout(function () { b.readOnly = false; }, 180); }
+    try { b.focus({ preventScroll: true }); } catch (e) { b.focus(); } }
   function msgColeta(txt, tipo) { var m = document.getElementById("expMsg"); if (m) { m.className = "exp-msg " + (tipo || ""); m.textContent = txt; } }
   function codigoParaPlu(cod) {
     var a = EXP.aberto, dig = String(cod || "").replace(/\D/g, ""), p = null;
@@ -3988,12 +3993,13 @@ window.PedidoPDF = (function () {
         return '<div style="background:#e3eefb;border:1px solid #c4d8f2;border-radius:8px;padding:7px 9px;color:#1f4f7a"><small>' + x[0] + "</small><br><b>" + x[1] + "</b></div>";
       }).join("") + "</div>";
     // 05/11 (Marcelo): R$ VENDIDO e MARGEM (%) - do relatório ABC de Vendas Individual (robô), das lojas que a pessoa vê
-    function rs(m) { var v = 0, c = 0; cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { v += Number(x[0]) || 0; c += Number(x[1]) || 0; } }); return [v, c]; }
+    // 10/11 (Marcelo): CUSTO = o do CD (loja 001): qtd vendida x custo unitário do CD no mês (m.cdu, do servidor)
+    function rs(m) { var v = 0, c = 0, q = 0; cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { v += Number(x[0]) || 0; c += Number(x[1]) || 0; q += Number(m.lojas[k]) || 0; } }); if (m.cdu > 0) c = q * m.cdu; return [v, c]; }
     function marg(vc) { return vc[1] > 0 ? (vc[0] - vc[1]) / vc[1] * 100 : null; }   // 06/11: MARKUP = (venda - custo) / custo
     function unit(m) {   // preço e custo médios UNITÁRIOS do mês = R$ / quantidade (só as lojas com R$)
       var q = 0, v = 0, c = 0;
       cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { q += Number(m.lojas[k]) || 0; v += Number(x[0]) || 0; c += Number(x[1]) || 0; } });
-      return q > 0 ? [v / q, c / q] : null;
+      return q > 0 ? [v / q, m.cdu > 0 ? m.cdu : c / q] : null;
     }
     function pct(x) { return x == null ? "—" : (Math.round(x * 10) / 10).toString().replace(".", ",") + "%"; }
     var comValor = meses.some(function (m) { return !!m.valores; }), tabValores = "";
@@ -4005,12 +4011,12 @@ window.PedidoPDF = (function () {
           return '<div style="background:#eaf3ee;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
         }).join("") + "</div>";
       // 06/11 (Marcelo): preço e custo médios do mês (na embalagem) e MARKUP (sobre o custo); * = estimado
-      tabValores = '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th>Mês</th><th>Vendido R$</th><th>Preço ' + esc(un) + '</th><th>Custo ' + esc(un) + '</th><th>Markup</th></tr>' + meses.map(function (m) {
-        if (!m.valores) return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + '</td><td colspan="4"><small>ainda não carregado</small></td></tr>';
+      tabValores = '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th>Mês</th><th>Vendido R$</th>' + (fat > 1 ? "<th>Preço UN</th>" : "") + '<th>Preço ' + esc(un) + "</th>" + (fat > 1 ? "<th>Custo UN</th>" : "") + '<th>Custo ' + esc(un) + '</th><th>Markup</th></tr>' + meses.map(function (m) {
+        if (!m.valores) return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + '</td><td colspan="' + (fat > 1 ? 6 : 4) + '"><small>ainda não carregado</small></td></tr>';
         var x = rs(m), mg = marg(x), u = unit(m);
-        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + (m.est ? " *" : "") + "</td><td><b>" + reais(x[0]) + "</b></td><td>" + (u && u[0] > 0 ? reais(u[0] * fat) : "—") + "</td><td>" + (u && u[1] > 0 ? reais(u[1] * fat) : "—") +
+        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + (m.est ? " *" : "") + "</td><td><b>" + reais(x[0]) + "</b></td>" + (fat > 1 ? "<td>" + (u && u[0] > 0 ? reais(u[0]) : "—") + "</td>" : "") + "<td>" + (u && u[0] > 0 ? reais(u[0] * fat) : "—") + "</td>" + (fat > 1 ? "<td>" + (u && u[1] > 0 ? reais(u[1]) : "—") + (m.cdEst ? " ¹" : "") + "</td>" : "") + "<td>" + (u && u[1] > 0 ? reais(u[1] * fat) : "—") + (fat > 1 ? "" : (m.cdEst ? " ¹" : "")) +
           '</td><td style="color:' + corMargem(mg) + '">' + pct(mg) + "</td></tr>";
-      }).join("") + "</table></div>" + (meses.some(function (m) { return m.est && m.valores; }) ? '<p style="margin:-6px 0 12px"><small>* R$, preço e custo estimados pelo preço e custo atuais (a Posição de vendas só traz a quantidade).</small></p>' : "");
+      }).join("") + "</table></div>" + '<p style="margin:-6px 0 12px"><small>Custo = custo do CD (loja 001).' + (meses.some(function (m) { return m.cdEst && m.valores; }) ? " ¹ mês sem custo do CD no relatório: usado o custo atual do CD." : "") + (meses.some(function (m) { return m.est && m.valores; }) ? " * R$ e preço estimados pelo preço atual (a Posição de vendas só traz a quantidade)." : "") + "</small></p>";
     }
     // 05/11 (Marcelo): sem a tabela do total - para quem vê mais de uma loja a tabela LOJA A LOJA já aparece aberta;
     // o gráfico vem DEPOIS dela, com os valores em cima das barras, a linha da média, o melhor mês em destaque e
@@ -4099,12 +4105,13 @@ window.PedidoPDF = (function () {
       if (!linhas.length) return;
       var b = linhas[0];
       precoH = '<div style="font-weight:700;margin:4px 0 6px;color:#5b4636">Preço de venda, custo e markup <small style="font-weight:400">(' + esc(un) + (fat > 1 ? " c/ " + num(fat) : "") + ")</small></div>" +
-        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th style="text-align:left"></th><th>Preço</th><th>Custo</th><th>Markup</th></tr>' +
+        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th style="text-align:left"></th>' + (fat > 1 ? "<th>Preço UN</th><th>Preço " + esc(un) + "</th><th>Custo UN</th><th>Custo " + esc(un) + "</th>" : "<th>Preço</th><th>Custo</th>") + '<th>Markup</th></tr>' +
         linhas.map(function (l, i) {
           var mk = l[2] > 0 ? (l[1] - l[2]) / l[2] * 100 : null;
           var vp = temAtual && i && b[1] > 0 && l[1] > 0 ? "<br><small>atual " + variacao(b[1], l[1]) + "</small>" : "";
           var vc = temAtual && i && b[2] > 0 && l[2] > 0 ? "<br><small>atual " + variacao(b[2], l[2]) + "</small>" : "";
-          return '<tr><td style="text-align:left">' + esc(l[0]) + (l[3] ? " *" : "") + "</td><td><b>" + (l[1] > 0 ? reais(l[1] * fat) : "—") + "</b>" + vp + "</td><td><b>" + (l[2] > 0 ? reais(l[2] * fat) : "—") + "</b>" + vc +
+          var cUn = fat > 1 ? function (v) { return "<td>" + (v > 0 ? reais(v) : "—") + "</td>"; } : function () { return ""; };   // 10/11: preço e custo também por UNIDADE
+          return '<tr><td style="text-align:left">' + esc(l[0]) + (l[3] ? " *" : "") + "</td>" + cUn(l[1]) + "<td><b>" + (l[1] > 0 ? reais(l[1] * fat) : "—") + "</b>" + vp + "</td>" + cUn(l[2]) + "<td><b>" + (l[2] > 0 ? reais(l[2] * fat) : "—") + "</b>" + vc +
             '</td><td style="color:' + corMargem(mk) + '"><b>' + pctTxt(mk) + "</b></td></tr>";
         }).join("") + "</table></div>";
     })();
@@ -5539,7 +5546,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.15";
+  var VERSAO_APP = "2026-11-10.17";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
