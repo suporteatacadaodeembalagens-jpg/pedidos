@@ -5027,12 +5027,14 @@ window.PedidoPDF = (function () {
   }
   function listaVisivelCmp() {
     // 06/11: busca padrão da Consulta (nome, PLU, marca, fornecedor, EAN, várias palavras) e ordem alfabética
+    // 10/11 (Marcelo): FORA DE LINHA não aparece no pedido de compra
+    var semFl = function (l) { return Array.isArray(l) ? l.filter(function (x) { return x && !x.fl; }) : l; };
     var termo = semAcento(cmp.termo.trim());
     if (termo.length >= 2) {
-      if (Array.isArray(cmp.forn)) return filtrarPadrao(cmp.forn, cmp.termo, "");
-      return Array.isArray(cmp.busca) ? cmp.busca.slice().sort(ordemAlfa) : cmp.busca;
+      if (Array.isArray(cmp.forn)) return semFl(filtrarPadrao(cmp.forn, cmp.termo, ""));
+      return Array.isArray(cmp.busca) ? semFl(cmp.busca.slice().sort(ordemAlfa)) : cmp.busca;
     }
-    return cmp.forn;
+    return semFl(cmp.forn);
   }
 
   function htmlCompra(x, detalhe) {
@@ -5149,11 +5151,13 @@ window.PedidoPDF = (function () {
     if (!corpo.fornecedor) { toast("Escolha o fornecedor"); var i = $("cmpForn"); if (i) i.focus(); return; }
     if (!corpo.entrega || !corpo.entrega.endereco) { toast("Escolha onde entregar"); return; }
     if (!corpo.dataEntrega) { toast("Informe a data de entrega"); var de = $("cmpDataEnt"); if (de) de.focus(); return; }
-    var semPreco = corpo.itens.filter(function (x) { return !(Number(x.preco) > 0); }).length;
+    // 10/11 (Marcelo): NÃO gera o pedido com item de custo (preço) 0
+    var semP = corpo.itens.filter(function (x) { return !(Number(x.preco) > 0); });
+    if (semP.length) { toast("Não dá para gerar: " + semP.length + (semP.length === 1 ? " item com custo 0: " : " itens com custo 0: ") + semP.slice(0, 3).map(function (x) { return x.d || x.p; }).join(", ") + (semP.length > 3 ? "…" : "") + ". Coloque o preço."); return; }
     var fd = cmp.fornDados[corpo.fornecedor], semCnpj = !(fd && fd !== "carregando" && fd.cnpj);
-    if ((semPreco || semCnpj) && !b._conf) {   // não bloqueia, mas avisa e pede um 2º toque
+    if (semCnpj && !b._conf) {   // não bloqueia, mas avisa e pede um 2º toque
       b._conf = true; b.textContent = "Toque de novo para gerar";
-      toast(semCnpj ? "Atenção: o fornecedor está sem CNPJ/endereço" : semPreco + " item(ns) sem preço");
+      toast("Atenção: o fornecedor está sem CNPJ/endereço");
       setTimeout(function () { b._conf = false; b.textContent = "Gerar pedido (PDF)"; }, 3500);
       return;
     }
@@ -5674,7 +5678,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.24";
+  var VERSAO_APP = "2026-11-10.25";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
