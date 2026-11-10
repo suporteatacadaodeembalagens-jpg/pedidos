@@ -1770,7 +1770,8 @@ window.PedidoPDF = (function () {
         else if (k === "mcancelar") fecharItemColeta();
         else if (k === "desfazer") desfazerColeta();
         else if (k === "fecharconf") fecharConferencia();
-        else if (k === "digitar") { var b = document.getElementById("expBip"); if (b) { b.setAttribute("inputmode", "numeric"); b.blur(); setTimeout(function () { b.focus(); }, 50); } return; }
+        else if (k === "digitar") { var b = document.getElementById("expBip"); if (b) { b.setAttribute("inputmode", "text"); b._dig = true; b.blur(); setTimeout(function () { b.focus(); }, 50); } return; }
+        else if (k === "modobip") { var nm = LS.get("bipModo", "leitor") === "normal" ? "leitor" : "normal"; LS.set("bipModo", nm); var bm = document.getElementById("expBip"); if (bm) bm.remove(); desenharExpedicao(); toast(nm === "normal" ? "Teclado ligado no campo de bipar" : "Só o leitor: o campo não abre o teclado"); setTimeout(focoBip, 0); return; }
         else if (k === "camera") { abrirLeitor(function (cod) { setTimeout(function () { bipar(cod); focoBip(); }, 50); }); return; }
         else if (k === "mod") { EXP.mod = v; EXP.aberto = null; desenharExpedicao(); if (v === "conferencia" && !EXP.lista) carregarExpedicao(); }
         else if (k === "atualizar") { EXP.lista = null; if (EXP.aberto) abrirPedidoExp(EXP.aberto.id); carregarExpedicao(); }
@@ -1802,7 +1803,9 @@ window.PedidoPDF = (function () {
         if (/^\d{8,}$/.test(v) && agora - (b._ini || agora) < 350) b._tm = setTimeout(function () { if (b.value === v) { b.value = ""; bipar(v); } }, 120);
       });
       t.addEventListener("keydown", function (e) {   // gatilho do coletor: código + Enter
-        if (e.target && e.target.id === "expBip" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); var v = e.target.value; e.target.value = ""; bipar(v); }
+        if (e.target && e.target.id === "expBip" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); var v = e.target.value; e.target.value = "";
+          var bt = e.target; if (bt._dig && LS.get("bipModo", "leitor") !== "normal") { bt._dig = false; bt.setAttribute("inputmode", "none"); bt.blur(); setTimeout(focoBip, 30); }   // digitou pelo ⌨: fecha o teclado
+          bipar(v); }
         else if (e.target && e.target.id === "expMQ" && (e.key === "Enter" || e.keyCode === 13)) {   // bipou com a ficha aberta = outro produto
           e.preventDefault(); var vq = String(e.target.value || "").replace(/\D/g, "");
           if (vq.length >= 7) { fecharItemColeta(); bipar(vq); } else salvarItemColeta("soma");
@@ -2135,8 +2138,12 @@ window.PedidoPDF = (function () {
     if (!a.itens) { t.innerHTML = h + '<button class="btn btn-cinza" data-exp="voltar" style="width:100%;margin-bottom:8px">&#8592; Voltar</button><div class="carregando"><div class="giro"></div>Abrindo a conferência…</div></div>'; return; }
     if (!document.getElementById("expBip")) {
       t.innerHTML = h + '<div id="expCab"></div>' +
-        '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Bipe o código (ou toque para digitar código, PLU ou nome)">' +
-        '<button data-exp="digitar" title="Digitar o código ou o PLU">&#9000;</button><button data-exp="camera" title="Ler com a câmera">&#128247;</button></div>' +
+        // 10/11 (Marcelo): SÓ O LEITOR - tocar no campo não abre o teclado (inputmode none); o ⌨ abre o teclado para digitar.
+        // Se o leitor deste aparelho não escrever no campo assim, o link embaixo volta o modo com teclado (fica guardado no aparelho).
+        (function () { var so = LS.get("bipModo", "leitor") !== "normal";
+          return '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go"' + (so ? ' inputmode="none"' : "") + ' placeholder="' + (so ? "Bipe o código com o leitor (⌨ para digitar)" : "Bipe o código (ou toque para digitar código, PLU ou nome)") + '">' +
+            '<button data-exp="digitar" title="Digitar o código, PLU ou nome">&#9000;</button><button data-exp="camera" title="Ler com a câmera">&#128247;</button></div>' +
+            '<div style="text-align:right;margin:-4px 0 6px"><button data-exp="modobip" style="background:none;border:0;color:#7a6a62;font-size:12px;text-decoration:underline;padding:2px 0">' + (so ? "Leitor não escreve no campo? Toque aqui" : "Teclado ligado no campo · voltar para só o leitor") + "</button></div>"; })() +
         '<div id="expMsg" class="exp-msg">Bipe o produto: abre a ficha dele para lançar a quantidade. Também dá para tocar no produto da lista.</div><div id="expLista"></div><div id="expPe"></div></div>';
       setTimeout(focoBip, 0);
     }
@@ -5526,7 +5533,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.13";
+  var VERSAO_APP = "2026-11-10.14";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
