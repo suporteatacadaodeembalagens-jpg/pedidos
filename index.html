@@ -63,7 +63,35 @@
   @keyframes barraServ{0%{left:-40%}100%{left:100%}}
   .item{content-visibility:auto;contain-intrinsic-size:auto 96px}   /* 10/11: rolagem leve em listas grandes */
   .exp-it{content-visibility:auto;contain-intrinsic-size:auto 70px}
-  .ana-inline{min-width:0;max-width:100%;width:100%;box-sizing:border-box}   /* 10/11: análise dentro do cartão (Consulta/Compra) não estoura a largura */
+  .ana-inline{min-width:0;max-width:100%;width:100%;box-sizing:border-box}
+  /* 10/11 (Marcelo): EXPEDIÇÃO MAIS CLARA NO COLETOR - letras e botões maiores, erro bem visível, piscada de cor */
+  body #telaExp .exp-it{padding:12px 12px;font-size:16px}
+  body #telaExp .exp-it-d{font-size:16.5px;font-weight:700;line-height:1.25}
+  body #telaExp .exp-it-d small{font-size:13.5px;font-weight:400}
+  body #telaExp .exp-it-q b{font-size:26px}
+  body #telaExp .exp-bip input{font-size:19px;padding:14px 12px}
+  body #telaExp .exp-bip button{width:56px;font-size:22px}
+  body #telaExp .exp-msg{font-size:16.5px;padding:12px 13px;border:2px solid transparent}
+  body #telaExp .exp-msg.ok{border-color:#1a7f45}
+  body #telaExp .exp-msg.aviso{border-color:#e0a100}
+  body #telaExp .exp-msg.erro{background:#c62828;color:#fff;border-color:#8e1b1b;font-size:17.5px;animation:expTreme .35s}
+  body #telaExp .exp-filtros button{padding:11px 16px;font-size:15px}
+  body #telaExp #expModal .exp-modal-t{font-size:21px}
+  body #telaExp #expModal .exp-modal-info{font-size:15px}
+  body #telaExp #expModal .exp-modal-qs b{font-size:34px}
+  body #telaExp #expModal .exp-modal-qs span{font-size:14px}
+  body #telaExp #expModal label{font-size:14.5px}
+  body #telaExp #expModal input{font-size:20px;padding:13px}
+  body #telaExp #expModal #expMQ{font-size:32px;padding:14px}
+  body #telaExp #expModal #expMQ::placeholder{font-size:19px;font-weight:700}
+  body #telaExp #expModal #expMQ.erro{border-color:#c62828;background:#fdecea;animation:expTreme .35s}
+  body #telaExp #expModal .exp-modal-b button{min-height:58px;font-size:17px}
+  body #telaExp #expModal .verde{font-size:19px}
+  body #telaExp .exp-modal-msg{font-size:16px;font-weight:700;min-height:0}
+  body #telaExp .exp-modal-msg.erro{background:#c62828;color:#fff;border-radius:10px;padding:12px 12px;margin-top:10px;font-size:18px;text-align:center;box-shadow:0 0 0 3px #f5b5b5;animation:expTreme .35s}
+  @keyframes expTreme{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+  #expFlash{position:fixed;inset:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .45s}
+  #expFlash.on{opacity:.38;transition:none}   /* 10/11: análise dentro do cartão (Consulta/Compra) não estoura a largura */
   html,body{margin:0;height:100%;background:var(--fundo);color:var(--texto);
     font-family:Roboto,"Segoe UI",Arial,sans-serif;font-size:15px}
   button{font-family:inherit}
@@ -1865,7 +1893,17 @@ window.PedidoPDF = (function () {
     var so = b.getAttribute("data-sotecla") && !b._dig;
     if (so && document.activeElement !== b) { b.readOnly = true; clearTimeout(b._ro); b._ro = setTimeout(function () { b.readOnly = false; }, 180); }
     try { b.focus({ preventScroll: true }); } catch (e) { b.focus(); } }
-  function msgColeta(txt, tipo) { var m = document.getElementById("expMsg"); if (m) { m.className = "exp-msg " + (tipo || ""); m.textContent = txt; } }
+  /* 10/11 (Marcelo): AVISO NO COLETOR - vibração diferente para cada caso e a tela pisca a cor (dá para ver de longe):
+     certo = verde (1 vibração curta) · atenção = amarelo (2) · erro / a mais / fora do pedido = vermelho (longa) */
+  function avisoExp(tipo) {
+    if (tipo !== "ok" && tipo !== "aviso" && tipo !== "erro") return;
+    try { if (navigator.vibrate) navigator.vibrate(tipo === "ok" ? 50 : tipo === "aviso" ? [90, 70, 90] : [300, 90, 300]); } catch (e) {}
+    if (tipo !== "ok") setTimeout(function () { expSom(tipo === "erro" ? 180 : 700, 160); }, 190);   // 2º bip: dá para distinguir sem olhar
+    var f = document.getElementById("expFlash"); if (!f) { f = document.createElement("div"); f.id = "expFlash"; document.body.appendChild(f); }
+    f.style.background = tipo === "ok" ? "#1a7f45" : tipo === "aviso" ? "#f5b400" : "#c62828";
+    f.classList.add("on"); clearTimeout(avisoExp.t); avisoExp.t = setTimeout(function () { f.classList.remove("on"); }, 160);
+  }
+  function msgColeta(txt, tipo) { var m = document.getElementById("expMsg"); if (m) { m.className = "exp-msg"; void m.offsetWidth; m.className = "exp-msg " + (tipo || ""); m.textContent = txt; } avisoExp(tipo); }
   function codigoParaPlu(cod) {
     var a = EXP.aberto, dig = String(cod || "").replace(/\D/g, ""), p = null;
     if (dig) p = (a.eans || {})[dig.replace(/^0+/, "")] || null;
@@ -2023,7 +2061,11 @@ window.PedidoPDF = (function () {
     } else msgModal("Peça ao Marcelo para apagar a sua senha (no app dele); depois você cria outra.");
   }
   function fecharItemColeta() { var mo = document.getElementById("expModal"); if (mo) { mo.hidden = true; mo.innerHTML = ""; } EXP.modal = null; EXP.abrirId = null; setTimeout(focoBip, 0); }
-  function msgModal(t) { var m = document.getElementById("expMMsg"); if (m) m.textContent = t; expSom(220, 250); }
+  function msgModal(t) {   // 10/11: erro na ficha BEM VISÍVEL (caixa vermelha que treme + campo vermelho + vibração)
+    var m = document.getElementById("expMMsg"); if (m) { m.className = "exp-modal-msg"; void m.offsetWidth; m.className = "exp-modal-msg erro"; m.textContent = t; try { m.scrollIntoView({ block: "nearest" }); } catch (e) {} }
+    var q = document.getElementById("expMQ"); if (q) { q.classList.remove("erro"); void q.offsetWidth; q.classList.add("erro"); if (m && q.nextElementSibling !== m) q.insertAdjacentElement("afterend", m); }   // a mensagem fica logo abaixo da quantidade
+    expSom(220, 250); avisoExp("erro");
+  }
   // 10/11 (Marcelo): ZERAR CONTAGEM só com a senha do Antonio ou do Marcelo (eles mesmos zeram direto)
   var CONF_AUT_APP = ["Antonio", "Marcelo"];
   function autZerarOk() { return CONF_AUT_APP.indexOf(EXP.nome) >= 0 || (EXP.az && EXP.azExp > Date.now()); }
@@ -5619,7 +5661,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.20";
+  var VERSAO_APP = "2026-11-10.21";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
