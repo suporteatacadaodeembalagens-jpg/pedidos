@@ -3,6 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
+<link rel="preconnect" href="https://script.google.com" crossorigin><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <meta name="app-api" content="https://script.google.com/macros/s/AKfycbyuOPfZPzxQZBuaV_p60HTOUGzF_SX6kqZ_1BYNM1kph4-GwTQnx0LELk1Vj5FPjDwE/exec">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -17,16 +18,28 @@
   var m = document.querySelector('meta[name="app-api"]');
   if (!m || (window.google && google.script && google.script.run)) return;
   var url = m.content;
+  // 10/11 (Marcelo): app mais fluido - toque que espera o servidor mostra na hora uma barrinha no topo
+  var ultToque = 0, pend = 0, tBarra = 0;
+  document.addEventListener("pointerdown", function () { ultToque = Date.now(); }, true);
+  document.addEventListener("keydown", function () { ultToque = Date.now(); }, true);
+  function barra(on) {
+    var b = document.getElementById("barraServ");
+    if (!b && on) { b = document.createElement("div"); b.id = "barraServ"; b.innerHTML = "<i></i>"; document.body.appendChild(b); }
+    if (b) b.className = on ? "on" : "";
+  }
+  function inicio(doToque) { if (!doToque) return; pend++; if (pend === 1) { clearTimeout(tBarra); tBarra = setTimeout(function () { if (pend > 0) barra(true); }, 250); } }
+  function fim(doToque) { if (!doToque) return; pend = Math.max(0, pend - 1); if (!pend) { clearTimeout(tBarra); barra(false); } }
   function runner(ok, falha) {
     return new Proxy({}, { get: function (_, fn) {
       if (fn === "withSuccessHandler") return function (f) { return runner(f, falha); };
       if (fn === "withFailureHandler") return function (f) { return runner(ok, f); };
       return function () {
-        var args = Array.prototype.slice.call(arguments);
+        var args = Array.prototype.slice.call(arguments), doToque = Date.now() - ultToque < 1500;
+        inicio(doToque);
         fetch(url, { method: "POST", body: JSON.stringify({ api: fn, args: args }) })
           .then(function (r) { return r.json(); })
-          .then(function (j) { if (j && j.ok) { if (ok) ok(j.r); } else if (falha) falha(new Error((j && j.erro) || "Erro no servidor.")); },
-                function () { if (falha) falha(new Error("Sem conexão com o servidor. Confira a internet e tente de novo.")); });
+          .then(function (j) { fim(doToque); if (j && j.ok) { if (ok) ok(j.r); } else if (falha) falha(new Error((j && j.erro) || "Erro no servidor.")); },
+                function () { fim(doToque); if (falha) falha(new Error("Sem conexão com o servidor. Confira a internet e tente de novo.")); });
       };
     } });
   }
@@ -43,6 +56,13 @@
     --amarelo:#fff6d1; --amarelo-borda:#f5c400; --vermelho:#b42226; --zap:#1a7f45;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{touch-action:manipulation}   /* 10/11: toque responde na hora (sem esperar o "duplo toque") */
+  #barraServ{position:fixed;top:0;left:0;right:0;height:3px;z-index:9999;overflow:hidden;pointer-events:none;opacity:0;transition:opacity .15s}
+  #barraServ.on{opacity:1}
+  #barraServ i{position:absolute;top:0;bottom:0;width:40%;background:var(--ouro);border-radius:3px;animation:barraServ 1s ease-in-out infinite}
+  @keyframes barraServ{0%{left:-40%}100%{left:100%}}
+  .item{content-visibility:auto;contain-intrinsic-size:auto 96px}   /* 10/11: rolagem leve em listas grandes */
+  .exp-it{content-visibility:auto;contain-intrinsic-size:auto 70px}
   html,body{margin:0;height:100%;background:var(--fundo);color:var(--texto);
     font-family:Roboto,"Segoe UI",Arial,sans-serif;font-size:15px}
   button{font-family:inherit}
@@ -2524,24 +2544,41 @@ window.PedidoPDF = (function () {
     var t = e.k === "lib" && x.lib ? e.nome + (x.lib.em ? " em " + esc(x.lib.em) : "") + (x.lib.por ? " · " + esc(x.lib.por) : "") : e.nome;
     return '<span class="chip" style="background:' + e.fundo + ";color:" + e.cor + ";border:1px solid " + e.cor + ';font-weight:700;margin:0 0 4px">' + t + "</span><br>";
   }
-  function legendaEtapas() {
-    return '<div class="legenda-etapas" style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:4px 0 10px;font-size:13px">' +
-      ETAPAS_COR.map(function (e) { return '<span style="display:inline-flex;align-items:center;gap:5px"><i style="width:14px;height:14px;border-radius:4px;background:' + e.cor + ';display:inline-block"></i>' + e.nome + "</span>"; }).join("") + "</div>";
+  /** 10/11 (Marcelo): o gabarito de cores também é FILTRO: toca numa cor e só aparecem os pedidos daquela etapa. */
+  function legendaEtapas(lista) {
+    var n = { "": lista.length, sem: 0 }; ETAPAS_COR.forEach(function (e) { n[e.k] = 0; });
+    lista.forEach(function (x) { var e = etapaPed(x); n[e ? e.k : "sem"]++; });
+    var bt = function (k, nome, cor) {
+      var on = (mgr.cor || "") === k;
+      return '<button type="button" data-corfiltro="' + k + '" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:13px;cursor:pointer;' +
+        "border:2px solid " + (on ? (cor || "#5c2a2a") : "#e3d9c6") + ";background:" + (on ? "#fff" : "transparent") + ";font-weight:" + (on ? 700 : 400) + ';color:inherit">' +
+        (cor ? '<i style="width:14px;height:14px;border-radius:4px;background:' + cor + ';display:inline-block"></i>' : "") + nome + " (" + n[k] + ")</button>";
+    };
+    return '<div class="legenda-etapas" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 4px">' + bt("", "Todas", "") +
+      ETAPAS_COR.map(function (e) { return bt(e.k, e.nome, e.cor); }).join("") + (n.sem ? bt("sem", "Sem cor (aguardando ERP)", "#c9c2b6") : "") + "</div>";
   }
   function botaoLiberar(x) {
     if (x.status === "pendente" || x.conf || (nivelNum() < 4 && !ehMestre())) return "";   // só a Diretoria e o Marcelo liberam
+    if (x.libEnviando) return '<button class="ver" disabled style="background:#fff1df;color:#b35c00;font-size:12px;opacity:.85">&#10004; ' + (x.lib ? "Liberado" : "Desfazendo") + '<br><small>salvando…</small></button>';
     return x.lib ? '<button class="ver" style="background:#fff1df;color:#b35c00;font-size:12px" data-liberar="' + esc(x.id) + '" data-lib="0">&#10004; Liberado<br><small>desfazer</small></button>'
       : '<button class="ver" style="background:#e67700;color:#fff;font-size:12px" data-liberar="' + esc(x.id) + '" data-lib="1">Liberar p/ expedição</button>';
   }
-  function liberarExp(bt) {
+  function liberarExp(bt) {   // 10/11 (Marcelo): resposta na hora - a tela muda já e o servidor grava por trás
     var id = bt.getAttribute("data-liberar"), lib = bt.getAttribute("data-lib") === "1";
     var x = ((mgr.lista && mgr.lista.pedidos) || []).filter(function (p) { return p.id === id; })[0];
-    if (!lib && !window.confirm("Desfazer a liberação para a expedição" + (x ? " de " + x.loja : "") + "?")) return;
-    bt.disabled = true;
+    if (!x || x.libEnviando) return;
+    if (!lib && !window.confirm("Desfazer a liberação para a expedição de " + x.loja + "?")) return;
+    var antes = x.lib || null, d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; };
+    x.lib = lib ? { em: z(d.getDate()) + "/" + z(d.getMonth() + 1) + "/" + d.getFullYear() + " " + z(d.getHours()) + ":" + z(d.getMinutes()), por: (sessao && sessao.nome) || "", ts: Date.now() } : null;
+    x.libEnviando = true; desenharManager();
+    toast(lib ? "Liberado para a expedição" : "Liberação desfeita");
+    try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
     chamar("liberarExpedicao", [id, lib], function (r) {
-      if (x) x.lib = r && r.lib || null;
-      toast(lib ? "Liberado para a expedição." : "Liberação desfeita."); desenharManager();
-    }, function (err) { bt.disabled = false; toast(String(err && err.message || err)); });
+      x.libEnviando = false; x.lib = r && r.lib || null; desenharManager();
+    }, function (err) {
+      x.libEnviando = false; x.lib = antes; desenharManager();
+      toast("Não salvou: " + String(err && err.message || err));
+    });
   }
   function chipStatus(x) {
     return x.status === "pendente" ? '<span class="chip pend">Aguardando aprovação</span>'
@@ -2731,8 +2768,11 @@ window.PedidoPDF = (function () {
     html += '<select class="filtro-loja" id="mgrLoja"><option value="">Todas as lojas</option>' +
       lojas.map(function (l) { var n = nPorLoja[l] || 0;
         return "<option" + (l === mgr.loja ? " selected" : "") + ' value="' + esc(l) + '">' + esc(l) + (n ? " (" + n + ")" : " · sem pedidos") + "</option>"; }).join("") + "</select>";
+    if (mgr.filtro === "aprovado") {   // 10/11: filtro por cor (etapa) logo abaixo do filtro de lojas
+      html += legendaEtapas(lista);
+      if (mgr.cor) lista = lista.filter(function (x) { var e = etapaPed(x); return (e ? e.k : "sem") === mgr.cor; });
+    }
     if (mgr.filtro === "aprovado") html += '<div class="aviso" style="margin-top:8px"><small>Os pedidos aprovados ficam aqui por ' + mgr.lista.dias + " dias e depois são apagados.</small></div>";
-    if (mgr.filtro === "aprovado") html += legendaEtapas();
     var oque = mgr.filtro === "pendente" ? "aguardando aprovação" : fatAba ? "faturado nos últimos " + mgr.lista.dias + " dias" : "aprovado a faturar";
     if (!lista.length) html += '<div class="vazio">' + (mgr.loja ? "<b>" + esc(mgr.loja) + "</b><br>Sem pedido " + oque + "."
       : "Nenhum pedido " + oque + ".") + "</div>";
@@ -4971,6 +5011,8 @@ window.PedidoPDF = (function () {
   function casaBusca(it, termo, termoNum, comForn) {
     var t = TXT_BUSCA.get(it);   // texto sem acento calculado 1 vez por produto (não vai para o armazenamento do celular)
     if (t == null) { t = semAcento((it.d || "") + " " + (it.p || "") + " " + (it.m || "")); TXT_BUSCA.set(it, t); }
+    // 10/11 (Marcelo): busca só com NÚMEROS de 4 dígitos ou mais = resultado EXATO (PLU ou EAN igual, sem pedaços)
+    if (/^\d{4,}$/.test(termo.replace(/\s/g, ""))) return soDigitos(it.p) === termoNum || (!!it.b && soDigitos(it.b) === termoNum);
     if (comForn && it.f) t = t + " " + semAcento(it.f);   // comForn: também procura no FORNECEDOR (Consulta e busca da loja)
     if (t.indexOf(termo) >= 0) return true;
     if (termoNum.length >= 6 && !!it.b && it.b.indexOf(termoNum) >= 0) return true;
@@ -5144,6 +5186,7 @@ window.PedidoPDF = (function () {
     }
     if (ehManager()) {
       var sf = e.target.closest("[data-subfat]"); if (sf) { mgr.sub = sf.getAttribute("data-subfat"); desenharManager(); window.scrollTo(0, 0); return; }
+      var cf = e.target.closest("[data-corfiltro]"); if (cf) { mgr.cor = cf.getAttribute("data-corfiltro"); desenharManager(); return; }
       var lb = e.target.closest("[data-liberar]"); if (lb) { liberarExp(lb); return; }
       var xp = e.target.closest("[data-excpend]"); if (xp) { excluirPendente({ id: xp.getAttribute("data-excpend"), nome: xp.getAttribute("data-exnome"), loja: xp.getAttribute("data-exloja") }); return; }
       var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
@@ -5422,7 +5465,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-09.27";
+  var VERSAO_APP = "2026-11-10.4";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
