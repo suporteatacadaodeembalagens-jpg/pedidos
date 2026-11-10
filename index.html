@@ -3988,15 +3988,22 @@ window.PedidoPDF = (function () {
     // botões para ver o gráfico de UMA loja.
     var tabela;
     if (cods.length > 1) {
-      tabela = '<div style="overflow-x:auto;margin:0 0 12px"><table class="tab-lojas tab-lj" style="min-width:' + (140 + cods.length * 58) + 'px"><tr><th>Mês</th><th>Total ' + esc(un) + '</th>' +
-        cods.map(function (c) { return '<th title="' + esc(r.nomes[c] || "") + '">' + esc(c) + "<br><small>" + esc((r.nomes[c] || "").slice(0, 7)) + "</small></th>"; }).join("") + "</tr>" +
+      // 10/11 (Marcelo): ao lado da VENDA de cada loja, o ESTOQUE da loja no mês (mês atual = estoque de hoje)
+      var estC = function (m, c) { var v = m.estq ? m.estq[c] : undefined; return v == null ? '<td class="est-m sem">—</td>' : '<td class="est-m' + (v < 0 ? " neg" : "") + '">' + cx(v) + "</td>"; };
+      var estT = function (m) { if (!m.estq) return '<td class="est-m sem">—</td>'; var s = 0, n = 0; cods.forEach(function (c) { if (m.estq[c] != null) { s += Number(m.estq[c]) || 0; n++; } }); return n ? '<td class="est-m' + (s < 0 ? " neg" : "") + '"><b>' + cx(s) + "</b></td>" : '<td class="est-m sem">—</td>'; };
+      tabela = '<style>.tab-lj td.est-m{color:#7a6a62;background:#faf6ee;font-size:12.5px}.tab-lj td.est-m.neg{color:#c62828}.tab-lj th.est-h{background:#f3ece0;font-weight:600;font-size:11.5px}</style>' +
+        '<div style="overflow-x:auto;margin:0 0 6px"><table class="tab-lojas tab-lj" style="min-width:' + (200 + cods.length * 104) + 'px"><tr><th rowspan="2">Mês</th><th colspan="2">Total ' + esc(un) + '</th>' +
+        cods.map(function (c) { return '<th colspan="2" title="' + esc(r.nomes[c] || "") + '">' + esc(c) + "<br><small>" + esc((r.nomes[c] || "").slice(0, 7)) + "</small></th>"; }).join("") + "</tr>" +
+        '<tr><th class="est-h">Venda</th><th class="est-h">Est.</th>' + cods.map(function () { return '<th class="est-h">Venda</th><th class="est-h">Est.</th>'; }).join("") + "</tr>" +
         meses.map(function (m) {
-          return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + cx(tot(m)) + "</b></td>" +
-            cods.map(function (c) { return "<td>" + cx(Number(m.lojas[c]) || 0) + "</td>"; }).join("") + "</tr>";
-        }).join("") + "</table></div>";
+          return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + cx(tot(m)) + "</b></td>" + estT(m) +
+            cods.map(function (c) { return "<td>" + cx(Number(m.lojas[c]) || 0) + "</td>" + estC(m, c); }).join("") + "</tr>";
+        }).join("") + "</table></div>" +
+        '<p style="margin:0 0 12px"><small>Est. = estoque da loja no mês (mês atual = estoque de hoje; meses fechados = o último estoque guardado no mês). O app guarda o estoque desde 10/11/2026; antes disso aparece —.</small></p>';
     } else {
-      tabela = '<table class="tab-lojas tab-lj" style="margin:0 0 12px"><tr><th>Mês</th><th>Vendas ' + esc(un) + "</th></tr>" + meses.map(function (m) {
-        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + cx(tot(m)) + "</b></td></tr>";
+      tabela = '<table class="tab-lojas tab-lj" style="margin:0 0 12px"><tr><th>Mês</th><th>Vendas ' + esc(un) + "</th><th>Estoque " + esc(un) + "</th></tr>" + meses.map(function (m) {
+        var ev = m.estq && cods.length ? m.estq[cods[0]] : undefined;   // 10/11: estoque da loja no mês (mês atual = hoje)
+        return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + cx(tot(m)) + "</b></td><td" + (ev < 0 ? ' class="neg"' : "") + ">" + (ev == null ? "—" : cx(ev)) + "</td></tr>";
       }).join("") + "</table>";
     }
     function grafico(loja) {
@@ -5503,7 +5510,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.9";
+  var VERSAO_APP = "2026-11-10.10";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
