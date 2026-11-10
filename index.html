@@ -63,6 +63,7 @@
   @keyframes barraServ{0%{left:-40%}100%{left:100%}}
   .item{content-visibility:auto;contain-intrinsic-size:auto 96px}   /* 10/11: rolagem leve em listas grandes */
   .exp-it{content-visibility:auto;contain-intrinsic-size:auto 70px}
+  .ana-inline{min-width:0;max-width:100%;width:100%;box-sizing:border-box}   /* 10/11: análise dentro do cartão (Consulta/Compra) não estoura a largura */
   html,body{margin:0;height:100%;background:var(--fundo);color:var(--texto);
     font-family:Roboto,"Segoe UI",Arial,sans-serif;font-size:15px}
   button{font-family:inherit}
@@ -3954,6 +3955,18 @@ window.PedidoPDF = (function () {
     // 09/11 (Marcelo): preço de VAREJO (unidade) e o preço da EMBALAGEM (CX/FD/DP...) logo abaixo dos cartões
     var tabPv = ehMgrLogin() ? cons.precos : cons.precosLoja, pVar = (tabPv && tabPv[plu] && Number(tabPv[plu][0])) || (r && r.atual && Number(r.atual.preco)) || 0;
     if (!tabPv && !ehMgrLogin() && typeof buscarPrecosLoja === "function") { try { buscarPrecosLoja(); } catch (e) {} }
+    // 10/11 (Marcelo): ESTOQUE ATUAL logo acima dos preços: em UN (acima do varejo) e na embalagem (acima do preço CX)
+    var mAt = meses.filter(function (m) { return m.estq; })[0], eLj = null, eCd = null;
+    if (mAt && (mAt.parcial || mAt === meses[0])) { eLj = 0; cods.forEach(function (c) { eLj += Number(mAt.estq[c]) || 0; }); }
+    if (porPlu[plu] && porPlu[plu].e != null && ehMgrLogin()) eCd = Number(porPlu[plu].e) || 0;
+    if (eLj != null || eCd != null) {
+      var eTot = (eLj || 0) + (eCd || 0), det = (eLj != null ? (cods.length > 1 ? "lojas " : "loja ") + num(eLj) : "") + (eCd != null ? (eLj != null ? " · " : "") + "CD " + num(eCd) : "");
+      var detCx = (eLj != null ? (cods.length > 1 ? "lojas " : "loja ") + num(Math.round(eLj / fat * 10) / 10) : "") + (eCd != null ? (eLj != null ? " · " : "") + "CD " + num(Math.round(eCd / fat * 10) / 10) : "");
+      resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
+        [["Estoque atual (UN)", num(eTot), det], ["Estoque atual " + esc(q > 1 ? t + " c/ " + num(q) : "UN"), num(Math.round(eTot / fat * 10) / 10), detCx]].map(function (x) {
+          return '<div style="background:#eaf3ee;border:1px solid #c9e2d2;border-radius:8px;padding:7px 9px;color:#1d5c34"><small>' + x[0] + '</small><br><b' + (eTot < 0 ? ' style="color:#c62828"' : "") + ">" + x[1] + "</b>" + (x[2] ? '<br><small style="color:#5c7a66">' + x[2] + "</small>" : "") + "</div>";
+        }).join("") + "</div>";
+    }
     if (pVar > 0) resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
       [["Preço varejo (UN)", reais(pVar)], ["Preço " + esc(q > 1 ? t + " c/ " + num(q) : "UN"), reais(pVar * (q > 1 ? q : 1))]].map(function (x) {
         return '<div style="background:#e3eefb;border:1px solid #c4d8f2;border-radius:8px;padding:7px 9px;color:#1f4f7a"><small>' + x[0] + "</small><br><b>" + x[1] + "</b></div>";
@@ -5510,7 +5523,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.10";
+  var VERSAO_APP = "2026-11-10.12";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
