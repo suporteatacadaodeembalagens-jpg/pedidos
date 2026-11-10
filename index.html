@@ -2040,6 +2040,11 @@ window.PedidoPDF = (function () {
       if (!just) { msgModal("Escreva a justificativa para aceitar o carregado."); if (ji) ji.focus(); return; }
       nq = q0 + add; st = "aceito"; nj = just;
     }
+    // 10/11 (Marcelo): CARREGAMENTO acima do SEPARADO -> avisa NA HORA (não lança; a ficha continua aberta para recontar)
+    if (car && it.lim != null && (modo === "soma" || modo === "parcial")) {
+      if (nq > Number(it.lim)) { expSom(220, 450); msgModal("✕ Quantidade ACIMA do que foi separado. Reconte."); if (qi) { qi.value = ""; qi.focus(); } return; }
+      if (modo === "parcial" && nq === Number(it.lim)) { msgModal("Essa quantidade bate com a separação: use Somar."); return; }
+    }
     if (nq !== q0) { c.q = nq; EXP.fila.push({ p: p, d: nq - q0, et: a.etapa }); }
     if (st !== (c.st || "") || nj !== (c.just || "")) { c.st = st; c.just = st ? nj : ""; EXP.fila.push({ p: p, st: st, just: c.just, et: a.etapa }); }
     EXP.ultimos.push(antes);
@@ -2119,6 +2124,13 @@ window.PedidoPDF = (function () {
       if (falta) { msgColeta("Ainda falta responder " + falta + (falta === 1 ? " item." : " itens."), "erro"); return; }
       if (!window.confirm("Fechar a SEPARAÇÃO de " + a.loja + "?\nO pedido vai para o CARREGAMENTO, para ser coletado de novo (às cegas).")) return;
     } else if (!a.sepFechada) { msgColeta("O carregamento só fecha depois que a SEPARAÇÃO for fechada.", "aviso"); return; }
+    else if ((function () {   // 10/11 (Marcelo): item que ainda não bate com a separação (sem Parcial / Não atendido) não deixa fechar
+      var pd = a.itens.filter(function (it) { if (it.lim == null) return false; var c = a.conf[it.p] || {}; return !((Number(c.q) || 0) === Number(it.lim) || (c.st && c.just)); });
+      if (!pd.length) return false;
+      a.pend = pd.map(function (it) { return it.p; }); EXP.abertos = EXP.abertos || {}; pd.forEach(function (it) { EXP.abertos[it.dep || "OUTROS"] = true; });
+      expSom(220, 450); desenharExpedicao();
+      msgColeta("Não dá para fechar: " + pd.length + (pd.length === 1 ? " produto ainda pendente" : " produtos ainda pendentes") + " (em vermelho): " + pd.slice(0, 3).map(function (it) { return it.d || it.p; }).join(", ") + (pd.length > 3 ? "…" : "") + ". Colete ou use Atender parcialmente / Não atendido.", "erro");
+      return true; })()) return;
     else if (!window.confirm("Fechar o CARREGAMENTO de " + a.loja + "?\nO app confere se cada item bate com a separação.")) return;
     msgColeta("Enviando…", "");
     enviarColeta(function () {
@@ -5546,7 +5558,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.17";
+  var VERSAO_APP = "2026-11-10.18";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
