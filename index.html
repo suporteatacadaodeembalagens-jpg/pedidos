@@ -1798,7 +1798,7 @@ window.PedidoPDF = (function () {
         else if (k === "mcancelar") fecharItemColeta();
         else if (k === "desfazer") desfazerColeta();
         else if (k === "fecharconf") fecharConferencia();
-        else if (k === "digitar") { var b = document.getElementById("expBip"); if (b) { b.setAttribute("inputmode", "text"); b._dig = true; b.blur(); setTimeout(function () { b.focus(); }, 50); } return; }
+        else if (k === "digitar") { var b = document.getElementById("expBip"); if (b) { b.setAttribute("inputmode", "text"); b._dig = true; b.readOnly = false; clearTimeout(b._ro); clearTimeout(b._ro2); b.blur(); setTimeout(function () { b.focus(); }, 50); } return; }
         else if (k === "modobip") { var nm = LS.get("bipModo", "leitor") === "normal" ? "leitor" : "normal"; LS.set("bipModo", nm); var bm = document.getElementById("expBip"); if (bm) bm.remove(); desenharExpedicao(); toast(nm === "normal" ? "Teclado ligado no campo de bipar" : "Só o leitor: o campo não abre o teclado"); setTimeout(focoBip, 0); return; }
         else if (k === "camera") { abrirLeitor(function (cod) { setTimeout(function () { bipar(cod); focoBip(); }, 50); }); return; }
         else if (k === "mod") { EXP.mod = v; EXP.aberto = null; desenharExpedicao(); if (v === "conferencia" && !EXP.lista) carregarExpedicao(); }
@@ -1836,11 +1836,12 @@ window.PedidoPDF = (function () {
       // 10/11: modo SÓ LEITOR - tocar no campo de bipar não abre o teclado (o toque não chega no campo; ele continua com o foco)
       ["touchstart", "mousedown"].forEach(function (ty) { t.addEventListener(ty, function (e) {
         var b = e.target; if (!b || b.id !== "expBip" || !b.getAttribute("data-sotecla") || b._dig) return;
-        e.preventDefault(); if (document.activeElement !== b) setTimeout(focoBip, 0);
+        e.preventDefault(); b.readOnly = true; clearTimeout(b._ro2); b._ro2 = setTimeout(function () { if (!b._dig) b.readOnly = false; }, 450);   // 10/11: o toque não abre o teclado nem se o celular insistir
+        if (document.activeElement !== b) setTimeout(focoBip, 0);
       }, { passive: false }); });
       t.addEventListener("keydown", function (e) {   // gatilho do coletor: código + Enter
         if (e.target && e.target.id === "expBip" && (e.key === "Enter" || e.keyCode === 13)) { e.preventDefault(); var v = e.target.value; e.target.value = "";
-          var bt = e.target; if (bt._dig && LS.get("bipModo", "leitor") !== "normal") { bt._dig = false; bt.removeAttribute("inputmode"); bt.blur(); setTimeout(focoBip, 30); }   // digitou pelo ⌨: fecha o teclado
+          var bt = e.target; if (bt._dig) { bt._dig = false; bt.removeAttribute("inputmode"); bt.blur(); setTimeout(focoBip, 30); }   // digitou pelo ⌨: fecha o teclado
           bipar(v); }
         else if (e.target && e.target.id === "expMQ" && (e.key === "Enter" || e.keyCode === 13)) {   // bipou com a ficha aberta = outro produto
           e.preventDefault(); var vq = String(e.target.value || "").replace(/\D/g, "");
@@ -2236,10 +2237,10 @@ window.PedidoPDF = (function () {
         // 10/11 (Marcelo): SÓ O LEITOR - o campo é NORMAL (o EDA52 só escreve em campo normal: com inputmode none ele não lê);
         // o TOQUE no campo é bloqueado (não abre o teclado) e o foco fica no campo sozinho; o ⌨ abre o teclado para digitar.
         // Se o leitor deste aparelho não escrever no campo assim, o link embaixo volta o modo com teclado (fica guardado no aparelho).
-        (function () { var so = LS.get("bipModo", "leitor") !== "normal";
+        (function () { var so = true;   // 10/11: sempre SÓ LEITOR (o modo "com teclado" saiu: o leitor do EDA52 já escreve no campo normal)
           return '<div class="exp-bip"><input id="expBip" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go"' + (so ? ' data-sotecla="1"' : "") + ' placeholder="' + (so ? "Bipe o código com o leitor (⌨ para digitar)" : "Bipe o código (ou toque para digitar código, PLU ou nome)") + '">' +
             '<button data-exp="digitar" title="Digitar o código, PLU ou nome">&#9000;</button><button data-exp="camera" title="Ler com a câmera">&#128247;</button></div>' +
-            '<div style="text-align:right;margin:-4px 0 6px"><button data-exp="modobip" style="background:none;border:0;color:#7a6a62;font-size:12px;text-decoration:underline;padding:2px 0">' + (so ? "Leitor não escreve no campo? Toque aqui" : "Teclado ligado no campo · voltar para só o leitor") + "</button></div>"; })() +
+            '<div style="display:none"><button data-exp="modobip" style="background:none;border:0;color:#7a6a62;font-size:12px;text-decoration:underline;padding:2px 0">' + (so ? "Leitor não escreve no campo? Toque aqui" : "Teclado ligado no campo · voltar para só o leitor") + "</button></div>"; })() +
         '<div id="expMsg" class="exp-msg">Bipe o produto: abre a ficha dele para lançar a quantidade. Também dá para tocar no produto da lista.</div><div id="expLista"></div><div id="expPe"></div></div>';
       setTimeout(focoBip, 0);
     }
@@ -5661,7 +5662,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.21";
+  var VERSAO_APP = "2026-11-10.22";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
