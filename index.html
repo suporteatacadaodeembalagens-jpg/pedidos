@@ -4104,6 +4104,12 @@ window.PedidoPDF = (function () {
       [["Preço varejo (UN)", reais(pVar)], ["Preço " + esc(q > 1 ? t + " c/ " + num(q) : "UN"), reais(pVar * (q > 1 ? q : 1))]].map(function (x) {
         return cartaoAna(x[0], x[1], ANA_COR.preco, ANA_COR.precoF);
       }).join("") + "</div>";
+    // 10/11 (Marcelo): CUSTO ATUAL (CD 001) logo abaixo dos preços: UN e na embalagem
+    var cAt = r && r.atual && Number(r.atual.custo) || 0;
+    if (cAt > 0) resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
+      [["Custo atual (UN)", reais(cAt)], ["Custo " + esc(q > 1 ? t + " c/ " + num(q) : "UN"), reais(cAt * (q > 1 ? q : 1))]].map(function (x) {
+        return cartaoAna(x[0], x[1], ANA_COR.custo, ANA_COR.custoF, "CD 001");
+      }).join("") + "</div>";
     // 05/11 (Marcelo): R$ VENDIDO e MARGEM (%) - do relatório ABC de Vendas Individual (robô), das lojas que a pessoa vê
     // 10/11 (Marcelo): CUSTO = o do CD (loja 001): qtd vendida x custo unitário do CD no mês (m.cdu, do servidor)
     function rs(m) { var v = 0, c = 0, q = 0; cods.forEach(function (k) { var x = m.valores && m.valores[k]; if (x) { v += Number(x[0]) || 0; c += Number(x[1]) || 0; q += Number(m.lojas[k]) || 0; } }); if (m.cdu > 0) c = q * m.cdu; return [v, c]; }
@@ -5662,7 +5668,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.22";
+  var VERSAO_APP = "2026-11-10.23";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
