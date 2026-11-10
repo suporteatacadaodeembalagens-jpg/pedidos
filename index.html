@@ -1786,6 +1786,9 @@ window.PedidoPDF = (function () {
         else if (k === "pincancelar") { var mc = document.getElementById("expModal"); if (mc) { mc.hidden = true; mc.innerHTML = ""; } EXP.loginDepois = null; EXP.loginNome = null; if (EXP.redesenhar) { EXP.redesenhar = false; desenharExpedicao(); } setTimeout(focoBip, 0); return; }
         else if (k === "etl") { EXP.etapaLista = v; desenharExpedicao(); return; }
         else if (k === "mzerar") salvarItemColeta("zerar");
+        else if (k === "aznome") abrirAutZerar(v);
+        else if (k === "azok") confirmarAutZerar();
+        else if (k === "azcancelar") { if (EXP.modal && EXP.modal.p) abrirItemColeta(EXP.modal.p, ""); else fecharItemColeta(); }
         else if (k === "maceitar") salvarItemColeta("aceito");
         else if (k === "voltar") { voltarColeta(); return; }
         else if (k === "imprimir") window.print();
@@ -2021,9 +2024,32 @@ window.PedidoPDF = (function () {
   }
   function fecharItemColeta() { var mo = document.getElementById("expModal"); if (mo) { mo.hidden = true; mo.innerHTML = ""; } EXP.modal = null; EXP.abrirId = null; setTimeout(focoBip, 0); }
   function msgModal(t) { var m = document.getElementById("expMMsg"); if (m) m.textContent = t; expSom(220, 250); }
+  // 10/11 (Marcelo): ZERAR CONTAGEM só com a senha do Antonio ou do Marcelo (eles mesmos zeram direto)
+  var CONF_AUT_APP = ["Antonio", "Marcelo"];
+  function autZerarOk() { return CONF_AUT_APP.indexOf(EXP.nome) >= 0 || (EXP.az && EXP.azExp > Date.now()); }
+  function abrirAutZerar(nome, msg) {
+    var mo = modalExp(); EXP.azNome = nome || EXP.azNome || "";
+    mo.innerHTML = '<div class="exp-modal-cx"><div class="exp-modal-t">Zerar contagem</div><div class="exp-modal-info">Precisa da senha do <b>Antonio</b> ou do <b>Marcelo</b>.</div>' +
+      '<div class="exp-nomes">' + CONF_AUT_APP.map(function (n) { return '<button data-exp="aznome" data-v="' + esc(n) + '"' + (EXP.azNome === n ? ' class="on"' : "") + ">" + esc(n) + "</button>"; }).join("") + "</div>" +
+      (EXP.azNome ? '<label for="expAzPin">Senha do ' + esc(EXP.azNome) + '</label><input id="expAzPin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">' +
+        '<div class="exp-modal-b"><button data-exp="azok" class="verde">Liberar e zerar</button></div>' : "") +
+      '<div class="exp-modal-b"><button data-exp="azcancelar" class="link">Cancelar</button></div><div id="expMMsg" class="exp-modal-msg">' + esc(msg || "") + "</div></div>";
+    mo.hidden = false;
+    setTimeout(function () { var i = document.getElementById("expAzPin"); if (i) i.focus(); }, 30);
+  }
+  function confirmarAutZerar() {
+    var pin = String((document.getElementById("expAzPin") || {}).value || "").trim();
+    if (!/^\d{4,6}$/.test(pin)) { msgModal("A senha tem de 4 a 6 números."); return; }
+    var m = document.getElementById("expMMsg"); if (m) m.textContent = "Conferindo…";
+    expChamar("confAutorizar", [EXP.azNome, pin], function (r) {
+      EXP.az = r.az; EXP.azExp = Date.now() + 9 * 60000; toast("Liberado por " + r.nome);
+      salvarItemColeta("zerar");
+    }, function (e) { msgModal(String(e && e.message || e)); });
+  }
   function salvarItemColeta(modo) {   // modo: soma | parcial | nao | zerar | aceito
     var a = EXP.aberto, md = EXP.modal; if (!a || !md) return;
     var p = md.p, it = itemColeta(p); if (!it) return;
+    if (modo === "zerar" && !autZerarOk()) { abrirAutZerar(""); return; }   // 10/11: precisa da senha do Antonio / Marcelo
     var car = a.etapa === "car", c = a.conf[p] || (a.conf[p] = { q: 0, st: "", just: "" });
     var qi = document.getElementById("expMQ"), ji = document.getElementById("expMJ");
     var txt = String(qi && qi.value || "").trim(), add = txt === "" ? 0 : Math.max(0, Math.round(Number(txt) || 0)), just = String(ji && ji.value || "").trim();
@@ -2041,12 +2067,17 @@ window.PedidoPDF = (function () {
       nq = q0 + add; st = "aceito"; nj = just;
     }
     // 10/11 (Marcelo): CARREGAMENTO acima do SEPARADO -> avisa NA HORA (não lança; a ficha continua aberta para recontar)
+    if (!car && (modo === "soma" || modo === "parcial") && nq > (Number(it.qtd) || 0)) {   // 10/11 (Marcelo): SEPARAÇÃO não passa do PEDIDO
+      expSom(220, 450); msgModal("✕ Quantidade ACIMA do pedido (" + num(it.qtd) + "). Reconte."); if (qi) { qi.value = ""; qi.focus(); } return;
+    }
     if (car && it.lim != null && (modo === "soma" || modo === "parcial")) {
       if (nq > Number(it.lim)) { expSom(220, 450); msgModal("✕ Quantidade ACIMA do que foi separado. Reconte."); if (qi) { qi.value = ""; qi.focus(); } return; }
       if (modo === "parcial" && nq === Number(it.lim)) { msgModal("Essa quantidade bate com a separação: use Somar."); return; }
     }
+    var i0z = EXP.fila.length;
     if (nq !== q0) { c.q = nq; EXP.fila.push({ p: p, d: nq - q0, et: a.etapa }); }
     if (st !== (c.st || "") || nj !== (c.just || "")) { c.st = st; c.just = st ? nj : ""; EXP.fila.push({ p: p, st: st, just: c.just, et: a.etapa }); }
+    if (modo === "zerar") for (var iz = i0z; iz < EXP.fila.length; iz++) { EXP.fila[iz].z = 1; EXP.fila[iz].az = EXP.az || ""; }
     EXP.ultimos.push(antes);
     var nome = it.d || p, msg, tipo;
     if (car) { msg = modo === "zerar" ? "↺ ZERADO: " + nome : modo === "nao" ? "✕ NÃO CARREGADO: " + nome : (modo === "aceito" || modo === "parcial") ? "◐ PARCIAL: " + nome + " → " + num(nq) : "+" + num(add) + " " + nome + " → " + num(nq) + " carregado"; tipo = modo === "nao" ? "erro" : (modo === "aceito" || modo === "parcial") ? "aviso" : "ok"; }
@@ -2076,13 +2107,13 @@ window.PedidoPDF = (function () {
       EXP.enviando = null;
       if (EXP.aberto && EXP.aberto.id === id && r) aplicarEstadoConf(r);
       if (r && r.recusados && r.recusados.length) {   // 10/11: carregamento acima do separado: o servidor não aceita
-        expSom(220, 500); msgColeta("✕ " + r.recusados.map(function (x) { return x.d || x.p; }).join(", ") + ": carregado passa do que foi SEPARADO. Reconte (não foi somado).", "erro");
+        expSom(220, 500); msgColeta("✕ " + r.recusados.map(function (x) { return x.d || x.p; }).join(", ") + ": " + (r.recusados[0].m === "pedido" ? "separado passa do PEDIDO" : "carregado passa do que foi SEPARADO") + ". Reconte (não foi somado).", "erro");
       }
       if (EXP.fila.length) enviarColeta(); else { var d = EXP.depois; EXP.depois = null; if (d) d(); }
     }, function (e) {
       EXP.enviando = null; var m = String(e && e.message || e);
       if (/senha de novo/i.test(m)) { EXP.fila = ops.concat(EXP.fila); EXP.ct = null; msgColeta(m, "erro"); abrirLoginConf(null); return; }   // crachá venceu: entra de novo e reenvia
-      if (/fechada|CARREGAMENTO|SEPARAÇÃO|não cadastrado|Só /i.test(m)) { EXP.fila = []; EXP.depois = null; msgColeta(m, "erro"); return; }
+      if (/fechada|CARREGAMENTO|SEPARAÇÃO|não cadastrado|Só |precisa da senha/i.test(m)) { EXP.fila = []; EXP.depois = null; msgColeta(m, "erro"); return; }
       EXP.fila = ops.concat(EXP.fila); msgColeta("Sem conexão: as leituras ficam guardadas e vão de novo sozinhas.", "erro");
       setTimeout(function () { enviarColeta(); }, 4000);
     });
@@ -3959,6 +3990,32 @@ window.PedidoPDF = (function () {
       try { desenharAnalise(plu, desc, r); } finally { desenharAnalise.alvo = null; }
     }, function (e) { box.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
+  /* 10/11 (Marcelo): CORES DA ANÁLISE (gabarito no topo). Cada tipo de número tem a sua cor, sempre a mesma:
+     VENDAS = azul (mais forte = vendeu mais) · melhor mês = dourado · ESTOQUE = verde-água (pela cobertura: vermelho =
+     negativo/ruptura, âmbar = baixo, roxo = excesso) · PREÇO = índigo · CUSTO = laranja · MARKUP e variação: verde bom,
+     âmbar atenção, vermelho ruim. Cores fortes só onde precisa chamar a atenção. */
+  var ANA_COR = { venda: "#1f5a97", vendaF: "#e8f0fa", ouro: "#b7791f", ouroF: "#fff4d6", est: "#00796b", estF: "#e0f2f1",
+    baixo: "#b26a00", baixoF: "#fff3e0", rupt: "#c62828", ruptF: "#fdecea", exc: "#6a1b9a", excF: "#f3e5f5",
+    preco: "#283593", precoF: "#e8eaf6", custo: "#c2410c", custoF: "#fff1e8", bom: "#2e7d32", bomF: "#e8f5e9", neutro: "#5b4636", neutroF: "#f6f0e6" };
+  function cartaoAna(tit, val, cor, fundo, extra) {
+    return '<div style="background:' + fundo + ";border:1px solid " + cor + "33;border-left:4px solid " + cor + ';border-radius:8px;padding:7px 9px;color:' + cor + '"><small style="color:#5b4636">' + tit + "</small><br><b>" + val + "</b>" + (extra ? '<br><small style="opacity:.85">' + extra + "</small>" : "") + "</div>";
+  }
+  /** cobertura do estoque = estoque / venda média do mês -> cor */
+  function corCobertura(est, media) {
+    if (est < 0) return ["rupt", "negativo"];
+    if (!(media > 0)) return est > 0 ? ["est", ""] : ["baixo", "sem estoque"];
+    var c = est / media;
+    return c < 0.5 ? ["rupt", "ruptura"] : c < 1 ? ["baixo", "baixo"] : c > 3 ? ["exc", "excesso"] : ["est", "ok"];
+  }
+  function gabaritoAna() {
+    var i = function (cor, fundo, txt) { return '<span style="display:inline-flex;align-items:center;gap:5px;margin:0 10px 4px 0"><i style="width:12px;height:12px;border-radius:3px;background:' + fundo + ";border:2px solid " + cor + ';display:inline-block"></i>' + txt + "</span>"; };
+    var C = ANA_COR;
+    return '<details class="ana-gab" open style="background:#fffaf2;border:1px solid #efe2cf;border-radius:10px;padding:6px 10px;margin:0 0 10px;font-size:12px;color:#5b4636"><summary style="cursor:pointer;font-weight:700">Gabarito de cores</summary><div style="margin-top:6px">' +
+      i(C.venda, C.vendaF, "Vendas (mais forte = vendeu mais)") + i(C.ouro, C.ouroF, "Melhor mês") +
+      i(C.est, C.estF, "Estoque ok (1 a 3 meses)") + i(C.baixo, C.baixoF, "Estoque baixo (menos de 1 mês)") + i(C.rupt, C.ruptF, "Ruptura / negativo") + i(C.exc, C.excF, "Excesso (mais de 3 meses)") +
+      i(C.preco, C.precoF, "Preço de venda") + i(C.custo, C.custoF, "Custo (CD 001)") +
+      i(C.bom, C.bomF, "Markup bom (45%+) / alta ▲") + i(C.baixo, C.baixoF, "Markup atenção (20–45%)") + i(C.rupt, C.ruptF, "Markup baixo (&lt;20%) / queda ▼") + "</div></details>";
+  }
   function desenharAnalise(plu, desc, r) {
     var box = desenharAnalise.alvo || $("anaRes"); if (!box) return;
     var it = porPlu[plu] || {}, q = Number(it.q) || 0, t = it.t || "CX";
@@ -3981,9 +4038,9 @@ window.PedidoPDF = (function () {
     var resumo = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px">' +
       [["Total " + fech.length + (fech.length === 1 ? " mês" : " meses"), cx(soma) + " " + esc(un)],
        ["Média por mês", cx(media) + " " + esc(un)],
-       ["Últimos 3 meses x 3 anteriores", tend == null ? "—" : (tend > 0 ? "+" : "") + tend + "%"],
-       ["Melhor mês", melhor ? nomeMes(melhor.mes) + " (" + cx(tot(melhor)) + " " + esc(un) + ")" : "—"]].map(function (x) {
-        return '<div style="background:#f6f0e6;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
+       ["Últimos 3 meses x 3 anteriores", tend == null ? "—" : (tend > 0 ? "▲ +" : tend < 0 ? "▼ " : "") + tend + "%", tend == null ? "neutro" : tend > 0 ? "bom" : tend < 0 ? "rupt" : "neutro"],
+       ["Melhor mês", melhor ? nomeMes(melhor.mes) + " (" + cx(tot(melhor)) + " " + esc(un) + ")" : "—", "ouro"]].map(function (x, ix) {
+        var k = x[2] || "venda"; return cartaoAna(esc(x[0]), x[1], ANA_COR[k], ANA_COR[k + "F"]);   // 10/11: cores do gabarito
       }).join("") + "</div>";
     // 09/11 (Marcelo): preço de VAREJO (unidade) e o preço da EMBALAGEM (CX/FD/DP...) logo abaixo dos cartões
     var tabPv = ehMgrLogin() ? cons.precos : cons.precosLoja, pVar = (tabPv && tabPv[plu] && Number(tabPv[plu][0])) || (r && r.atual && Number(r.atual.preco)) || 0;
@@ -3997,12 +4054,12 @@ window.PedidoPDF = (function () {
       var detCx = (eLj != null ? (cods.length > 1 ? "lojas " : "loja ") + num(Math.round(eLj / fat * 10) / 10) : "") + (eCd != null ? (eLj != null ? " · " : "") + "CD " + num(Math.round(eCd / fat * 10) / 10) : "");
       resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
         [["Estoque atual (UN)", num(eTot), det], ["Estoque atual " + esc(q > 1 ? t + " c/ " + num(q) : "UN"), num(Math.round(eTot / fat * 10) / 10), detCx]].map(function (x) {
-          return '<div style="background:#eaf3ee;border:1px solid #c9e2d2;border-radius:8px;padding:7px 9px;color:#1d5c34"><small>' + x[0] + '</small><br><b' + (eTot < 0 ? ' style="color:#c62828"' : "") + ">" + x[1] + "</b>" + (x[2] ? '<br><small style="color:#5c7a66">' + x[2] + "</small>" : "") + "</div>";
+          var ke = eTot < 0 ? "rupt" : "est"; return cartaoAna(x[0], x[1], ANA_COR[ke], ANA_COR[ke + "F"], x[2]);
         }).join("") + "</div>";
     }
     if (pVar > 0) resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
       [["Preço varejo (UN)", reais(pVar)], ["Preço " + esc(q > 1 ? t + " c/ " + num(q) : "UN"), reais(pVar * (q > 1 ? q : 1))]].map(function (x) {
-        return '<div style="background:#e3eefb;border:1px solid #c4d8f2;border-radius:8px;padding:7px 9px;color:#1f4f7a"><small>' + x[0] + "</small><br><b>" + x[1] + "</b></div>";
+        return cartaoAna(x[0], x[1], ANA_COR.preco, ANA_COR.precoF);
       }).join("") + "</div>";
     // 05/11 (Marcelo): R$ VENDIDO e MARGEM (%) - do relatório ABC de Vendas Individual (robô), das lojas que a pessoa vê
     // 10/11 (Marcelo): CUSTO = o do CD (loja 001): qtd vendida x custo unitário do CD no mês (m.cdu, do servidor)
@@ -4020,10 +4077,10 @@ window.PedidoPDF = (function () {
       fv.forEach(function (m) { var x = rs(m); sv[0] += x[0]; sv[1] += x[1]; });
       resumo += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:-6px 0 12px">' +
         [["Vendido " + fv.length + (fv.length === 1 ? " mês" : " meses"), reais(sv[0])], ["Markup médio", pct(marg(sv))]].map(function (x) {
-          return '<div style="background:#eaf3ee;border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b></div>";
+          var mgm = marg(sv), km = /Markup/.test(x[0]) ? (mgm == null ? "neutro" : mgm < 20 ? "rupt" : mgm < 45 ? "baixo" : "bom") : "venda"; return cartaoAna(esc(x[0]), x[1], ANA_COR[km], ANA_COR[km + "F"]);
         }).join("") + "</div>";
       // 06/11 (Marcelo): preço e custo médios do mês (na embalagem) e MARKUP (sobre o custo); * = estimado
-      tabValores = '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th>Mês</th><th>Vendido R$</th>' + (fat > 1 ? "<th>Preço UN</th>" : "") + '<th>Preço ' + esc(un) + "</th>" + (fat > 1 ? "<th>Custo UN</th>" : "") + '<th>Custo ' + esc(un) + '</th><th>Markup</th></tr>' + meses.map(function (m) {
+      tabValores = '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th>Mês</th><th style="background:#e8f0fa;color:#1f5a97">Vendido R$</th>' + (fat > 1 ? "<th style=\"background:" + ANA_COR.precoF + ";color:" + ANA_COR.preco + "\">Preço UN</th>" : "") + "<th style=\"background:" + ANA_COR.precoF + ";color:" + ANA_COR.preco + "\">Preço " + esc(un) + "</th>" + (fat > 1 ? "<th style=\"background:" + ANA_COR.custoF + ";color:" + ANA_COR.custo + "\">Custo UN</th>" : "") + "<th style=\"background:" + ANA_COR.custoF + ";color:" + ANA_COR.custo + "\">Custo " + esc(un) + '</th><th>Markup</th></tr>' + meses.map(function (m) {
         if (!m.valores) return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + '</td><td colspan="' + (fat > 1 ? 6 : 4) + '"><small>ainda não carregado</small></td></tr>';
         var x = rs(m), mg = marg(x), u = unit(m);
         return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + (m.est ? " *" : "") + "</td><td><b>" + reais(x[0]) + "</b></td>" + (fat > 1 ? "<td>" + (u && u[0] > 0 ? reais(u[0]) : "—") + "</td>" : "") + "<td>" + (u && u[0] > 0 ? reais(u[0] * fat) : "—") + "</td>" + (fat > 1 ? "<td>" + (u && u[1] > 0 ? reais(u[1]) : "—") + (m.cdEst ? " ¹" : "") + "</td>" : "") + "<td>" + (u && u[1] > 0 ? reais(u[1] * fat) : "—") + (fat > 1 ? "" : (m.cdEst ? " ¹" : "")) +
@@ -4036,15 +4093,19 @@ window.PedidoPDF = (function () {
     var tabela;
     if (cods.length > 1) {
       // 10/11 (Marcelo): ao lado da VENDA de cada loja, o ESTOQUE da loja no mês (mês atual = estoque de hoje)
-      var estC = function (m, c) { var v = m.estq ? m.estq[c] : undefined; return v == null ? '<td class="est-m sem">—</td>' : '<td class="est-m' + (v < 0 ? " neg" : "") + '">' + cx(v) + "</td>"; };
+      var medL = {}, maxL = {}, topL = {}; cods.forEach(function (c) { var s = 0, n = 0, mx = 0, tp = null; fech.forEach(function (m) { var v = Number(m.lojas[c]) || 0; s += v; n++; if (v > mx) { mx = v; tp = m.mes; } }); medL[c] = n ? s / n : 0; maxL[c] = mx; topL[c] = tp; });
+      var vendaC = function (m, c) { var v = Number(m.lojas[c]) || 0, mx = maxL[c] || 0, a = mx > 0 ? Math.min(1, v / mx) : 0, top = !m.parcial && topL[c] === m.mes && v > 0;   // 10/11: azul mais forte = vendeu mais; dourado = melhor mês da loja
+        return '<td style="background:' + (top ? ANA_COR.ouroF : "rgba(31,90,151," + (0.04 + a * 0.32).toFixed(2) + ")") + (top ? ";box-shadow:inset 0 0 0 2px " + ANA_COR.ouro + ";font-weight:700" : "") + (a > 0.75 && !top ? ";color:#0d2f57;font-weight:700" : "") + '">' + cx(v) + "</td>"; };
+      var estC = function (m, c) { var v = m.estq ? m.estq[c] : undefined; if (v == null) return '<td class="est-m sem">—</td>'; var k = corCobertura(v, medL[c])[0];
+        return '<td class="est-m" title="' + corCobertura(v, medL[c])[1] + '" style="background:' + ANA_COR[k + "F"] + ";color:" + ANA_COR[k] + ';font-weight:600">' + cx(v) + "</td>"; };
       var estT = function (m) { if (!m.estq) return '<td class="est-m sem">—</td>'; var s = 0, n = 0; cods.forEach(function (c) { if (m.estq[c] != null) { s += Number(m.estq[c]) || 0; n++; } }); return n ? '<td class="est-m' + (s < 0 ? " neg" : "") + '"><b>' + cx(s) + "</b></td>" : '<td class="est-m sem">—</td>'; };
       tabela = '<style>.tab-lj td.est-m{color:#7a6a62;background:#faf6ee;font-size:12.5px}.tab-lj td.est-m.neg{color:#c62828}.tab-lj th.est-h{background:#f3ece0;font-weight:600;font-size:11.5px}</style>' +
         '<div style="overflow-x:auto;margin:0 0 6px"><table class="tab-lojas tab-lj" style="min-width:' + (200 + cods.length * 104) + 'px"><tr><th rowspan="2">Mês</th><th colspan="2">Total ' + esc(un) + '</th>' +
         cods.map(function (c) { return '<th colspan="2" title="' + esc(r.nomes[c] || "") + '">' + esc(c) + "<br><small>" + esc((r.nomes[c] || "").slice(0, 7)) + "</small></th>"; }).join("") + "</tr>" +
-        '<tr><th class="est-h">Venda</th><th class="est-h">Est.</th>' + cods.map(function () { return '<th class="est-h">Venda</th><th class="est-h">Est.</th>'; }).join("") + "</tr>" +
+        '<tr><th class="est-h" style="color:' + ANA_COR.venda + '">Venda</th><th class="est-h" style="color:' + ANA_COR.est + '">Est.</th>' + cods.map(function () { return '<th class="est-h" style="background:' + ANA_COR.vendaF + ';color:' + ANA_COR.venda + '">Venda</th><th class="est-h" style="background:' + ANA_COR.estF + ';color:' + ANA_COR.est + '">Est.</th>'; }).join("") + "</tr>" +
         meses.map(function (m) {
           return "<tr><td>" + nomeMes(m.mes, m.parcial, m.periodo) + "</td><td><b>" + cx(tot(m)) + "</b></td>" + estT(m) +
-            cods.map(function (c) { return "<td>" + cx(Number(m.lojas[c]) || 0) + "</td>" + estC(m, c); }).join("") + "</tr>";
+            cods.map(function (c) { return vendaC(m, c) + estC(m, c); }).join("") + "</tr>";
         }).join("") + "</table></div>" +
         '<p style="margin:0 0 12px"><small>Est. = estoque da loja no mês (mês atual = estoque de hoje; meses fechados = o último estoque guardado no mês). O app guarda o estoque desde 10/11/2026; antes disso aparece —.</small></p>';
     } else {
@@ -4117,7 +4178,7 @@ window.PedidoPDF = (function () {
       if (!linhas.length) return;
       var b = linhas[0];
       precoH = '<div style="font-weight:700;margin:4px 0 6px;color:#5b4636">Preço de venda, custo e markup <small style="font-weight:400">(' + esc(un) + (fat > 1 ? " c/ " + num(fat) : "") + ")</small></div>" +
-        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th style="text-align:left"></th>' + (fat > 1 ? "<th>Preço UN</th><th>Preço " + esc(un) + "</th><th>Custo UN</th><th>Custo " + esc(un) + "</th>" : "<th>Preço</th><th>Custo</th>") + '<th>Markup</th></tr>' +
+        '<div style="overflow-x:auto"><table class="tab-lojas tab-lj" style="margin:0 0 12px;min-width:430px"><tr><th style="text-align:left"></th>' + (fat > 1 ? "<th style=\"background:" + ANA_COR.precoF + ";color:" + ANA_COR.preco + "\">Preço UN</th><th style=\"background:" + ANA_COR.precoF + ";color:" + ANA_COR.preco + "\">Preço " + esc(un) + "</th><th style=\"background:" + ANA_COR.custoF + ";color:" + ANA_COR.custo + "\">Custo UN</th><th style=\"background:" + ANA_COR.custoF + ";color:" + ANA_COR.custo + "\">Custo " + esc(un) + "</th>" : "<th style=\"background:" + ANA_COR.precoF + ";color:" + ANA_COR.preco + "\">Preço</th><th style=\"background:" + ANA_COR.custoF + ";color:" + ANA_COR.custo + "\">Custo</th>") + '<th>Markup</th></tr>' +
         linhas.map(function (l, i) {
           var mk = l[2] > 0 ? (l[1] - l[2]) / l[2] * 100 : null;
           var vp = temAtual && i && b[1] > 0 && l[1] > 0 ? "<br><small>atual " + variacao(b[1], l[1]) + "</small>" : "";
@@ -4127,7 +4188,7 @@ window.PedidoPDF = (function () {
             '</td><td style="color:' + corMargem(mk) + '"><b>' + pctTxt(mk) + "</b></td></tr>";
         }).join("") + "</table></div>";
     })();
-    box.innerHTML = volta + cab + resumo + precoH + tabela + tabValores + graf + compH + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
+    box.innerHTML = volta + cab + gabaritoAna() + resumo + precoH + tabela + tabValores + graf + compH + '<p style="margin:10px 0 0"><small>Vendas em ' + esc(un) + (q > 1 ? " (c/ " + num(q) + " UN), quebrado igual nos pedidos" : "") + '. Mês "(até …)" ainda está correndo.</small></p>';
     // 06/11 (Marcelo): na Consulta, botão "Fechar análise" também no FIM da análise
     if (desenharAnalise.alvo) box.insertAdjacentHTML("beforeend", '<button class="btn btn-cinza" style="display:block;width:100%;margin:14px 0 0" data-anafechar="' + esc(plu) + '">&#10005; Fechar análise</button>');
     Array.prototype.forEach.call(box.querySelectorAll("[data-analoja]"), function (b) {
@@ -5558,7 +5619,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.18";
+  var VERSAO_APP = "2026-11-10.20";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
