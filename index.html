@@ -1106,7 +1106,7 @@ window.PedidoPDF = (function () {
   // manager pela loja: o servidor recebe "token~Loja" e age como a loja (guardando quem é o manager)
   function tk() { return sessao.token + (comoLoja ? "~" + encodeURIComponent(comoLoja) : ""); }
   var MGR_FN = { pedidosManager: 1, pedidoManager: 1, salvarEdicao: 1, aprovarPedido: 1, precosManager: 1, fornecedoresCompra: 1,
-    produtosFornecedor: 1, buscarCadastro: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
+    produtosFornecedor: 1, buscarCadastro: 1, vendasDiasCompra: 1, finalizarCompra: 1, enviarCompra: 1, listarCompras: 1, prepararEnvioCompra: 1,
     salvarRascunhoCompra: 1, abrirCompraSalva: 1, ticketEnvioCompra: 1, excluirCompra: 1, reenviarErp: 1, fornecedorCompra: 1, salvarDadosFornecedor: 1, entregasCompra: 1, marcarCompraEnviada: 1, errosErp: 1, lojasResumo: 1, apagarErro: 1, rascunhosManager: 1 };
   var EMAIL_MESTRE_APP = "marcelo@atacadaodeembalagens.com.br";   // administrador do sistema (o servidor confere de novo)
   function ehMestre() { return !!(sessao && String(sessao.email || "").toLowerCase() === EMAIL_MESTRE_APP); }
@@ -1121,6 +1121,28 @@ window.PedidoPDF = (function () {
   // ---------------- carregar dados ----------------
   // Estoque e vendas da última semana por loja, direto no cartão do produto (o servidor manda só o que o nível pode ver)
   var RES = null;
+  /* 10/11 (Marcelo): PEDIDO DE COMPRA - a coluna de vendas acompanha a COBERTURA (7, 25, 30 dias...).
+     Pede ao servidor as vendas dos N dias só dos produtos que aparecem na tela (juntando os pedidos). */
+  var VN = {}, VN_META = {}, VN_FILA = {}, VN_T = 0, VN_INDO = {};
+  function vendasN(p, n) {
+    var m = VN[n]; if (m && p in m) return m[p];
+    if (EM_APPS_SCRIPT && sessao) { (VN_FILA[n] = VN_FILA[n] || {})[p] = 1; clearTimeout(VN_T); VN_T = setTimeout(buscarVendasN, 250); }
+    return undefined;   // carregando
+  }
+  function buscarVendasN() {
+    Object.keys(VN_FILA).forEach(function (n) {
+      if (VN_INDO[n]) return;
+      var plus = Object.keys(VN_FILA[n]); delete VN_FILA[n]; if (!plus.length) return;
+      VN_INDO[n] = 1;
+      chamar("vendasDiasCompra", [plus, Number(n)], function (r) {
+        VN_INDO[n] = 0; var m = VN[n] = VN[n] || {};
+        plus.forEach(function (p) { m[p] = (r && r.v && (r.v[p] != null ? r.v[p] : r.v[("000000" + p).slice(-6)])) || 0; });
+        VN_META[n] = r || {};
+        if (tela === "compra") atualizarCmp();
+        if (VN_FILA[n]) buscarVendasN();
+      }, function () { VN_INDO[n] = 0; var m = VN[n] = VN[n] || {}; plus.forEach(function (p) { if (!(p in m)) m[p] = null; }); if (tela === "compra") atualizarCmp(); });
+    });
+  }
   /* 09/11 (Marcelo): "Vendas 7 dias" demorava a aparecer -> mostra NA HORA a última cópia guardada no aparelho
      e atualiza por trás; quando chega, redesenha a tela aberta (lista, Consulta ou Compra), não só a lista. */
   function chaveRes() { return "resCache_" + String(sessao && sessao.email || "").toLowerCase() + "_" + String(sessao && sessao.perfil || ""); }
@@ -1369,9 +1391,16 @@ window.PedidoPDF = (function () {
       return "<td" + (v < 0 ? ' class="neg"' : "") + ">" + (cx ? emEmb(v, q) : num(v)) + "</td>";
     }
     var tot = (le || 0) + e;   // estoque total = lojas + CD (só no pedido de compra)
-    var h = '<table class="tab-est"><tr><th></th><th>Vendas 7 dias</th><th>' + (umaLoja ? "Estoque loja" : "Estoque lojas") + "</th><th>Estoque CD</th>" + (comTotal ? "<th>Estoque total</th>" : "") + "</tr>";
-    if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + cel(lv, true) + cel(le, true) + cel(e, true) + (comTotal ? cel(tot, true) : "") + "</tr>";
-    if (!temCx) h += "<tr><td>UN</td>" + cel(lv) + cel(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td>" + (comTotal ? cel(tot) : "") + "</tr>";   // UN só quando não tem embalagem de compra
+    var nDias = comTotal ? Math.round(Number(compra && compra.cobertura) || 0) : 0, tituloV = "Vendas 7 dias", carregV = false;   // 10/11: compra = vendas da cobertura
+    if (nDias > 0 && nDias !== 7) {
+      var vN = vendasN(String(p), nDias), mt = VN_META[nDias];
+      tituloV = "Vendas " + nDias + " dias" + (mt && mt.comDados != null && mt.comDados < nDias ? " (" + mt.comDados + " com dados)" : "");
+      if (vN === undefined) carregV = true; else lv = vN;
+    }
+    var celV = function (cx) { return carregV ? '<td class="sem">…</td>' : cel(lv, cx); };
+    var h = '<table class="tab-est"><tr><th></th><th>' + tituloV + '</th><th>' + (umaLoja ? "Estoque loja" : "Estoque lojas") + "</th><th>Estoque CD</th>" + (comTotal ? "<th>Estoque total</th>" : "") + "</tr>";
+    if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + celV(true) + cel(le, true) + cel(e, true) + (comTotal ? cel(tot, true) : "") + "</tr>";
+    if (!temCx) h += "<tr><td>UN</td>" + celV(false) + cel(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td>" + (comTotal ? cel(tot) : "") + "</tr>";   // UN só quando não tem embalagem de compra
     h += "</table>";
     if (!so && (!umaLoja || (foco && RES && RES.lojas && RES.lojas.length > 1)))
       h += '<details class="det-lojas"' + (comCusto ? ' data-custo="' + esc(p) + '" data-t="' + esc(t || "") + '" data-q="' + (Number(q) || 0) + '"' : "") + "><summary>Ver por loja</summary>" + htmlLojas(p) + "</details>";
@@ -1654,7 +1683,7 @@ window.PedidoPDF = (function () {
   var EXP = { lista: null, aberto: null, loja: "", ver: "separar", mod: "conferencia" };
   // 09/11: módulo Expedição = 4 opções (Conferência, Recebimento, Contagem de estoque, Validade). Abre para o login
   // Expedição e, no início, para o Marcelo (mestre), que fecha e volta ao app.
-  var MODS_EXP = [["conferencia", "Conferência"], ["recebimento", "Recebimento"], ["contagem", "Contagem de estoque"], ["validade", "Validade"]];
+  var MODS_EXP = [["conferencia", "Conferência"]];   // 10/11 (Marcelo): Recebimento, Contagem de estoque e Validade saem por enquanto
   function expUsuario() { return sessaoExp || (sessao && ehMestre() ? sessao : null); }
   function expChamar(fn, args, ok, falha) {
     if (!expUsuario()) return;
@@ -2168,7 +2197,8 @@ window.PedidoPDF = (function () {
     if (!EXP.aberto && document.querySelector("#expModal:not([hidden])")) { EXP.redesenhar = true; return; }   // 09/11: janela aberta (ex.: senha) — redesenha depois
     var h = '<div class="exp-topo"><div><b>Expedição</b><span>' + esc(u.nome || u.email) + '</span></div>' +
       '<div class="exp-btns"><button data-exp="diag" title="Testar o leitor do coletor">&#128295;</button><button data-exp="atualizar">&#8635; Atualizar</button>' + (sessaoExp ? '<button data-exp="sair">Sair</button>' : '<button data-exp="fechar">&#10005; Fechar</button>') + '</div></div><div class="exp-corpo">' +
-      '<div class="exp-mods">' + MODS_EXP.map(function (x) { return '<button data-exp="mod" data-v="' + x[0] + '" class="' + (EXP.mod === x[0] ? "ativo" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>";
+      (MODS_EXP.length < 2 ? "" : '<div class="exp-mods">' + MODS_EXP.map(function (x) { return '<button data-exp="mod" data-v="' + x[0] + '" class="' + (EXP.mod === x[0] ? "ativo" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>");
+    if (!MODS_EXP.some(function (x) { return x[0] === EXP.mod; })) EXP.mod = "conferencia";
     if (EXP.mod !== "conferencia") {
       var nm = MODS_EXP.filter(function (x) { return x[0] === EXP.mod; })[0];
       t.innerHTML = h + '<div class="exp-breve"><b>' + esc(nm ? nm[1] : "") + "</b>Em breve: este módulo ainda vai ser montado.</div></div>"; return;
@@ -5186,7 +5216,10 @@ window.PedidoPDF = (function () {
     }
     if (ehManager()) {
       var sf = e.target.closest("[data-subfat]"); if (sf) { mgr.sub = sf.getAttribute("data-subfat"); desenharManager(); window.scrollTo(0, 0); return; }
-      var cf = e.target.closest("[data-corfiltro]"); if (cf) { mgr.cor = cf.getAttribute("data-corfiltro"); desenharManager(); return; }
+      var cf = e.target.closest("[data-corfiltro]"); if (cf) {   // 10/11: Faturado (verde) leva para a aba Faturados; as outras cores para A faturar
+        var kc = cf.getAttribute("data-corfiltro"), irFat = kc === "fat", aba = kc === "" ? mgr.sub : irFat ? "faturados" : "afaturar";
+        if (aba !== mgr.sub) { mgr.sub = aba; mgr.cor = irFat ? "" : kc; window.scrollTo(0, 0); } else mgr.cor = kc;
+        desenharManager(); return; }
       var lb = e.target.closest("[data-liberar]"); if (lb) { liberarExp(lb); return; }
       var xp = e.target.closest("[data-excpend]"); if (xp) { excluirPendente({ id: xp.getAttribute("data-excpend"), nome: xp.getAttribute("data-exnome"), loja: xp.getAttribute("data-exloja") }); return; }
       var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
@@ -5251,7 +5284,7 @@ window.PedidoPDF = (function () {
     if (e.target.id === "cmpBusca") buscarCmp(e.target.value);
     if (e.target.id === "cmpForn") { compra.fornecedor = e.target.value.trim(); salvarCompra(); mostrarForn(); desenharFornDados(); }
     if (e.target.id === "cmpObs") { compra.obs = e.target.value; salvarCompra(); }
-    if (e.target.id === "cmpCob") { var vcob = e.target.value.replace(/\D/g, "").slice(0, 2); if (e.target.value !== vcob) e.target.value = vcob; compra.cobertura = vcob; salvarCompra(); }
+    if (e.target.id === "cmpCob") { var vcob = e.target.value.replace(/\D/g, "").slice(0, 2); if (e.target.value !== vcob) e.target.value = vcob; compra.cobertura = vcob; salvarCompra(); clearTimeout(atualizarCmp.tCob); atualizarCmp.tCob = setTimeout(atualizarCmp, 350); }
     if (e.target.id === "cmpPag") { var vpag = e.target.value.replace(/[;,\s]+/g, "/").replace(/[^\d\/]/g, ""); if (e.target.value !== vpag) e.target.value = vpag; compra.pagamento = vpag; salvarCompra(); }
     if (e.target.id === "cmpForma") { compra.formaPagto = e.target.value.toUpperCase(); salvarCompra(); }
     if (e.target.id === "cmpDataEnt") { compra.dataEntrega = e.target.value; salvarCompra(); }
@@ -5465,7 +5498,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.4";
+  var VERSAO_APP = "2026-11-10.7";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
