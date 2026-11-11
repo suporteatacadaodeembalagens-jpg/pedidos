@@ -592,6 +592,21 @@
   body #telaErros .er-corpo{padding-top:14px}
   /* 11/11 (Marcelo): a barra do topo (logo, usuário e botões) aparece em TODAS as telas: Expedição e Relatório de erros começam abaixo dela */
   #telaExp,#telaErros{top:var(--topoH,0px)!important}
+  /* ===== 11/11 (Marcelo): BOTÕES bem destacados sem poluir =====
+     1 cor forte por tela (vermelho = ação principal) · secundários BRANCOS com borda azul clara e texto marinho (aparecem no
+     fundo claro sem gritar) · todo botão com altura mínima de 44 px (dedo) e anel azul quando focado. */
+  .btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1.2;cursor:pointer}
+  .btn:focus-visible,.ver:focus-visible,.icone-btn:focus-visible,.tile:focus-visible{outline:3px solid rgba(29,95,168,.45);outline-offset:2px}
+  .btn:disabled{opacity:.6;cursor:default}
+  .btn-cinza,.acao-cons .btn-ana,.ped .ver{background:#fff;color:var(--marrom);border:1.5px solid #c3d2e5;box-shadow:0 1px 2px rgba(15,40,75,.07)}
+  .btn-cinza:active,.acao-cons .btn-ana:active,.ped .ver:active{background:#eaf1fa;border-color:var(--azul)}
+  .ped .ver{min-height:40px}
+  .acao-cons .btn-cont{background:var(--marrom);color:#fff;border:0;box-shadow:inset 0 -3px 0 var(--ouro),0 2px 8px rgba(15,40,75,.18)}
+  .btn-verde{border:0}
+  .btn-texto,.link,.btn-link{color:var(--azul);font-weight:700}
+  main .modo:not(.ativo){background:#fff;border:1.5px solid #c3d2e5;color:var(--marrom)}
+  #cmpCob.cob-alta{border-color:#c62828!important;background:#fdecea;box-shadow:0 0 0 3px rgba(198,40,40,.15)}
+  .cob-msg{color:#b71c1c;font-size:13px;font-weight:700;margin-top:6px}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
 </style>
 </head>
@@ -5125,7 +5140,7 @@ window.PedidoPDF = (function () {
       '<div class="dupla"><div class="campo"><label for="cmpPag">Cond. pagamento (dias)</label><input id="cmpPag" inputmode="numeric" maxlength="20" placeholder="21/28/35" value="' + esc(compra.pagamento || "") + '"></div>' +
       '<div class="campo"><label for="cmpForma">Forma de pagamento</label><input id="cmpForma" list="cmpFormas" maxlength="30" value="' + esc(compra.formaPagto || "CARTEIRA") + '">' +
         '<datalist id="cmpFormas"><option value="CARTEIRA"><option value="BOLETO"><option value="DEPÓSITO"><option value="PIX"></datalist></div></div>' +
-      '<div class="dupla"><div class="campo"><label for="cmpCob">Cobertura (dias)</label><input id="cmpCob" inputmode="numeric" maxlength="2" placeholder="Ex.: 30" value="' + esc(compra.cobertura || "") + '"></div><div></div></div>' +
+      '<div class="dupla"><div class="campo"><label for="cmpCob">Cobertura (dias) <small style="color:var(--sub);font-weight:400">· máximo 30</small></label><input id="cmpCob" inputmode="numeric" maxlength="2" placeholder="Até 30" class="' + (Number(compra.cobertura) > 30 ? "cob-alta" : "") + '" value="' + esc(compra.cobertura || "") + '"><div id="cmpCobMsg" class="cob-msg"' + (Number(compra.cobertura) > 30 ? "" : " hidden") + '>A cobertura vai até 30 dias. Diminua para continuar.</div></div><div></div></div>' +
       '<button class="btn btn-cinza largo" id="cmpVerForn" type="button">Ver produtos deste fornecedor</button>' +
       '<div class="campo"><label for="cmpBusca">Buscar produto (cadastro inteiro, até sem estoque)</label><input id="cmpBusca" type="search" autocomplete="off" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" value="' + esc(cmp.termo) + '">' +
       '<button class="btn-ler escuro" id="btnLerCmp" type="button">' + ICO_EAN + "Ler código de barras</button></div>" +
@@ -5310,6 +5325,7 @@ window.PedidoPDF = (function () {
     if (!corpo.fornecedor) { toast("Escolha o fornecedor"); var i = $("cmpForn"); if (i) i.focus(); return; }
     if (!corpo.entrega || !corpo.entrega.endereco) { toast("Escolha onde entregar"); return; }
     if (!corpo.dataEntrega) { toast("Informe a data de entrega"); var de = $("cmpDataEnt"); if (de) de.focus(); return; }
+    if (Number(corpo.cobertura) > 30) { toast("Cobertura máxima: 30 dias. Diminua a cobertura para gerar o pedido."); var cb = $("cmpCob"); if (cb) { cb.focus(); cb.classList.add("cob-alta"); } return; }   // 11/11
     // 10/11 (Marcelo): NÃO gera o pedido com item de custo (preço) 0
     var semP = corpo.itens.filter(function (x) { return !(Number(x.preco) > 0); });
     if (semP.length) { toast("Não dá para gerar: " + semP.length + (semP.length === 1 ? " item com custo 0: " : " itens com custo 0: ") + semP.slice(0, 3).map(function (x) { return x.d || x.p; }).join(", ") + (semP.length > 3 ? "…" : "") + ". Coloque o preço."); return; }
@@ -5620,7 +5636,11 @@ window.PedidoPDF = (function () {
     if (e.target.id === "cmpBusca") buscarCmp(e.target.value);
     if (e.target.id === "cmpForn") { compra.fornecedor = e.target.value.trim(); salvarCompra(); mostrarForn(); desenharFornDados(); }
     if (e.target.id === "cmpObs") { compra.obs = e.target.value; salvarCompra(); }
-    if (e.target.id === "cmpCob") { var vcob = e.target.value.replace(/\D/g, "").slice(0, 2); if (e.target.value !== vcob) e.target.value = vcob; compra.cobertura = vcob; salvarCompra(); clearTimeout(atualizarCmp.tCob); atualizarCmp.tCob = setTimeout(atualizarCmp, 350); }
+    if (e.target.id === "cmpCob") { var vcob = e.target.value.replace(/\D/g, "").slice(0, 2); if (e.target.value !== vcob) e.target.value = vcob; compra.cobertura = vcob; salvarCompra();
+      // 11/11 (Marcelo): cobertura no MÁXIMO 30 dias — acima disso fica em vermelho e não deixa gerar o pedido
+      var cobAlta = Number(vcob) > 30; e.target.classList.toggle("cob-alta", cobAlta); var ma = $("cmpCobMsg"); if (ma) ma.hidden = !cobAlta;
+      if (cobAlta) { clearTimeout(atualizarCmp.tCob); return; }
+      clearTimeout(atualizarCmp.tCob); atualizarCmp.tCob = setTimeout(atualizarCmp, 350); }
     if (e.target.id === "cmpPag") { var vpag = e.target.value.replace(/[;,\s]+/g, "/").replace(/[^\d\/]/g, ""); if (e.target.value !== vpag) e.target.value = vpag; compra.pagamento = vpag; salvarCompra(); }
     if (e.target.id === "cmpForma") { compra.formaPagto = e.target.value.toUpperCase(); salvarCompra(); }
     if (e.target.id === "cmpDataEnt") { compra.dataEntrega = e.target.value; salvarCompra(); }
@@ -5853,7 +5873,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.7";
+  var VERSAO_APP = "2026-11-11.9";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
