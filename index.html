@@ -611,6 +611,10 @@
   body::before{content:"";position:fixed;left:50%;top:56%;width:min(80vw,620px);aspect-ratio:1.45;transform:translate(-50%,-50%);background:var(--logoFundo) center / contain no-repeat;opacity:.075;filter:grayscale(1) contrast(1.15);mix-blend-mode:multiply;-webkit-mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 55%,transparent 100%);mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 55%,transparent 100%);pointer-events:none;z-index:0}
   main{position:relative;z-index:1}
   .tiles .tile:not(.destaque){background:rgba(255,255,255,.9)}
+  /* 11/11 (Marcelo): fundo com TEXTURA leve (grão fininho, como papel) + luz suave nos cantos, para não ficar 100% liso.
+     Bem fraco: só se percebe nas áreas vazias. Feito com SVG dentro do próprio arquivo (nada a baixar). */
+  body{background-image:radial-gradient(1200px 600px at 0% 0%,rgba(29,95,168,.06),transparent 60%),radial-gradient(900px 500px at 100% 100%,rgba(246,194,0,.06),transparent 60%)!important;background-attachment:fixed!important}
+  body::after{content:"";position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .06 0 0 0 0 .16 0 0 0 0 .3 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:180px 180px;opacity:.16;pointer-events:none;z-index:0}
   /* 11/11: rodapé do Início */
   .rodape-app{position:static;display:flex;flex-direction:column;align-items:center;gap:10px;margin:28px 0 8px;padding:18px 0 4px;border-top:1px solid var(--linha);background:none;box-shadow:none;text-align:center}
   .rodape-app p{margin:0;font-size:12.5px;color:var(--sub)}
@@ -5893,7 +5897,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.12";
+  var VERSAO_APP = "2026-11-11.13";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
