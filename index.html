@@ -605,6 +605,10 @@
   .btn-verde{border:0}
   .btn-texto,.link,.btn-link{color:var(--azul);font-weight:700}
   main .modo:not(.ativo){background:#fff;border:1.5px solid #c3d2e5;color:var(--marrom)}
+  /* 11/11 (Marcelo): PAPEL TIMBRADO — logo bem clarinho no fundo de todas as telas, atrás dos cartões */
+  body::before{content:"";position:fixed;left:0;right:0;top:0;bottom:0;background:var(--logoFundo) center 58% / min(78vw, 560px) auto no-repeat;opacity:.09;filter:saturate(.7);pointer-events:none;z-index:0}
+  main{position:relative;z-index:1}
+  .tiles .tile:not(.destaque){background:rgba(255,255,255,.82);-webkit-backdrop-filter:blur(1px);backdrop-filter:blur(1px)}
   #cmpCob.cob-alta{border-color:#c62828!important;background:#fdecea;box-shadow:0 0 0 3px rgba(198,40,40,.15)}
   .cob-msg{color:#b71c1c;font-size:13px;font-weight:700;margin-top:6px}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
@@ -810,7 +814,9 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script>document.getElementById("logoMini").src = document.querySelector(".login .logo").src;</script>
+<script>document.getElementById("logoMini").src = document.querySelector(".login .logo").src;
+/* 11/11 (Marcelo): logo da empresa ao fundo, como papel timbrado (a mesma imagem do login, sem baixar nada a mais) */
+document.documentElement.style.setProperty("--logoFundo", 'url("' + document.querySelector(".login .logo").src + '")');</script>
 <script>
 /* Aberto dentro do Google Sites: a barra do Chrome esconde a parte de baixo do app.
    Mede quanto do app fica fora da tela e sobe o rodapé e os painéis (--corte). */
@@ -5873,7 +5879,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.9";
+  var VERSAO_APP = "2026-11-11.10";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
