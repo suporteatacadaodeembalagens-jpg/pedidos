@@ -4037,11 +4037,15 @@ window.PedidoPDF = (function () {
         "#telaCont td{padding:7px 6px;border-bottom:1px solid #eef2f7}#telaCont td.n{text-align:right;white-space:nowrap}#telaCont .neg{color:#c62828;font-weight:800}#telaCont .pos{color:#1d7a35;font-weight:800}" +
         "#telaCont .cn-tabwrap{overflow:auto;border-radius:12px;box-shadow:0 1px 2px rgba(15,40,75,.06)}" +
         "#telaCont .cn-vazio{text-align:center;color:var(--sub);padding:28px 10px}" +
+        "#telaCont .cn-flista{max-height:280px;overflow:auto;border:1px solid #d3dde9;border-radius:10px;background:#fff;margin-top:4px;box-shadow:0 8px 20px rgba(15,40,75,.12)}" +
+        "#telaCont .cn-flista button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid #eef2f7;background:#fff;padding:11px 12px;font-size:14px;cursor:pointer}#telaCont .cn-flista button:hover{background:#eef3f9}#telaCont .cn-flista small{color:var(--sub);white-space:nowrap}" +
         "#telaCont .v-venc{border-left-color:#c62828}#telaCont .v-30{border-left-color:#e53935}#telaCont .v-60{border-left-color:#e0a100}#telaCont .v-ok{border-left-color:#2e9d4f}";
       document.head.appendChild(st);
       tl = document.createElement("div"); tl.id = "telaCont"; document.body.appendChild(tl);
       tl.addEventListener("click", cnClique);
       tl.addEventListener("input", cnDigita);
+      tl.addEventListener("focusin", function (e) { if (e.target.id === "cnForn") cnMostrarForn(); });
+      tl.addEventListener("click", function (e) { var bx = document.getElementById("cnFornLista"); if (bx && !bx.hidden && !e.target.closest("#cnFornLista") && e.target.id !== "cnForn") bx.hidden = true; }, true);
       tl.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target.getAttribute && e.target.getAttribute("data-cq") != null) { e.preventDefault(); cnSalvarContagem(); } });
     }
     tl.hidden = false; CN.listas = null; CN.ed = null; CN.rel = null; CN.val = null;
@@ -4059,7 +4063,6 @@ window.PedidoPDF = (function () {
   }
   function cnAbas() {
     var a = CN.mgr ? [["listas", "Listas"], ["contar", "Contar"], ["rel", "Relatório"], ["val", "Validade"]] : [["contar", "Contar"], ["val", "Validade"]];
-    if (CN.modo === "app") a.push(["antiga", "Pedidos avulsos"]);
     return '<div class="cn-abas">' + a.map(function (x) { return '<button data-cn="aba" data-v="' + x[0] + '" class="' + (CN.aba === x[0] ? "on" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>";
   }
   function cnStatus(l) {
@@ -4100,10 +4103,35 @@ window.PedidoPDF = (function () {
       '<button data-cn="ed-todas">Todas as lojas</button></div>' +
       '<label>Adicionar produto (nome, PLU, marca ou código de barras)</label><input id="cnBusca" type="search" placeholder="Digite e escolha abaixo" autocomplete="off">' +
       '<div id="cnRes"></div>' +
+      // 11/11 (Marcelo): escolher FORNECEDOR (igual ao Pedido de compra) e pôr os produtos dele na lista
+      '<label>Ou escolha um fornecedor (traz os produtos dele)</label><input id="cnForn" placeholder="Toque para ver os fornecedores" autocomplete="off" value="' + esc(CN.fornNome || "") + '">' +
+      '<div id="cnFornLista" class="cn-flista" hidden></div><div id="cnFornRes">' + cnHtmlFornProd() + "</div>" +
       '<label>Produtos da lista (' + e.itens.length + ")</label>" +
       (e.itens.length ? e.itens.map(function (i, k) { return '<div class="cn-it"><div><b>' + esc(i.d || i.p) + "</b><small>PLU " + esc(i.p) + (i.q > 1 ? " · " + esc(i.t || "CX") + " c/ " + i.q : "") + '</small></div><button class="cn-x" data-cn="ed-tira" data-v="' + k + '" title="Tirar">&times;</button></div>'; }).join("")
         : '<div class="cn-vazio">Nenhum produto ainda.</div>') +
       '<div class="cn-acoes" style="margin-top:14px"><button data-cn="ed-cancelar">Cancelar</button><button class="azul" data-cn="ed-salvar">Salvar</button><button class="pri" data-cn="ed-salvar" data-a="liberar">Salvar e liberar</button></div></div>';
+  }
+  function cnHtmlFornProd() {
+    var fp = CN.fornProd; if (!CN.fornNome) return "";
+    if (fp === "carregando") return '<div class="carregando"><div class="giro"></div>Buscando os produtos do fornecedor…</div>';
+    if (!Array.isArray(fp)) return "";
+    var fora = fp.filter(function (x) { return !(CN.ed && CN.ed.itens.some(function (i) { return i.p === x.p; })); });
+    return '<div class="cn-acoes" style="margin:6px 0"><button class="azul" data-cn="forn-todos"' + (fora.length ? "" : " disabled") + '>+ Pôr todos (' + fora.length + ")</button><small style=\"align-self:center\">" + fp.length + " produtos de " + esc(CN.fornNome) + "</small></div>" +
+      '<div style="max-height:340px;overflow:auto">' + cnLinhasAdd(fp) + "</div>";
+  }
+  function cnLinhasAdd(l) {
+    return (l || []).slice(0, 300).map(function (x) { var ja = CN.ed && CN.ed.itens.some(function (i) { return i.p === x.p; });
+      return '<div class="cn-it"><div><b>' + esc(x.d) + "</b><small>PLU " + esc(x.p) + (x.m ? " · " + esc(x.m) : "") + (Number(x.q) > 1 ? " · " + esc(x.t || "CX") + " c/ " + x.q : "") + "</small></div>" +
+        (ja ? "<small>na lista</small>" : '<button class="cn-bt azul" data-cn="ed-add" data-p="' + esc(x.p) + '" data-d="' + esc(x.d) + '" data-t="' + esc(x.t || "") + '" data-q="' + (Number(x.q) || 0) + '">+ Pôr</button>') + "</div>"; }).join("");
+  }
+  function cnMostrarForn() {
+    var box = document.getElementById("cnFornLista"), inp = document.getElementById("cnForn"); if (!box || !inp) return;
+    if (!Array.isArray(CN.forns)) { box.innerHTML = '<div class="cn-vazio" style="padding:10px">Carregando fornecedores…</div>'; box.hidden = false;
+      if (CN.forns !== "carregando") { CN.forns = "carregando"; chamar("fornecedoresCompra", [], function (l) { CN.forns = l || []; cnMostrarForn(); }, function () { CN.forns = null; box.hidden = true; toast("Não foi possível carregar os fornecedores"); }); }
+      return; }
+    var t = semAcento(inp.value.trim()), l = CN.forns.filter(function (f) { return !t || semAcento(f.nome).indexOf(t) >= 0; });
+    box.innerHTML = l.length ? l.slice(0, 80).map(function (f) { return '<button type="button" data-cn="forn" data-v="' + esc(f.nome) + '">' + esc(f.nome) + "<small>" + f.n + " produtos</small></button>"; }).join("") : '<div class="cn-vazio" style="padding:10px">Nenhum fornecedor com esse nome.</div>';
+    box.hidden = false;
   }
   function cnResBusca(l) {
     var b = document.getElementById("cnRes"); if (!b) return;
@@ -4227,11 +4255,15 @@ window.PedidoPDF = (function () {
     if (k === "fechar") { document.getElementById("telaCont").hidden = true; return; }
     if (k === "atualizar") { CN.val = null; CN.rel = null; cnCarregar(); if (CN.relId) cnCarregarRel(CN.relId); return; }
     if (k === "aba") { if (v === "antiga") { abrirContagem(); return; } CN.aba = v; CN.ed = null; cnDesenhar(); return; }
-    if (k === "nova") { CN.ed = { nome: "", lojas: [], itens: [] }; cnDesenhar(); return; }
+    if (k === "nova") { CN.ed = { nome: "", lojas: [], itens: [] }; CN.fornNome = ""; CN.fornProd = null; cnDesenhar(); return; }
     if (k === "editar") { var l = CN.listas.filter(function (x) { return x.id === v; })[0]; if (!l) return; CN.ed = { id: l.id, nome: l.nome, lojas: (l.lojas || []).slice(), itens: (l.itens || []).slice() }; cnDesenhar(); return; }
     if (k === "ed-loja") { cnLerNome(); var i = CN.ed.lojas.indexOf(v); if (i >= 0) CN.ed.lojas.splice(i, 1); else CN.ed.lojas.push(v); cnDesenhar(); return; }
     if (k === "ed-todas") { cnLerNome(); CN.ed.lojas = cnLojasTodas().filter(function (c) { return c !== "001"; }); cnDesenhar(); return; }
     if (k === "ed-add") { cnLerNome(); CN.ed.itens.push({ p: b.getAttribute("data-p"), d: b.getAttribute("data-d"), t: b.getAttribute("data-t"), q: Number(b.getAttribute("data-q")) || 0 }); var bu = document.getElementById("cnBusca"), tx = bu ? bu.value : ""; cnDesenhar(); var bu2 = document.getElementById("cnBusca"); if (bu2) { bu2.value = tx; cnResBusca(CN.ultBusca); } return; }
+    if (k === "forn") { cnLerNome(); CN.fornNome = v; CN.fornProd = "carregando"; cnDesenhar();
+      chamar("produtosFornecedor", [v], function (l) { if (CN.fornNome !== v) return; CN.fornProd = (l || []).filter(function (x) { return !x.fl; }).sort(function (a, b) { return String(a.d).localeCompare(String(b.d)); }); if (CN.ed) cnDesenhar(); },
+        function () { CN.fornProd = []; toast("Não foi possível buscar os produtos do fornecedor"); if (CN.ed) cnDesenhar(); }); return; }
+    if (k === "forn-todos") { cnLerNome(); (Array.isArray(CN.fornProd) ? CN.fornProd : []).forEach(function (x) { if (!CN.ed.itens.some(function (i) { return i.p === x.p; })) CN.ed.itens.push({ p: x.p, d: x.d, t: x.t || "", q: Number(x.q) || 0 }); }); cnDesenhar(); toast("Produtos do fornecedor na lista"); return; }
     if (k === "ed-tira") { cnLerNome(); CN.ed.itens.splice(Number(v), 1); cnDesenhar(); return; }
     if (k === "ed-cancelar") { CN.ed = null; cnDesenhar(); return; }
     if (k === "ed-salvar") { cnLerNome(); var lib = b.getAttribute("data-a") === "liberar"; b.disabled = true;
@@ -4263,6 +4295,7 @@ window.PedidoPDF = (function () {
     if (t.getAttribute && t.getAttribute("data-cq") != null) { CN.digitado[CN.abertaId + "|" + t.getAttribute("data-cq")] = t.value;
       var n = Object.keys(CN.digitado).filter(function (k) { return k.indexOf(CN.abertaId + "|") === 0 && String(CN.digitado[k]).trim() !== ""; }).length, s = document.getElementById("cnPend"); if (s) s.textContent = n + " para salvar"; return; }
     if (id === "cnFiltro") { CN.filtroCont = t.value; clearTimeout(CN.tb); CN.tb = setTimeout(function () { var p = t.selectionStart; cnDesenhar(); var f = document.getElementById("cnFiltro"); if (f) { f.focus(); try { f.setSelectionRange(p, p); } catch (x) {} } }, 250); return; }
+    if (id === "cnForn") { cnMostrarForn(); return; }
     if (id === "cnBusca") { var q = t.value.trim(); clearTimeout(CN.tb); if (semAcento(q).length < 2) { cnResBusca([]); return; }
       CN.tb = setTimeout(function () { cnResBusca("carregando"); chamar("buscarCadastro", [q], function (l) { CN.ultBusca = l || []; cnResBusca(CN.ultBusca); }, function () { cnResBusca([]); }); }, 350); return; }
     if (id === "vProd" && CN.modo === "app") { var q2 = t.value.trim(); CN.vProd = q2; clearTimeout(CN.tb); if (semAcento(q2).length < 3) return;
@@ -6247,7 +6280,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.21";
+  var VERSAO_APP = "2026-11-11.22";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
