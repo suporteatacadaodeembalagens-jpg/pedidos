@@ -639,7 +639,8 @@
   .cmp-recf-lista{position:absolute;left:0;right:0;z-index:30;max-height:280px;overflow:auto;background:#fff;border:1px solid #d3dde9;border-radius:10px;box-shadow:0 8px 20px rgba(15,40,75,.14);margin-top:4px}
   .cmp-recf-lista button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid #eef2f7;background:#fff;padding:11px 12px;font-size:14px;cursor:pointer}
   .cmp-recf-lista button:hover{background:#eef3f9}.cmp-recf-lista small{color:var(--sub);white-space:nowrap}
-  .tab-ext{margin-top:6px}.tab-ext th{font-size:11.5px}
+  .tab-ext{margin-top:6px}.tab-ext th{font-size:11.5px}.tab-ext td:first-child{white-space:nowrap;font-weight:700}
+  .tab-med{display:flex;gap:8px;margin-top:8px}.tab-med>div{flex:1;background:#f4f7fb;border:1px solid #e3e9f1;border-radius:10px;padding:6px 10px;text-align:center}.tab-med small{display:block;color:var(--sub);font-size:11.5px}.tab-med b{font-size:16px;color:var(--marrom)}
   .cmp-erp{display:inline-block;margin:4px 0 2px;font-size:12px;font-weight:800;border:1px solid;border-radius:6px;padding:2px 8px}
   .cmp-rec .cmp-rcb{color:#1d5fa8;font-weight:700}
   #cmpCob.cob-alta{border-color:#c62828!important;background:#fdecea;box-shadow:0 0 0 3px rgba(198,40,40,.15)}
@@ -1316,19 +1317,25 @@ window.PedidoPDF = (function () {
     chamar("compraExtras", [plus], function (r) {
       EXT_INDO = false; EXT_META = r || EXT_META;
       plus.forEach(function (p) { var k = ("000000" + p).slice(-6);
-        EXT[p] = { ent: (r && r.ent && (r.ent[p] || r.ent[k])) || [null, null, null], mtd: r && r.mtd ? (r.mtd[p] != null ? r.mtd[p] : r.mtd[k]) : null }; });
+        EXT[p] = { ent: (r && r.ent && (r.ent[p] || r.ent[k])) || [null, null, null, null], vend: (r && r.vend && (r.vend[p] || r.vend[k])) || [null, null, null, null], mtd: r && r.mtd ? (r.mtd[p] != null ? r.mtd[p] : r.mtd[k]) : null }; });
       if (tela === "compra") atualizarCmp();
       if (Object.keys(EXT_FILA).length) buscarExtras();
-    }, function () { EXT_INDO = false; plus.forEach(function (p) { EXT[p] = { ent: [null, null, null], mtd: null }; }); if (tela === "compra") atualizarCmp(); });
+    }, function () { EXT_INDO = false; plus.forEach(function (p) { EXT[p] = { ent: [null, null, null, null], vend: [null, null, null, null], mtd: null }; }); if (tela === "compra") atualizarCmp(); });
   }
-  function htmlExtraCompra(p, q, t) {
+  function htmlExtraCompra(p, q, t) {   // 11/11 v2 (Marcelo): Entradas e Vendas por mês (atual + 3 anteriores) e as médias
     var x = extraCompra(p), un = q > 1 ? (t || "CX") : "UN";
     var f = function (v) { return v == null ? '<td class="sem">—</td>' : "<td>" + (q > 1 ? emEmb(v, q) : num(v)) + "</td>"; };
-    var meses = (EXT_META && EXT_META.meses) || [];
-    var nm = function (i) { var m = meses[i]; return m ? MES_ABR[Number(m.slice(5)) - 1] + (i === 2 ? " (até hoje)" : "") : ["mês -2", "mês -1", "este mês"][i]; };
-    var cab = '<table class="tab-est tab-ext"><tr><th></th><th>Vendas no mês' + (EXT_META && EXT_META.mtdDias ? " (" + EXT_META.mtdDias + " dias)" : "") + "</th><th>Entrada " + nm(0) + "</th><th>Entrada " + nm(1) + "</th><th>Entrada " + nm(2) + "</th></tr>";
-    if (x === undefined) return cab + "<tr><td>" + esc(un) + '</td><td class="sem">…</td><td class="sem">…</td><td class="sem">…</td><td class="sem">…</td></tr></table>';
-    return cab + "<tr><td>" + esc(un) + "</td>" + f(x.mtd) + f(x.ent[0]) + f(x.ent[1]) + f(x.ent[2]) + "</tr></table>";
+    var meses = (EXT_META && EXT_META.meses) || [];   // [mês -3, -2, -1, atual]
+    var nm = function (i) { var m = meses[i]; return m ? MES_ABR[Number(m.slice(5)) - 1] : ["mês -3", "mês -2", "mês -1", "mês atual"][i]; };
+    var ordem = [3, 2, 1, 0];   // na tela: mês atual primeiro, depois os anteriores
+    var cab = '<table class="tab-est tab-ext"><tr><th></th>' + ordem.map(function (i) { return "<th>" + (i === 3 ? "Mês atual (" + nm(3) + ")" : nm(i)) + "</th>"; }).join("") + "</tr>";
+    if (x === undefined) { var c = '<td class="sem">…</td>'; return cab + "<tr><td>Entradas " + esc(un) + "</td>" + c + c + c + c + "</tr><tr><td>Vendas " + esc(un) + "</td>" + c + c + c + c + "</tr></table>"; }
+    var ent = x.ent || [], vend = x.vend || [];
+    var fm = function (v) { return v == null ? "—" : (q > 1 ? emEmb(v, q) : num(v)) + " " + esc(un); };
+    var media = function (l) { var v = [0, 1, 2].map(function (i) { return l[i]; }).filter(function (n) { return n != null; }); return v.length ? v.reduce(function (s, n) { return s + n; }, 0) / v.length : null; };
+    return cab + "<tr><td>Entradas " + esc(un) + "</td>" + ordem.map(function (i) { return f(ent[i]); }).join("") + "</tr>" +
+      "<tr><td>Vendas " + esc(un) + "</td>" + ordem.map(function (i) { return f(vend[i]); }).join("") + "</tr></table>" +
+      '<div class="tab-med"><div><small>Média vendas (3 meses)</small><b>' + fm(media(vend)) + '</b></div><div><small>Média entradas (3 meses)</small><b>' + fm(media(ent)) + "</b></div></div>";
   }
   function buscarVendasN() {
     Object.keys(VN_FILA).forEach(function (n) {
@@ -6375,7 +6382,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.25";
+  var VERSAO_APP = "2026-11-11.26";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
