@@ -9,7 +9,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#4e2524">
+<meta name="theme-color" content="#143d6e">
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>Atacadão De Embalagens</title>
 <script>
@@ -75,8 +75,8 @@
 <style>
   /* Paleta do logo Atacadão de Embalagens: marrom da moldura, vermelho do letreiro, azul e amarelo da caixa, creme do fundo */
   :root{
-    --marrom:#5c2f2e; --marrom-esc:#3f1f1e; --principal:#d92b30; --principal-esc:#b42226;
-    --azul:#1f5a97; --azul-claro:#e4edf8; --ouro:#f5c400; --creme:#f4ecdb; --bege:#cfba8f;
+    --marrom:#143d6e; --marrom-esc:#0f2f57; --principal:#d92b30; --principal-esc:#b42226;
+    --azul:#1f5a97; --azul-claro:#e4edf8; --ouro:#f5c400; --creme:#edf2f8; --bege:#b9c8da;
     --fundo:#f7f2e8; --card:#fff; --texto:#2a1a19; --sub:#7a6a62; --linha:#e8dcc6;
     --amarelo:#fff6d1; --amarelo-borda:#f5c400; --vermelho:#b42226; --zap:#1a7f45;
   }
@@ -130,7 +130,7 @@
   .marca-app b{display:block;font-size:15px;line-height:1.12;letter-spacing:0}
   /* 03/11: o topo se adapta à tela - nada fica escondido com "...": o texto quebra para a linha de baixo e,
      em tela estreita, logo/botões diminuem */
-  .marca-app span{display:block;font-size:12px;line-height:1.25;color:#f0dfc0;white-space:normal;overflow-wrap:anywhere}
+  .marca-app span{display:block;font-size:12px;line-height:1.25;color:#d6e6f8;white-space:normal;overflow-wrap:anywhere}
   .icone-btn{background:rgba(255,255,255,.14);border:0;color:#fff;width:40px;height:40px;border-radius:10px;
     display:flex;align-items:center;justify-content:center;flex:0 0 auto}
   @media (max-width:420px){
@@ -155,7 +155,7 @@
   .btn-ler{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;border:0;border-radius:10px;padding:9px 12px;
     background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:14px}
   .btn-ler.escuro{background:var(--marrom);margin-top:8px}
-  .leitor{position:fixed;inset:0;z-index:80;background:rgba(20,10,10,.86);display:none;align-items:center;justify-content:center;
+  .leitor{position:fixed;inset:0;z-index:80;background:rgba(15,40,75,.86);display:none;align-items:center;justify-content:center;
     padding:14px 14px calc(14px + var(--corte, 0px))}
   .leitor.aberta{display:flex}
   .leitor-caixa{background:#fff;border-radius:16px;width:100%;max-width:520px;padding:14px;border-top:5px solid var(--ouro);display:flex;flex-direction:column;gap:10px}
@@ -170,17 +170,17 @@
   body.tela-extra header .abas, body.tela-extra .barra-como, body.tela-extra footer, body.tela-extra #barraMgr{display:none !important}
   .inicio-ola{font-size:16px;color:var(--marrom);font-weight:700;margin:8px 2px 14px}
   .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .tile{border:0;border-radius:16px;background:#fff;box-shadow:0 2px 8px rgba(60,30,20,.10);padding:16px 14px;text-align:left;min-height:118px;
+  .tile{border:0;border-radius:16px;background:#fff;box-shadow:0 2px 8px rgba(15,40,75,.10);padding:16px 14px;text-align:left;min-height:118px;
     display:flex;flex-direction:column;gap:6px;border-left:6px solid var(--ouro);color:var(--texto)}
   .tile svg{color:var(--principal)}
   .tile b{font-size:16.5px;color:var(--marrom);line-height:1.2}
   .tile span{font-size:13px;color:var(--sub);line-height:1.3}
   .tile.bloq{opacity:.55;filter:grayscale(1);border-left-color:#bbb;position:relative}
   .tile.bloq::after{content:"\1F512";position:absolute;top:10px;right:12px;font-size:16px}
-  #logCargo{width:100%;padding:12px;border:1px solid #d8c9ae;border-radius:10px;font-size:16px;background:#fff}
+  #logCargo{width:100%;padding:12px;border:1px solid #d3dde9;border-radius:10px;font-size:16px;background:#fff}
   .btn.bloq{background:#9a9a9a !important}
   .tile.destaque{background:var(--marrom);border-left-color:var(--ouro)}
-  .tile.destaque b{color:#fff} .tile.destaque span{color:#f0dfc0} .tile.destaque svg{color:var(--ouro)}
+  .tile.destaque b{color:#fff} .tile.destaque span{color:#d6e6f8} .tile.destaque svg{color:var(--ouro)}
   .titulo-tela{font-size:18px;font-weight:800;color:var(--marrom);margin:6px 2px 12px}
   .ficha{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:8px 0 0;font-size:13.5px}
   .ficha dt{color:var(--sub)} .ficha dd{margin:0;font-weight:700;color:var(--texto);word-break:break-word}
@@ -191,7 +191,7 @@
   .ficha-foto{text-align:center;margin:0 0 12px}
   .ficha-foto img{max-width:100%;max-height:300px;object-fit:contain;border-radius:10px;background:#fff}
   .ficha-foto .foto-fonte{display:block;font-size:11px;color:var(--sub);margin-top:4px}
-  .ficha-foto .sem-foto{background:#f6f0e6;border-radius:10px;padding:22px 12px;color:var(--sub)}
+  .ficha-foto .sem-foto{background:#f1f5fa;border-radius:10px;padding:22px 12px;color:var(--sub)}
   .ficha-foto .tirar-foto{display:block;width:100%;margin-top:12px;font-size:16px;padding:14px}
   .ficha-foto .trocar-foto{margin-top:8px;padding:7px 14px;font-size:13px}
   .ficha-foto .opc-foto{display:block;width:100%;box-sizing:border-box;margin-top:10px;font-size:15px;padding:12px;text-align:center;text-decoration:none}
@@ -224,12 +224,12 @@
   .cmp-forn.falta{border-left-color:var(--principal);background:#fdeceb}
   .cmp-forn b{color:var(--marrom)}
   .cmp-forn .btn{margin-top:8px;padding:10px 14px;font-size:14px}
-  .campo select{width:100%;border:1px solid #d8c9ae;border-radius:10px;padding:12px;font-size:16px;background:#fff;color:var(--texto)}
+  .campo select{width:100%;border:1px solid #d3dde9;border-radius:10px;padding:12px;font-size:16px;background:#fff;color:var(--texto)}
   .campo select:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
   .cmp-precos{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;margin-top:10px}
   .cmp-precos.dupla{grid-template-columns:1fr 1fr}
   .cmp-precos label{display:block;font-size:11.5px;color:var(--sub);margin-bottom:2px}
-  .cmp-precos input{width:100%;border:1px solid #d8c9ae;border-radius:8px;padding:9px 8px;font-size:16px;text-align:right;background:#fff}
+  .cmp-precos input{width:100%;border:1px solid #d3dde9;border-radius:8px;padding:9px 8px;font-size:16px;text-align:right;background:#fff}
   .cmp-precos input:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
   .cmp-tot{margin-top:6px;font-size:13px;text-align:right;color:var(--sub)}
   .cmp-tot b{color:var(--texto);font-size:15px}
@@ -237,7 +237,7 @@
   .btn-zap:disabled{background:#9db8a7}
   .item .desc{cursor:pointer}
   .item .desc::after{content:" \203A";color:var(--sub);font-weight:400}
-  .item .desc .mini-foto{float:right;width:48px;height:48px;object-fit:contain;margin:-2px 0 4px 10px;border-radius:8px;background:#fff;border:1px solid #eee3d3}
+  .item .desc .mini-foto{float:right;width:48px;height:48px;object-fit:contain;margin:-2px 0 4px 10px;border-radius:8px;background:#fff;border:1px solid #e6ecf3}
   #fichaTitulo{padding-right:44px;font-size:17px;line-height:1.25}
   .tab-lojas{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
   .tab-lojas th{text-align:right;color:var(--sub);font-weight:700;padding:6px 4px;border-bottom:2px solid var(--ouro);font-size:12px}
@@ -248,7 +248,7 @@
   .tab-lojas tr.neg td{color:var(--vermelho);font-weight:600}
   .tab-lojas.compacta{font-size:12px}
   .tab-lojas.compacta th,.tab-lojas.compacta td{padding:6px 2px}
-  .tab-lojas tr.total td{background:#f3ead9;font-weight:800;color:var(--marrom,#5c2f2e)}
+  .tab-lojas tr.total td{background:#f3ead9;font-weight:800;color:var(--marrom,#143d6e)}
   .tab-lojas tr.total + tr:not(.total) td{border-top:2px solid var(--ouro)}
   .tab-lojas tr.total.neg td{color:var(--vermelho)}
   b.neg{color:var(--vermelho)}
@@ -271,7 +271,7 @@
   .aba.ativa{color:#fff;border-bottom-color:var(--ouro)}
   /* linha de cima: Fazer pedido | Pedidos anteriores (separada das abas de departamento) */
   .modos{display:flex;gap:8px;padding:0 14px 10px}
-  .modo{flex:1;border:0;border-radius:10px;padding:9px 6px;font-weight:700;font-size:13.5px;background:rgba(255,255,255,.14);color:#f0dfc0}
+  .modo{flex:1;border:0;border-radius:10px;padding:9px 6px;font-weight:700;font-size:13.5px;background:rgba(255,255,255,.14);color:#d6e6f8}
   .modo.ativo{background:var(--ouro);color:var(--marrom-esc)}
   header.modo-hist .busca, header.modo-hist .abas{display:none}
   header.modo-atual .abas{display:none}
@@ -289,11 +289,11 @@
   .barra-como span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .barra-como b{font-size:14.5px}
   .barra-como button{border:0;border-radius:8px;padding:8px 10px;background:var(--marrom);color:#fff;font-weight:800;font-size:12.5px;white-space:nowrap}
-  .barra-pedido{display:flex;align-items:center;gap:8px;padding:0 14px 10px;color:#f0dfc0;font-size:13.5px}
+  .barra-pedido{display:flex;align-items:center;gap:8px;padding:0 14px 10px;color:#d6e6f8;font-size:13.5px}
   .barra-pedido span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .barra-pedido b{color:#fff;font-size:15px}
   .barra-pedido button{border:0;border-radius:9px;padding:7px 10px;background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:12.5px}
-  .novo-ped{background:var(--card);border-radius:12px;padding:14px;margin:6px 0 10px;box-shadow:0 1px 2px rgba(63,31,30,.08);border-top:4px solid var(--ouro)}
+  .novo-ped{background:var(--card);border-radius:12px;padding:14px;margin:6px 0 10px;box-shadow:0 1px 2px rgba(15,40,75,.08);border-top:4px solid var(--ouro)}
   .novo-ped h3{margin:0 0 2px;color:var(--marrom);font-size:17px}
   .novo-ped .btn{width:100%}
   .rasc .acoes-rasc{display:flex;gap:8px;margin-top:10px}
@@ -325,7 +325,7 @@
   .chip.fat{margin-left:4px;background:#e3f4e8;color:#1d6b35;border:1px solid #9fd3ad}
   .subabas{display:flex;gap:6px;margin:0 0 8px}
   .subabas .btn{flex:1;padding:8px 6px;font-size:13.5px}
-  .mgr-item{background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;box-shadow:0 1px 2px rgba(63,31,30,.08)}
+  .mgr-item{background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;box-shadow:0 1px 2px rgba(15,40,75,.08)}
   .mgr-item .d{flex:1;min-width:0;font-weight:600;font-size:14.5px;line-height:1.25}
   .mgr-item .d small{display:block;color:var(--sub);font-weight:400;font-size:12px;margin-top:3px}
   .mgr-item.zero{opacity:.45}
@@ -388,14 +388,14 @@
   .snack span{flex:1;min-width:0}
   .snack button{border:0;border-radius:9px;background:var(--ouro);color:var(--marrom-esc);font-weight:800;padding:10px 14px;font-size:14px}
   html.embutido .snack{left:62px}
-  .ped{background:var(--card);border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(63,31,30,.08)}
+  .ped{background:var(--card);border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(15,40,75,.08)}
   .ped .topo-ped{display:flex;align-items:center;gap:10px}
   .ped .q1{flex:1;min-width:0}
   .ped .q1 b{display:block;font-size:15px}
   .ped .q1 span{display:block;font-size:12.5px;color:var(--sub)}
   .ped .ver{border:0;border-radius:10px;padding:10px 12px;background:var(--creme);color:var(--marrom);font-weight:700;font-size:13px}
   .ped .itens-ped{margin-top:8px;border-top:1px solid var(--linha)}
-  .filtro-loja{width:100%;padding:11px;border:1px solid #d8c9ae;border-radius:10px;font-size:15px;background:#fff;margin:4px 0 10px}
+  .filtro-loja{width:100%;padding:11px;border:1px solid #d3dde9;border-radius:10px;font-size:15px;background:#fff;margin:4px 0 10px}
   .aba small{display:inline-block;margin-left:5px;background:var(--ouro);color:var(--marrom-esc);border-radius:9px;padding:0 6px;font-size:11px;font-weight:700}
   /* ---------- lista ---------- */
   main{padding:8px max(12px, env(safe-area-inset-right, 0px)) calc(150px + var(--corte, 0px)) max(12px, env(safe-area-inset-left, 0px))}
@@ -404,13 +404,13 @@
   /* 04/11 (Marcelo): quebra de MARCA em destaque: faixa amarela cheia com o nome em branco, centralizado
      (sombra escura no texto para dar leitura no amarelo). Publicado de novo (2): deploy anterior do GitHub travou. */
   .grupo.marca{background:var(--ouro);color:#fff;font-size:21px;line-height:1.15;font-weight:900;letter-spacing:.8px;padding:6px 12px;margin:16px 0 8px;text-align:center;
-    border-radius:8px;text-shadow:0 1px 2px rgba(63,31,30,.75),0 0 1px rgba(63,31,30,.9)}
+    border-radius:8px;text-shadow:0 1px 2px rgba(15,40,75,.75),0 0 1px rgba(15,40,75,.9)}
   .conf-res{margin-top:6px;font-size:13px;color:var(--texto);background:#fff8ee;border:1px solid #f0d9b5;border-radius:8px;padding:6px 8px}
   .conf-res.ok{background:#eef8f0;border-color:#cde9d3;color:#1a7f45;font-weight:700}
   .conf-res summary{cursor:pointer}.conf-res .cr-nao{color:#b42226}.conf-res .cr-parc{color:#b56200}
   .conf-res table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px;background:#fff}.conf-res th{text-align:left;background:#f3ebdd;padding:4px 6px}.conf-res td{padding:4px 6px;border-top:1px solid #f0e8dc;vertical-align:top}
   .item{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;
-    box-shadow:0 1px 2px rgba(63,31,30,.08);border:2px solid transparent}
+    box-shadow:0 1px 2px rgba(15,40,75,.08);border:2px solid transparent}
   .item.com-pedido{background:#eaf7ea;border-color:#b9dfb9}   /* com quantidade: verde bem claro */
   .item.sel{background:var(--amarelo);border-color:var(--amarelo-borda)}   /* item tocado: amarelo (vale mais que o verde) */
   .desc{font-weight:600;font-size:15px;line-height:1.25}
@@ -468,7 +468,7 @@
   .btn-cinza{background:var(--creme);color:var(--marrom)}
   .btn-texto{background:none;color:var(--vermelho);padding:13px 6px}
   /* ---------- telas sobrepostas ---------- */
-  .tela{position:fixed;inset:0;z-index:50;background:rgba(40,20,19,.55);display:none;align-items:center;justify-content:center;
+  .tela{position:fixed;inset:0;z-index:50;background:rgba(15,40,75,.55);display:none;align-items:center;justify-content:center;
     padding:14px 12px calc(14px + var(--corte, 0px))}
   /* dentro do Google Sites: o rodapé desvia do botão (i) do Google no canto de baixo */
   html.embutido footer .resumo{padding-left:50px;min-height:44px}
@@ -484,7 +484,7 @@
   .painel .acoes.sem-linha{border-top:0;padding-top:0}
   .campo{margin:10px 0}
   .campo label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
-  .campo input{width:100%;border:1px solid #d8c9ae;border-radius:10px;padding:12px;font-size:16px;background:#fff}
+  .campo input{width:100%;border:1px solid #d3dde9;border-radius:10px;padding:12px;font-size:16px;background:#fff}
   .campo input:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,90,151,.15)}
   .campo-forn{position:relative;margin-top:-2px}
   .busca .campo-forn input{padding-left:12px;background-image:none}.campo-forn input{padding-right:46px}.campo-forn.ativo input{border:2px solid var(--ouro);background:#fffbe9;font-weight:700}
@@ -502,7 +502,7 @@
     border-radius:10px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.vis{opacity:.95}
   .login{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;padding:20px;
-    background:radial-gradient(circle at 50% 30%, #7a3f3d 0%, var(--marrom) 45%, var(--marrom-esc) 100%)}
+    background:radial-gradient(circle at 50% 30%, #2a6fbf 0%, var(--marrom) 45%, var(--marrom-esc) 100%)}
   .login.aberta{display:flex}
   .login{padding-bottom:calc(20px + var(--corte, 0px))}
   .login .caixa{background:var(--fundo);border-radius:18px;width:100%;max-width:400px;padding:22px 20px;
@@ -541,25 +541,25 @@
     .login .caixa.cadastro{max-height:calc(100vh / var(--z) - 40px - var(--corte, 0px))}
     /* mouse: mostra que dá para clicar */
     button:not(:disabled),.tile,.item .desc,.aba,.modo{cursor:pointer}
-    .item:hover,.ped:hover{box-shadow:0 2px 8px rgba(63,31,30,.14)}
+    .item:hover,.ped:hover{box-shadow:0 2px 8px rgba(15,40,75,.14)}
     .modo:hover:not(.ativo),.aba:hover{filter:brightness(1.12)}
   }
   @media (min-width:1300px) and (hover:hover) and (pointer:fine){ :root{--z:1.25;--larg:960px} }
   @media (min-width:1700px) and (hover:hover) and (pointer:fine){ :root{--z:1.35;--larg:1000px} }
   /* ===== 11/11 (Marcelo): TEMA MODERNO com as cores do LOGO =====
-     marrom da moldura (topo e títulos) · vermelho do letreiro (ação principal) · azul e amarelo da caixa (destaques) · creme (fundo).
+     11/11 (Marcelo): AZUL da caixa no lugar do marrom (topo, títulos, destaques) · vermelho do letreiro (ação principal) · azul e amarelo da caixa (destaques) · creme (fundo).
      Leve: só CSS, sem fonte nem imagem nova (usa a fonte do próprio celular). */
-  :root{--marrom:#4e2524;--marrom-esc:#351817;--principal:#d7262c;--principal-esc:#b51d22;--azul:#1d5fa8;--azul-claro:#eaf2fb;
-    --ouro:#f6c200;--creme:#f5eee3;--bege:#d6c4a2;--fundo:#faf7f2;--card:#fff;--texto:#261716;--sub:#76675f;--linha:#eee5d7;
-    --sombra:0 1px 2px rgba(38,23,22,.05),0 6px 18px rgba(38,23,22,.06)}
+  :root{--marrom:#143d6e;--marrom-esc:#0f2f57;--principal:#d7262c;--principal-esc:#b51d22;--azul:#1d5fa8;--azul-claro:#eaf2fb;
+    --ouro:#f6c200;--creme:#edf2f8;--bege:#b9c8da;--fundo:#f4f7fb;--card:#fff;--texto:#1a2433;--sub:#5d6b7c;--linha:#e3e9f1;
+    --sombra:0 1px 2px rgba(15,40,75,.05),0 6px 18px rgba(15,40,75,.06)}
   html,body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-  header{background:linear-gradient(120deg,#3f1d1c 0%,#5a2b2a 55%,#6e3533 100%);border-bottom:0;box-shadow:0 2px 0 var(--ouro),0 6px 18px rgba(38,23,22,.18)}
+  header{background:linear-gradient(120deg,#0f2f57 0%,#1a4c86 55%,#1d5fa8 100%);border-bottom:0;box-shadow:0 2px 0 var(--ouro),0 6px 18px rgba(15,40,75,.18)}
   .icone-btn{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);transition:background .15s}
   .icone-btn:active{background:rgba(255,255,255,.28)}
   .tile{background:#fff;border:1px solid var(--linha);border-radius:18px;box-shadow:var(--sombra);transition:transform .12s,box-shadow .12s}
-  .tile:active{transform:scale(.97);box-shadow:0 1px 2px rgba(38,23,22,.08)}
+  .tile:active{transform:scale(.97);box-shadow:0 1px 2px rgba(15,40,75,.08)}
   .tile svg{background:#fdeced;color:var(--principal);padding:9px;border-radius:12px;box-sizing:content-box;margin-bottom:4px}
-  .tile.destaque{background:linear-gradient(135deg,#4e2524,#6e3533);border-color:transparent}
+  .tile.destaque{background:linear-gradient(135deg,#143d6e,#1d5fa8);border-color:transparent}
   .tile.destaque svg{background:rgba(246,194,0,.18);color:var(--ouro)}
   .tile b{letter-spacing:-.1px}
   .item,.ped{border-radius:14px;box-shadow:var(--sombra)}
@@ -570,18 +570,20 @@
   .btn-verde:active{background:#b51d22}
   .btn-verde:disabled{background:#d8cec5;box-shadow:none}
   .btn-cinza{background:var(--creme);color:var(--marrom)}
-  .painel{border-top:0;border-radius:20px;box-shadow:0 20px 50px rgba(38,23,22,.28);overflow:hidden}
+  .painel{border-top:0;border-radius:20px;box-shadow:0 20px 50px rgba(15,40,75,.28);overflow:hidden}
   .painel::before,.login .caixa::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--principal) 0 33%,var(--ouro) 33% 66%,var(--azul) 66%)}
   .login .caixa{border-top:0;position:relative;overflow:hidden;border-radius:20px}
-  footer{border-top:0;box-shadow:0 -2px 0 var(--ouro),0 -6px 18px rgba(38,23,22,.08)}
+  footer{border-top:0;box-shadow:0 -2px 0 var(--ouro),0 -6px 18px rgba(15,40,75,.08)}
   .campo input,.campo select{border-color:#e3d8c6;border-radius:12px}
   .busca input{border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
   .titulo-tela{font-size:19px;letter-spacing:-.2px}
   .aviso{border-radius:12px}
   .tiles .tile:nth-child(4n+2):not(.destaque) svg{background:#e8f1fb;color:var(--azul)}
   .tiles .tile:nth-child(4n+3):not(.destaque) svg{background:#fff4cf;color:#9a6b00}
-  .tiles .tile:nth-child(4n+4):not(.destaque) svg{background:#f3e8e4;color:var(--marrom)}
-  body #telaErros .er-topo,body #telaExp .exp-topo{background:linear-gradient(120deg,#3f1d1c 0%,#5a2b2a 55%,#6e3533 100%)}
+  .tiles .tile:nth-child(4n+4):not(.destaque) svg{background:#e6edf6;color:var(--marrom)}
+  .tile b,.titulo-tela,.painel h2{color:var(--marrom)}
+  .icone-btn{background:rgba(255,255,255,.14)}
+  body #telaErros .er-topo,body #telaExp .exp-topo{background:linear-gradient(120deg,#0f2f57 0%,#1a4c86 55%,#1d5fa8 100%)}
   /* 11/11 (Marcelo): a barra do topo (logo, usuário e botões) aparece em TODAS as telas: Expedição e Relatório de erros começam abaixo dela */
   #telaExp,#telaErros{top:var(--topoH,0px)!important}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
@@ -1802,17 +1804,17 @@ window.PedidoPDF = (function () {
       var st = document.createElement("style"); st.id = "expCss";
       st.textContent = "#telaExp{position:fixed;inset:0;z-index:90;background:var(--fundo);overflow:auto;-webkit-overflow-scrolling:touch}" +
         "#telaExp .exp-topo{position:sticky;top:0;z-index:2;background:var(--marrom);color:#fff;border-bottom:3px solid var(--ouro);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}" +
-        "#telaExp .exp-topo b{font-size:16px}#telaExp .exp-topo span{display:block;font-size:12px;color:#f0dfc0}" +
+        "#telaExp .exp-topo b{font-size:16px}#telaExp .exp-topo span{display:block;font-size:12px;color:#d6e6f8}" +
         "#telaExp .exp-topo .exp-btns{margin-left:auto;display:flex;gap:8px}" +
         "#telaExp .exp-topo button{border:0;border-radius:9px;padding:8px 12px;background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:13px}" +
         "#telaExp .exp-corpo{max-width:900px;margin:0 auto;padding:12px}" +
         "#telaExp .exp-mods{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}@media (max-width:560px){#telaExp .exp-mods{grid-template-columns:1fr 1fr}}" +
-        "#telaExp .exp-mods button{border:2px solid transparent;border-radius:10px;padding:11px 6px;font-weight:800;font-size:13.5px;background:#fff;color:var(--marrom);box-shadow:0 1px 2px rgba(63,31,30,.08)}" +
+        "#telaExp .exp-mods button{border:2px solid transparent;border-radius:10px;padding:11px 6px;font-weight:800;font-size:13.5px;background:#fff;color:var(--marrom);box-shadow:0 1px 2px rgba(15,40,75,.08)}" +
         "#telaExp .exp-mods .ativo{background:var(--marrom);color:#fff;border-color:var(--ouro)}#telaExp .exp-breve{background:#fff;border-radius:12px;padding:22px 16px;text-align:center;color:var(--sub)}#telaExp .exp-breve b{display:block;color:var(--marrom);font-size:17px;margin-bottom:6px}" +
         "#telaExp .exp-filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}" +
         "#telaExp .exp-filtros button{border:0;border-radius:999px;padding:8px 12px;font-weight:700;background:#efe6d8;color:var(--marrom)}#telaExp .exp-filtros button.on{background:var(--marrom);color:#fff}" +
         "#telaExp .exp-filtros select{padding:8px;border-radius:9px;border:1px solid var(--linha);font-size:14px;max-width:100%}" +
-        "#telaExp .exp-card{background:#fff;border-radius:12px;padding:11px 12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(63,31,30,.08);border:2px solid transparent;cursor:pointer}" +
+        "#telaExp .exp-card{background:#fff;border-radius:12px;padding:11px 12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(15,40,75,.08);border:2px solid transparent;cursor:pointer}" +
         "#telaExp .exp-card b{font-size:15px}#telaExp .exp-card small{color:var(--sub)}" +
         "#telaExp .exp-tag{display:inline-block;border-radius:6px;padding:1px 7px;font-size:11.5px;font-weight:700;margin-left:6px;background:#e6eef8;color:#1d4e89}" +
         "#telaExp .exp-tag.nf{background:#e3f4e6;color:#1a7f45}" +
@@ -1831,7 +1833,7 @@ window.PedidoPDF = (function () {
         "#telaExp .exp-it-b{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}#telaExp .exp-it-b button{border:1px solid var(--linha);background:#fff;border-radius:8px;padding:6px 12px;font-weight:800;font-size:15px;color:var(--marrom)}#telaExp .exp-it-b button.lg{font-size:12.5px}" +
         "#telaExp .exp-topo-col{flex-wrap:nowrap}#telaExp .exp-topo-col>div:nth-child(2){min-width:0}#telaExp .exp-topo-col span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#telaExp .exp-topo .exp-volta{font-size:22px;padding:4px 12px;line-height:1}" +
         "#telaExp .exp-it{cursor:pointer}#telaExp .exp-it-d small.ok{color:#1a7f45;font-weight:700}" +
-        "#expModal{position:fixed;inset:0;z-index:5;background:rgba(30,15,15,.55);display:flex;align-items:flex-start;justify-content:center;padding:60px 12px 12px;overflow:auto}#expModal[hidden]{display:none}" +
+        "#expModal{position:fixed;inset:0;z-index:5;background:rgba(15,40,75,.55);display:flex;align-items:flex-start;justify-content:center;padding:60px 12px 12px;overflow:auto}#expModal[hidden]{display:none}" +
         "#expModal .exp-modal-cx{background:#fff;border-radius:14px;padding:14px;width:100%;max-width:480px;border-top:5px solid var(--ouro);box-shadow:0 10px 30px rgba(0,0,0,.3)}" +
         "#expModal .exp-modal-t{font-size:19px;font-weight:800;color:var(--marrom);line-height:1.2}#expModal .exp-modal-info{color:var(--sub);font-size:13.5px;margin:4px 0 10px}" +
         "#expModal .exp-modal-qs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}#expModal .exp-modal-qs div{background:#f6f1e8;border-radius:10px;padding:8px;text-align:center}" +
@@ -2764,7 +2766,7 @@ window.PedidoPDF = (function () {
     var bt = function (k, nome, cor) {
       var on = (mgr.cor || "") === k;
       return '<button type="button" data-corfiltro="' + k + '" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:13px;cursor:pointer;' +
-        "border:2px solid " + (on ? (cor || "#5c2a2a") : "#e3d9c6") + ";background:" + (on ? "#fff" : "transparent") + ";font-weight:" + (on ? 700 : 400) + ';color:inherit">' +
+        "border:2px solid " + (on ? (cor || "#143d6e") : "#dbe3ee") + ";background:" + (on ? "#fff" : "transparent") + ";font-weight:" + (on ? 700 : 400) + ';color:inherit">' +
         (cor ? '<i style="width:14px;height:14px;border-radius:4px;background:' + cor + ';display:inline-block"></i>' : "") + nome + " (" + n[k] + ")</button>";
     };
     return '<div class="legenda-etapas" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 4px">' + bt("", "Todas", "") +
@@ -3722,7 +3724,7 @@ window.PedidoPDF = (function () {
       var st = document.createElement("style"); st.id = "errCss";
       st.textContent = "#telaErros{position:fixed;inset:0;z-index:91;background:var(--fundo);overflow:auto;-webkit-overflow-scrolling:touch}" +
         "#telaErros .er-topo{position:sticky;top:0;z-index:3;background:var(--marrom);color:#fff;border-bottom:3px solid var(--ouro);padding:10px 14px;display:flex;align-items:center;gap:10px}" +
-        "#telaErros .er-topo b{font-size:17px;display:block}#telaErros .er-topo span{font-size:12px;color:#f0dfc0}" +
+        "#telaErros .er-topo b{font-size:17px;display:block}#telaErros .er-topo span{font-size:12px;color:#d6e6f8}" +
         "#telaErros .er-topo button{border:0;border-radius:9px;padding:9px 12px;background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:14px}" +
         "#telaErros .er-corpo{max-width:920px;margin:0 auto;padding:12px}" +
         "#telaErros .er-res{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 12px}" +
@@ -3730,11 +3732,11 @@ window.PedidoPDF = (function () {
         "#telaErros .er-res b{display:block;font-size:24px;line-height:1.1}#telaErros .er-res small{font-size:12px;opacity:.85}" +
         "#telaErros .er-res button.on{box-shadow:0 0 0 3px rgba(0,0,0,.18)}" +
         "#telaErros .er-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}" +
-        "#telaErros .er-chips button{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;font-size:13px;cursor:pointer;border:2px solid #e3d9c6;background:transparent;color:inherit;font-family:inherit}" +
+        "#telaErros .er-chips button{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;font-size:13px;cursor:pointer;border:2px solid #dbe3ee;background:transparent;color:inherit;font-family:inherit}" +
         "#telaErros .er-chips button.on{background:#fff;font-weight:700}#telaErros .er-chips i{width:12px;height:12px;border-radius:3px;display:inline-block}" +
         "#telaErros .er-busca{width:100%;font-size:16px;padding:11px 12px;border-radius:10px;border:1px solid var(--linha);margin:0 0 12px}" +
         "#telaErros .er-dia{margin:14px 0 6px;font-weight:800;color:var(--marrom);font-size:14px;display:flex;justify-content:space-between}" +
-        "#telaErros .er-card{background:#fff;border-radius:12px;border-left:6px solid;padding:10px 12px;margin:0 0 8px;box-shadow:0 1px 2px rgba(63,31,30,.08)}" +
+        "#telaErros .er-card{background:#fff;border-radius:12px;border-left:6px solid;padding:10px 12px;margin:0 0 8px;box-shadow:0 1px 2px rgba(15,40,75,.08)}" +
         "#telaErros .er-l1{display:flex;flex-wrap:wrap;gap:6px;align-items:center}" +
         "#telaErros .er-tag{font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 7px}" +
         "#telaErros .er-quem{font-weight:800;margin:6px 0 2px;font-size:15px}#telaErros .er-det{font-size:13px;color:var(--sub)}" +
@@ -3864,7 +3866,7 @@ window.PedidoPDF = (function () {
       return '<button data-er="grav" data-v="' + k + '" class="' + (ERR.grav === k ? "on" : "") + '" style="background:' + g[1] + ";color:" + g[0] + ";border-color:" + g[0] + '55;border-left-color:' + g[0] + '"><small>' + g[2] + "</small><b>" + nG[k] + "</b><small>" + g[3] + "</small></button>"; }).join("") + "</div>";
     // gabarito de cores = filtro por tipo (como em Aprovados)
     var chip = function (k, nome, cor, n) { var on = ERR.filtro === k;
-      return '<button data-er="tipo" data-v="' + esc(k) + '" class="' + (on ? "on" : "") + '" style="' + (on ? "border-color:" + (cor || "#5c2a2a") : "") + '">' + (cor ? '<i style="background:' + cor + '"></i>' : "") + esc(nome) + " (" + n + ")</button>"; };
+      return '<button data-er="tipo" data-v="' + esc(k) + '" class="' + (on ? "on" : "") + '" style="' + (on ? "border-color:" + (cor || "#143d6e") : "") + '">' + (cor ? '<i style="background:' + cor + '"></i>' : "") + esc(nome) + " (" + n + ")</button>"; };
     var chips = '<div class="er-chips">' + chip("Todos", "Todos", "", base.length) + tipos.map(function (t) { var c = corErro(t);
       return chip(t, c[2], c[0], base.filter(function (e) { return (e.tipo || "ERP") === t; }).length); }).join("") + "</div>";
     var topo = tl.querySelector(".er-topo span"); if (topo) topo.textContent = "Últimos " + ERR.dias + " dias · " + l.length + (l.length === 1 ? " registro" : " registros");
@@ -3889,7 +3891,7 @@ window.PedidoPDF = (function () {
       modal("Pedir contagem de estoque", (it.d ? '<p style="margin:0 0 6px"><b>' + esc(it.d) + "</b><br><small>PLU " + esc(plu) + "</small></p>" : "") +
         '<p style="margin:0 0 8px">Em quais lojas contar?</p>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 10px">' + cods.map(function (c) {
-          return '<label style="display:flex;gap:6px;align-items:center;background:#f6f0e6;border-radius:8px;padding:8px"><input type="checkbox" data-contck="1" value="' + esc(c) + '">' +
+          return '<label style="display:flex;gap:6px;align-items:center;background:#f1f5fa;border-radius:8px;padding:8px"><input type="checkbox" data-contck="1" value="' + esc(c) + '">' +
             esc(c) + " " + esc(RES && RES.nomes && RES.nomes[c] || "") + "</label>";
         }).join("") + "</div>" +
         '<div style="display:flex;gap:8px"><button class="btn btn-cinza" style="flex:1" data-conttodas="1">Marcar todas</button>' +
@@ -4196,7 +4198,7 @@ window.PedidoPDF = (function () {
      âmbar atenção, vermelho ruim. Cores fortes só onde precisa chamar a atenção. */
   var ANA_COR = { venda: "#1f5a97", vendaF: "#e8f0fa", ouro: "#b7791f", ouroF: "#fff4d6", est: "#00796b", estF: "#e0f2f1",
     baixo: "#b26a00", baixoF: "#fff3e0", rupt: "#c62828", ruptF: "#fdecea", exc: "#6a1b9a", excF: "#f3e5f5",
-    preco: "#283593", precoF: "#e8eaf6", custo: "#c2410c", custoF: "#fff1e8", bom: "#2e7d32", bomF: "#e8f5e9", neutro: "#5b4636", neutroF: "#f6f0e6" };
+    preco: "#283593", precoF: "#e8eaf6", custo: "#c2410c", custoF: "#fff1e8", bom: "#2e7d32", bomF: "#e8f5e9", neutro: "#5b4636", neutroF: "#f1f5fa" };
   function cartaoAna(tit, val, cor, fundo, extra) {
     return '<div style="background:' + fundo + ";border:1px solid " + cor + "33;border-left:4px solid " + cor + ';border-radius:8px;padding:7px 9px;color:' + cor + '"><small style="color:#5b4636">' + tit + "</small><br><b>" + val + "</b>" + (extra ? '<br><small style="opacity:.85">' + extra + "</small>" : "") + "</div>";
   }
@@ -4423,7 +4425,7 @@ window.PedidoPDF = (function () {
   function cxTxt(v) { return num(Math.round((Number(v) || 0) * 10) / 10); }
   function cartoes(lista, cor) {
     return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px">' + lista.map(function (x) {
-      return '<div style="background:' + (cor || "#f6f0e6") + ';border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b>" + (x[2] ? "<br><small>" + x[2] + "</small>" : "") + "</div>";
+      return '<div style="background:' + (cor || "#f1f5fa") + ';border-radius:8px;padding:7px 9px"><small>' + esc(x[0]) + "</small><br><b>" + x[1] + "</b>" + (x[2] ? "<br><small>" + x[2] + "</small>" : "") + "</div>";
     }).join("") + "</div>";
   }
   /** Gráfico de barras em PAR: período atual (vermelho) x mesmo período do ano anterior (cinza). a/b: números ou null. */
@@ -5799,7 +5801,7 @@ window.PedidoPDF = (function () {
   $("btnCompartilhar").addEventListener("click", function () {
     var url = "https://suporteatacadaodeembalagens-jpg.github.io/pedidos/", txt = "App de pedidos do Atacadão de Embalagens";
     if (navigator.share) { navigator.share({ title: "Atacadão De Embalagens", text: txt, url: url }).catch(function () {}); return; }
-    modal("Compartilhar o app", '<p style="margin:0 0 8px">Link do app:</p><div style="background:#f6f0e6;border-radius:8px;padding:10px;word-break:break-all;margin:0 0 12px"><b>' + esc(url) + "</b></div>" +
+    modal("Compartilhar o app", '<p style="margin:0 0 8px">Link do app:</p><div style="background:#f1f5fa;border-radius:8px;padding:10px;word-break:break-all;margin:0 0 12px"><b>' + esc(url) + "</b></div>" +
       '<div style="display:flex;gap:8px"><a class="btn btn-verde" style="flex:1;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(txt + ": " + url) + '">WhatsApp</a>' +
       '<button class="btn btn-cinza" style="flex:1" type="button" id="btnCopiarLink">Copiar link</button></div>');
     var cp = $("btnCopiarLink");
@@ -5814,7 +5816,7 @@ window.PedidoPDF = (function () {
     if (mgr && mgr.sujo && !confirm("Você tem alterações não salvas neste pedido. Atualizar mesmo assim?")) return;
     var tela = document.createElement("div");
     tela.id = "telaAtualizando";
-    tela.style.cssText = "position:fixed;inset:0;z-index:99999;background:#3f1f1e;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-size:16px;text-align:center;padding:24px";
+    tela.style.cssText = "position:fixed;inset:0;z-index:99999;background:#0f2f57;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-size:16px;text-align:center;padding:24px";
     tela.innerHTML = '<div class="giro" style="width:46px;height:46px;border-width:5px"></div><b style="font-size:18px">Atualizando para a última versão…</b><span style="opacity:.8">O app e os dados estão sendo carregados de novo.</span>';
     document.body.appendChild(tela);
     try { confirmarExclusao(); } catch (e) {}     // exclusão com "Desfazer" pendente vai antes
@@ -5842,7 +5844,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.5";
+  var VERSAO_APP = "2026-11-11.6";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
@@ -5880,8 +5882,8 @@ window.PedidoPDF = (function () {
     if ($("avisoVersao")) return;
     var d = document.createElement("div");
     d.id = "avisoVersao";
-    d.style.cssText = "position:fixed;left:10px;right:10px;bottom:84px;z-index:9999;background:#3f1f1e;color:#fff;border-radius:12px;padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.3);font-size:14px";
-    d.innerHTML = '<span style="flex:1">Tem uma <b>versão nova</b> do app.</span><button type="button" style="border:0;border-radius:9px;padding:9px 12px;font-weight:800;background:#f5c400;color:#3f1f1e">Atualizar agora</button>';
+    d.style.cssText = "position:fixed;left:10px;right:10px;bottom:84px;z-index:9999;background:#0f2f57;color:#fff;border-radius:12px;padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.3);font-size:14px";
+    d.innerHTML = '<span style="flex:1">Tem uma <b>versão nova</b> do app.</span><button type="button" style="border:0;border-radius:9px;padding:9px 12px;font-weight:800;background:#f5c400;color:#0f2f57">Atualizar agora</button>';
     d.querySelector("button").addEventListener("click", function () { irParaVersao(v); });
     document.body.appendChild(d);
   }
