@@ -9,7 +9,8 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#5c2f2e">
+<meta name="theme-color" content="#4e2524">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>Atacadão De Embalagens</title>
 <script>
 /* Fora do Google (GitHub Pages): imita o google.script.run chamando o servidor do Apps Script por POST {api, args}.
@@ -29,17 +30,41 @@
   }
   function inicio(doToque) { if (!doToque) return; pend++; if (pend === 1) { clearTimeout(tBarra); tBarra = setTimeout(function () { if (pend > 0) barra(true); }, 250); } }
   function fim(doToque) { if (!doToque) return; pend = Math.max(0, pend - 1); if (!pend) { clearTimeout(tBarra); barra(false); } }
+  /* 11/11 (Marcelo): app mais rápido. CONSULTAS (só leitura) ficam guardadas 1 minuto na memória: abrir de novo o mesmo
+     produto/fornecedor/análise é instantâneo; a mesma consulta pedida 2x ao mesmo tempo vai 1x só ao servidor; consulta que
+     cai por internet ruim tenta de novo sozinha (1x). Gravações (aprovar, salvar, enviar...) NUNCA são repetidas nem guardadas,
+     e qualquer gravação apaga o que estava guardado. */
+  var LEITURA = { fichaProduto: 1, analiseVendas: 1, precosPorLoja: 1, precosLoja: 1, lojasResumo: 1, fornecedoresCompra: 1, produtosFornecedor: 1,
+    fornecedorCompra: 1, rankingFornecedores: 1, analiseFornecedor: 1, produtosFornecedorVendas: 1, vendasDiasCompra: 1, buscarCadastro: 1,
+    buscarProdutos: 1, custosMinhaLoja: 1, fotosProdutos: 1, entregasCompra: 1, precosManager: 1 };
+  var memo = {};
+  function enviar(fn, args, ler) {
+    var vez = function () {
+      var ctl = ler && window.AbortController ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, 45000) : 0;
+      return fetch(url, { method: "POST", body: JSON.stringify({ api: fn, args: args }), signal: ctl ? ctl.signal : undefined })
+        .then(function (r) { clearTimeout(tm); return r.json(); }, function (e) { clearTimeout(tm); throw e; });
+    };
+    return ler ? vez().catch(function () { return new Promise(function (s) { setTimeout(s, 800); }).then(vez); }) : vez();
+  }
   function runner(ok, falha) {
     return new Proxy({}, { get: function (_, fn) {
       if (fn === "withSuccessHandler") return function (f) { return runner(f, falha); };
       if (fn === "withFailureHandler") return function (f) { return runner(ok, f); };
       return function () {
         var args = Array.prototype.slice.call(arguments), doToque = Date.now() - ultToque < 1500;
+        var ler = !!LEITURA[fn], chave = ler ? fn + "|" + JSON.stringify(args) : "";
+        if (!ler) memo = {};   // qualquer gravação limpa o que estava guardado (nada fica velho)
+        var m = ler && memo[chave];
+        if (m && m.s !== undefined && Date.now() - m.ts < 60000) { var s0 = m.s; setTimeout(function () { if (ok) ok(JSON.parse(s0)); }, 0); return; }   // cópia nova (ninguém estraga o guardado)
+        if (m && m.p) { m.p.push([ok, falha]); return; }   // a mesma consulta já está a caminho: espera a mesma resposta
+        var esp = [[ok, falha]]; if (ler) memo[chave] = { p: esp };
+        var entrega = function (i, v, s) { esp.forEach(function (f) { if (f[i]) f[i](s !== undefined ? JSON.parse(s) : v); }); };
         inicio(doToque);
-        fetch(url, { method: "POST", body: JSON.stringify({ api: fn, args: args }) })
-          .then(function (r) { return r.json(); })
-          .then(function (j) { fim(doToque); if (j && j.ok) { if (ok) ok(j.r); } else if (falha) falha(new Error((j && j.erro) || "Erro no servidor.")); },
-                function () { fim(doToque); if (falha) falha(new Error("Sem conexão com o servidor. Confira a internet e tente de novo.")); });
+        enviar(fn, args, ler).then(function (j) {
+          fim(doToque);
+          if (j && j.ok) { if (!ler) { entrega(0, j.r); return; } var s = JSON.stringify(j.r === undefined ? null : j.r); memo[chave] = { s: s, ts: Date.now() }; entrega(0, j.r, esp.length > 1 ? s : undefined); }
+          else { if (ler) delete memo[chave]; entrega(1, new Error((j && j.erro) || "Erro no servidor.")); }
+        }, function () { fim(doToque); if (ler) delete memo[chave]; entrega(1, new Error("Sem conexão com o servidor. Confira a internet e tente de novo.")); });
       };
     } });
   }
@@ -521,6 +546,45 @@
   }
   @media (min-width:1300px) and (hover:hover) and (pointer:fine){ :root{--z:1.25;--larg:960px} }
   @media (min-width:1700px) and (hover:hover) and (pointer:fine){ :root{--z:1.35;--larg:1000px} }
+  /* ===== 11/11 (Marcelo): TEMA MODERNO com as cores do LOGO =====
+     marrom da moldura (topo e títulos) · vermelho do letreiro (ação principal) · azul e amarelo da caixa (destaques) · creme (fundo).
+     Leve: só CSS, sem fonte nem imagem nova (usa a fonte do próprio celular). */
+  :root{--marrom:#4e2524;--marrom-esc:#351817;--principal:#d7262c;--principal-esc:#b51d22;--azul:#1d5fa8;--azul-claro:#eaf2fb;
+    --ouro:#f6c200;--creme:#f5eee3;--bege:#d6c4a2;--fundo:#faf7f2;--card:#fff;--texto:#261716;--sub:#76675f;--linha:#eee5d7;
+    --sombra:0 1px 2px rgba(38,23,22,.05),0 6px 18px rgba(38,23,22,.06)}
+  html,body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  header{background:linear-gradient(120deg,#3f1d1c 0%,#5a2b2a 55%,#6e3533 100%);border-bottom:0;box-shadow:0 2px 0 var(--ouro),0 6px 18px rgba(38,23,22,.18)}
+  .icone-btn{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);transition:background .15s}
+  .icone-btn:active{background:rgba(255,255,255,.28)}
+  .tile{background:#fff;border:1px solid var(--linha);border-radius:18px;box-shadow:var(--sombra);transition:transform .12s,box-shadow .12s}
+  .tile:active{transform:scale(.97);box-shadow:0 1px 2px rgba(38,23,22,.08)}
+  .tile svg{background:#fdeced;color:var(--principal);padding:9px;border-radius:12px;box-sizing:content-box;margin-bottom:4px}
+  .tile.destaque{background:linear-gradient(135deg,#4e2524,#6e3533);border-color:transparent}
+  .tile.destaque svg{background:rgba(246,194,0,.18);color:var(--ouro)}
+  .tile b{letter-spacing:-.1px}
+  .item,.ped{border-radius:14px;box-shadow:var(--sombra)}
+  .ped .ver{background:var(--creme);border-radius:11px}
+  .btn{border-radius:12px;transition:filter .15s,transform .1s}
+  .btn:active{transform:scale(.98)}
+  .btn-verde{background:linear-gradient(180deg,#e0353a,#c9232a);box-shadow:0 2px 8px rgba(201,35,42,.22)}
+  .btn-verde:active{background:#b51d22}
+  .btn-verde:disabled{background:#d8cec5;box-shadow:none}
+  .btn-cinza{background:var(--creme);color:var(--marrom)}
+  .painel{border-top:0;border-radius:20px;box-shadow:0 20px 50px rgba(38,23,22,.28);overflow:hidden}
+  .painel::before,.login .caixa::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--principal) 0 33%,var(--ouro) 33% 66%,var(--azul) 66%)}
+  .login .caixa{border-top:0;position:relative;overflow:hidden;border-radius:20px}
+  footer{border-top:0;box-shadow:0 -2px 0 var(--ouro),0 -6px 18px rgba(38,23,22,.08)}
+  .campo input,.campo select{border-color:#e3d8c6;border-radius:12px}
+  .busca input{border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .titulo-tela{font-size:19px;letter-spacing:-.2px}
+  .aviso{border-radius:12px}
+  .tiles .tile:nth-child(4n+2):not(.destaque) svg{background:#e8f1fb;color:var(--azul)}
+  .tiles .tile:nth-child(4n+3):not(.destaque) svg{background:#fff4cf;color:#9a6b00}
+  .tiles .tile:nth-child(4n+4):not(.destaque) svg{background:#f3e8e4;color:var(--marrom)}
+  body #telaErros .er-topo,body #telaExp .exp-topo{background:linear-gradient(120deg,#3f1d1c 0%,#5a2b2a 55%,#6e3533 100%)}
+  /* 11/11 (Marcelo): a barra do topo (logo, usuário e botões) aparece em TODAS as telas: Expedição e Relatório de erros começam abaixo dela */
+  #telaExp,#telaErros{top:var(--topoH,0px)!important}
+  body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
 </style>
 </head>
 <body>
@@ -1351,7 +1415,7 @@ window.PedidoPDF = (function () {
   function atualizarModo() {
     document.body.classList.toggle("tela-extra", tela !== "app");
     document.body.classList.toggle("tela-compra", tela === "compra");
-    $("btnInicio").hidden = tela === "inicio";
+    $("btnInicio").hidden = tela === "inicio" && !(sessao && telaCheiaAberta());
     $("barraCompra").hidden = tela !== "compra" || cmp.aba !== "novo";
     var m = ehManager();
     $("barraComo").hidden = !comoLoja;
@@ -5569,6 +5633,22 @@ window.PedidoPDF = (function () {
       }
     }
   });
+  /* 11/11 (Marcelo): barra do topo sempre à vista (as telas cheias ficam abaixo dela); o botão Início também fecha essas telas */
+  function telaCheiaAberta() { return ["telaExp", "telaErros"].some(function (id) { var e = document.getElementById(id); return !!(e && !e.hidden); }); }
+  function sincTopo() {   // só mexe no que mudou (senão o observador entra em loop)
+    var hd = document.querySelector("header"), tp = hd && hd.querySelector(".topo");
+    var al = Math.round(tp && tp.offsetParent !== null ? Math.max(0, hd.getBoundingClientRect().top) + tp.getBoundingClientRect().height : 0) + "px";
+    if (document.documentElement.style.getPropertyValue("--topoH") !== al) document.documentElement.style.setProperty("--topoH", al);
+    var c = telaCheiaAberta(); if (document.body.classList.contains("tela-cheia") !== c) document.body.classList.toggle("tela-cheia", c);
+    var hi = tela === "inicio" && !(sessao && c), bi = $("btnInicio"); if (bi && bi.hidden !== hi) bi.hidden = hi;
+  }
+  try { new MutationObserver(sincTopo).observe(document.body, { childList: true, attributes: true, subtree: true, attributeFilter: ["hidden"] }); } catch (e) {}
+  try { new ResizeObserver(sincTopo).observe(document.querySelector("header .topo")); } catch (e) {}
+  window.addEventListener("resize", sincTopo); sincTopo();
+  $("btnInicio").addEventListener("click", function () {
+    var er = document.getElementById("telaErros"); if (er) er.hidden = true;
+    var ex = document.getElementById("telaExp"); if (sessao && ex && !ex.hidden) fecharExpedicao();
+  });
   $("btnInicio").addEventListener("click", irInicio);
   $("btnFinalizarCompra").addEventListener("click", gerarCompra);
   $("btnSalvarCompra").addEventListener("click", salvarCompraServidor);
@@ -5762,7 +5842,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.2";
+  var VERSAO_APP = "2026-11-11.5";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
