@@ -583,7 +583,13 @@
   .tiles .tile:nth-child(4n+4):not(.destaque) svg{background:#e6edf6;color:var(--marrom)}
   .tile b,.titulo-tela,.painel h2{color:var(--marrom)}
   .icone-btn{background:rgba(255,255,255,.14)}
-  body #telaErros .er-topo,body #telaExp .exp-topo{background:linear-gradient(120deg,#0f2f57 0%,#1a4c86 55%,#1d5fa8 100%)}
+  /* 11/11: a barra de título das telas cheias fica CLARA (a barra azul do topo já está logo acima: nada de duas faixas azuis) */
+  body #telaErros .er-topo,body #telaExp .exp-topo{background:rgba(255,255,255,.94);-webkit-backdrop-filter:saturate(1.4) blur(8px);backdrop-filter:saturate(1.4) blur(8px);color:var(--texto);border-bottom:1px solid var(--linha);box-shadow:0 6px 16px rgba(15,40,75,.06)}
+  body #telaErros .er-topo b,body #telaExp .exp-topo b{color:var(--marrom)}
+  body #telaErros .er-topo span,body #telaExp .exp-topo span{color:var(--sub)}
+  body #telaErros .er-topo button,body #telaExp .exp-topo button{background:var(--creme);color:var(--marrom);border:1px solid var(--linha)}
+  body #telaErros .er-topo button[data-er="atualizar"],body #telaExp .exp-topo button[data-exp="atualizar"]{background:var(--azul);color:#fff;border-color:var(--azul)}
+  body #telaErros .er-corpo{padding-top:14px}
   /* 11/11 (Marcelo): a barra do topo (logo, usuário e botões) aparece em TODAS as telas: Expedição e Relatório de erros começam abaixo dela */
   #telaExp,#telaErros{top:var(--topoH,0px)!important}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
@@ -5639,7 +5645,10 @@ window.PedidoPDF = (function () {
   function telaCheiaAberta() { return ["telaExp", "telaErros"].some(function (id) { var e = document.getElementById(id); return !!(e && !e.hidden); }); }
   function sincTopo() {   // só mexe no que mudou (senão o observador entra em loop)
     var hd = document.querySelector("header"), tp = hd && hd.querySelector(".topo");
-    var al = Math.round(tp && tp.offsetParent !== null ? Math.max(0, hd.getBoundingClientRect().top) + tp.getBoundingClientRect().height : 0) + "px";
+    // 11/11: no computador o app tem zoom (html{zoom}); a medida vai SEM o zoom (senão a tela cheia descia demais e abria uma faixa).
+    // +2px: deixa à vista a linha amarela de baixo do topo.
+    var cssH = tp ? parseFloat(getComputedStyle(tp).height) || tp.offsetHeight : 0, zr = cssH ? tp.getBoundingClientRect().height / cssH : 1;
+    var al = (tp && tp.offsetParent !== null ? Math.round(Math.max(0, hd.getBoundingClientRect().top) / (zr || 1) + cssH) + 2 : 0) + "px";
     if (document.documentElement.style.getPropertyValue("--topoH") !== al) document.documentElement.style.setProperty("--topoH", al);
     var c = telaCheiaAberta(); if (document.body.classList.contains("tela-cheia") !== c) document.body.classList.toggle("tela-cheia", c);
     var hi = tela === "inicio" && !(sessao && c), bi = $("btnInicio"); if (bi && bi.hidden !== hi) bi.hidden = hi;
@@ -5844,7 +5853,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.6";
+  var VERSAO_APP = "2026-11-11.7";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
