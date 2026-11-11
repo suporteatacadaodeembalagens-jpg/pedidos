@@ -628,6 +628,12 @@
   main .cmp-abas .modo{border:0;padding:10px 6px;font-size:13.5px}
   main .cmp-abas .modo:not(.ativo){background:rgba(255,255,255,.14);color:#d6e6f8;border:0;box-shadow:none}
   main .cmp-abas .modo.ativo{background:var(--ouro);color:var(--marrom-esc)}
+  /* 11/11: botões da lista de compras (Gerar PDF | Enviar | Excluir) no padrão do app */
+  .cmp-rec .ver{border:1.5px solid #c3d2e5;background:#fff;color:var(--marrom);border-radius:10px;padding:9px 12px;font-weight:700;font-size:13px;min-height:40px;white-space:nowrap;cursor:pointer}
+  .cmp-rec .ver.pdf{border-color:var(--azul);color:var(--azul)}
+  .cmp-rec .ver:disabled{opacity:.6}
+  .cmp-rec .excluir{background:#fff;border-color:#f1c4c4;color:var(--vermelho)}
+  @media (max-width:560px){.cmp-rec{flex-wrap:wrap}.cmp-rec div{flex:1 1 100%}.cmp-rec .ver{flex:1}}
   #cmpCob.cob-alta{border-color:#c62828!important;background:#fdecea;box-shadow:0 0 0 3px rgba(198,40,40,.15)}
   .cob-msg{color:#b71c1c;font-size:13px;font-weight:700;margin-top:6px}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
@@ -5328,7 +5334,8 @@ window.PedidoPDF = (function () {
         return '<div class="cmp-rec"><div><b>' + (c.numero ? "Nº " + esc(String(c.numero).replace(/^0+/, "")) + " · " : "") + esc(c.fornecedor || "Sem fornecedor") + "</b><small>" + esc(c.quando) + " · " + c.n + (c.n === 1 ? " item" : " itens") + "</small>" +
           (salvos ? "" : c.enviadoPara ? '<small class="ok">Enviado (' + esc(c.enviadoPara) + ") em " + esc(c.enviadoEm) + "</small>" : "<small>Ainda não enviado</small>") + "</div>" +
           (salvos ? '<button class="ver" data-cont-cmp="' + esc(c.id) + '">Continuar</button>'
-                  : '<button class="ver" data-cenv="' + esc(c.id) + '">' + (c.enviadoPara ? "Reenviar" : "Enviar") + "</button>") +
+                  : '<button class="ver pdf" data-cpdf="' + esc(c.id) + '" title="Gerar o PDF de novo para salvar ou mandar">&#128196; Gerar PDF</button>' +   // 11/11 (Marcelo)
+                    '<button class="ver" data-cenv="' + esc(c.id) + '">' + (c.enviadoPara ? "Reenviar" : "Enviar") + "</button>") +
           '<button class="ver excluir" data-exc-cmp="' + esc(c.id) + '">Excluir</button></div>';
       }).join("") : '<div class="vazio" style="padding:20px">' + (salvos ? "Nenhum pedido salvo." : "Nenhum pedido gerado nos últimos 15 dias.") + "</div>");
   }
@@ -5606,6 +5613,14 @@ window.PedidoPDF = (function () {
       if (!e.target.closest(".forn-wrap") && $("cmpFornLista")) $("cmpFornLista").hidden = true;
       var cc = e.target.closest("[data-cont-cmp]"); if (cc) { continuarCompra(cc.getAttribute("data-cont-cmp")); return; }
       var xc = e.target.closest("[data-exc-cmp]"); if (xc) { excluirCompraTela(xc); return; }
+      var gp = e.target.closest("[data-cpdf]");   // 11/11 (Marcelo): gera o PDF de novo e baixa (para salvar ou mandar de outro jeito)
+      if (gp) { if (gp.disabled) return; var tx = gp.innerHTML; gp.disabled = true; gp.textContent = "Gerando…";
+        var volta = function () { gp.disabled = false; gp.innerHTML = tx; };
+        chamar("prepararEnvioCompra", [gp.getAttribute("data-cpdf")], function (r) {
+          PedidoPDF.gerar(r, document.querySelector(".login .logo").src).then(function (blob) { PedidoPDF.baixar(blob, PedidoPDF.nomeArquivo(r)); toast("PDF gerado"); volta(); },
+            function (x) { volta(); toast("Não deu para gerar o PDF: " + String(x && x.message || x)); });
+        }, function (x) { volta(); toast(String(x && x.message || x)); });
+        return; }
       var en = e.target.closest("[data-cenv]");
       if (en) { chamar("prepararEnvioCompra", [en.getAttribute("data-cenv")], abrirEnvio, function (x) { toast(String(x && x.message || x)); }); return; }
       var cq = e.target.closest("[data-cq]");
@@ -5924,7 +5939,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.18";
+  var VERSAO_APP = "2026-11-11.19";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
