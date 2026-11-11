@@ -606,9 +606,11 @@
   .btn-texto,.link,.btn-link{color:var(--azul);font-weight:700}
   main .modo:not(.ativo){background:#fff;border:1.5px solid #c3d2e5;color:var(--marrom)}
   /* 11/11 (Marcelo): PAPEL TIMBRADO — logo bem clarinho no fundo de todas as telas, atrás dos cartões */
-  body::before{content:"";position:fixed;left:0;right:0;top:0;bottom:0;background:var(--logoFundo) center 58% / min(78vw, 560px) auto no-repeat;opacity:.09;filter:saturate(.7);pointer-events:none;z-index:0}
+  /* 11/11 v2 (Marcelo): marca d'água mais elegante — em tons de cinza, bem suave e com as BORDAS ESFUMADAS (some o
+     "quadrado" da imagem); os cartões ficam quase brancos, deixando a marca aparecer de leve, como papel timbrado. */
+  body::before{content:"";position:fixed;left:50%;top:56%;width:min(80vw,620px);aspect-ratio:1.45;transform:translate(-50%,-50%);background:var(--logoFundo) center / contain no-repeat;opacity:.075;filter:grayscale(1) contrast(1.15);mix-blend-mode:multiply;-webkit-mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 55%,transparent 100%);mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 55%,transparent 100%);pointer-events:none;z-index:0}
   main{position:relative;z-index:1}
-  .tiles .tile:not(.destaque){background:rgba(255,255,255,.82);-webkit-backdrop-filter:blur(1px);backdrop-filter:blur(1px)}
+  .tiles .tile:not(.destaque){background:rgba(255,255,255,.9)}
   #cmpCob.cob-alta{border-color:#c62828!important;background:#fdecea;box-shadow:0 0 0 3px rgba(198,40,40,.15)}
   .cob-msg{color:#b71c1c;font-size:13px;font-weight:700;margin-top:6px}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
@@ -5879,7 +5881,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.10";
+  var VERSAO_APP = "2026-11-11.11";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
