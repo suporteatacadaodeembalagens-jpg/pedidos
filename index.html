@@ -634,6 +634,14 @@
   .cmp-rec .ver:disabled{opacity:.6}
   .cmp-rec .excluir{background:#fff;border-color:#f1c4c4;color:var(--vermelho)}
   @media (max-width:560px){.cmp-rec{flex-wrap:wrap}.cmp-rec div{flex:1 1 100%}.cmp-rec .ver{flex:1}}
+  /* 11/11: filtro de fornecedor em "Em aberto" (Pedido de compra) */
+  .cmp-recf{position:relative;margin:0 0 12px}
+  .cmp-recf-lista{position:absolute;left:0;right:0;z-index:30;max-height:280px;overflow:auto;background:#fff;border:1px solid #d3dde9;border-radius:10px;box-shadow:0 8px 20px rgba(15,40,75,.14);margin-top:4px}
+  .cmp-recf-lista button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid #eef2f7;background:#fff;padding:11px 12px;font-size:14px;cursor:pointer}
+  .cmp-recf-lista button:hover{background:#eef3f9}.cmp-recf-lista small{color:var(--sub);white-space:nowrap}
+  .tab-ext{margin-top:6px}.tab-ext th{font-size:11.5px}
+  .cmp-erp{display:inline-block;margin:4px 0 2px;font-size:12px;font-weight:800;border:1px solid;border-radius:6px;padding:2px 8px}
+  .cmp-rec .cmp-rcb{color:#1d5fa8;font-weight:700}
   #cmpCob.cob-alta{border-color:#c62828!important;background:#fdecea;box-shadow:0 0 0 3px rgba(198,40,40,.15)}
   .cob-msg{color:#b71c1c;font-size:13px;font-weight:700;margin-top:6px}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
@@ -1294,6 +1302,34 @@ window.PedidoPDF = (function () {
     if (EM_APPS_SCRIPT && sessao) { (VN_FILA[n] = VN_FILA[n] || {})[p] = 1; clearTimeout(VN_T); VN_T = setTimeout(buscarVendasN, 250); }
     return undefined;   // carregando
   }
+  /* 11/11 (Marcelo): card do PEDIDO DE COMPRA: entradas (compras recebidas) dos 3 últimos meses + venda acumulada do mês.
+     O robô manda 1 vez os 2 meses anteriores e todo dia o mês atual. */
+  var EXT = {}, EXT_FILA = {}, EXT_INDO = false, EXT_T = 0, EXT_META = null;
+  var MES_ABR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  function extraCompra(p) {
+    if (p in EXT) return EXT[p];
+    if (EM_APPS_SCRIPT && sessao) { EXT_FILA[p] = 1; clearTimeout(EXT_T); EXT_T = setTimeout(buscarExtras, 300); }
+    return undefined;
+  }
+  function buscarExtras() {
+    if (EXT_INDO) return; var plus = Object.keys(EXT_FILA); EXT_FILA = {}; if (!plus.length) return; EXT_INDO = true;
+    chamar("compraExtras", [plus], function (r) {
+      EXT_INDO = false; EXT_META = r || EXT_META;
+      plus.forEach(function (p) { var k = ("000000" + p).slice(-6);
+        EXT[p] = { ent: (r && r.ent && (r.ent[p] || r.ent[k])) || [null, null, null], mtd: r && r.mtd ? (r.mtd[p] != null ? r.mtd[p] : r.mtd[k]) : null }; });
+      if (tela === "compra") atualizarCmp();
+      if (Object.keys(EXT_FILA).length) buscarExtras();
+    }, function () { EXT_INDO = false; plus.forEach(function (p) { EXT[p] = { ent: [null, null, null], mtd: null }; }); if (tela === "compra") atualizarCmp(); });
+  }
+  function htmlExtraCompra(p, q, t) {
+    var x = extraCompra(p), un = q > 1 ? (t || "CX") : "UN";
+    var f = function (v) { return v == null ? '<td class="sem">—</td>' : "<td>" + (q > 1 ? emEmb(v, q) : num(v)) + "</td>"; };
+    var meses = (EXT_META && EXT_META.meses) || [];
+    var nm = function (i) { var m = meses[i]; return m ? MES_ABR[Number(m.slice(5)) - 1] + (i === 2 ? " (até hoje)" : "") : ["mês -2", "mês -1", "este mês"][i]; };
+    var cab = '<table class="tab-est tab-ext"><tr><th></th><th>Vendas no mês' + (EXT_META && EXT_META.mtdDias ? " (" + EXT_META.mtdDias + " dias)" : "") + "</th><th>Entrada " + nm(0) + "</th><th>Entrada " + nm(1) + "</th><th>Entrada " + nm(2) + "</th></tr>";
+    if (x === undefined) return cab + "<tr><td>" + esc(un) + '</td><td class="sem">…</td><td class="sem">…</td><td class="sem">…</td><td class="sem">…</td></tr></table>';
+    return cab + "<tr><td>" + esc(un) + "</td>" + f(x.mtd) + f(x.ent[0]) + f(x.ent[1]) + f(x.ent[2]) + "</tr></table>";
+  }
   function buscarVendasN() {
     Object.keys(VN_FILA).forEach(function (n) {
       if (VN_INDO[n]) return;
@@ -1580,6 +1616,7 @@ window.PedidoPDF = (function () {
     if (temCx) h += "<tr><td>" + esc(t || "CX") + "</td>" + celV(true) + celL(le, true) + cel(e, true) + (comTotal ? celL(tot, true) : "") + "</tr>";
     if (!temCx) h += "<tr><td>UN</td>" + celV(false) + celL(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td>" + (comTotal ? celL(tot) : "") + "</tr>";   // UN só quando não tem embalagem de compra
     h += "</table>";
+    if (comTotal) h += htmlExtraCompra(String(p), temCx ? Number(q) || 0 : 0, t);   // 11/11: entradas 3 meses + vendas do mês
     if (!so && (!umaLoja || (foco && RES && RES.lojas && RES.lojas.length > 1)))
       h += '<details class="det-lojas"' + (comCusto ? ' data-custo="' + esc(p) + '" data-t="' + esc(t || "") + '" data-q="' + (Number(q) || 0) + '"' : "") +
         (comTotal ? ' data-preco="' + esc(p) + '" data-nd="' + (nDias > 0 && nDias !== 7 ? nDias : 0) + '"' : "") +   // 11/11: compra = preço por loja
@@ -5504,7 +5541,7 @@ window.PedidoPDF = (function () {
       chamar("fornecedoresCompra", [], function (l) { cmp.forns = l || []; var bx = $("cmpFornLista"); if (bx && !bx.hidden) mostrarForn(); desenharFornDados(); },
         function (e) { cmp.forns = null; toast("Não foi possível carregar os fornecedores"); });
     }
-    var abas = '<div class="cmp-abas" id="cmpAbas">' + [["novo", compra.id ? "Pedido (salvo)" : "Novo pedido"], ["salvos", "Salvos"], ["enviados", "Enviados"]].map(function (a) {
+    var abas = '<div class="cmp-abas" id="cmpAbas">' + [["novo", compra.id ? "Pedido (salvo)" : "Novo pedido"], ["salvos", "Salvos"], ["enviados", "Em aberto"]].map(function (a) {
       return '<button class="modo' + (cmp.aba === a[0] ? " ativo" : "") + '" data-cab="' + a[0] + '">' + a[1] + "</button>"; }).join("") + "</div>";
     if (cmp.aba !== "novo") { $("lista").innerHTML = '<div class="titulo-tela">Pedido de compra</div>' + abas + '<div id="cmpRecentes"></div>'; desenharRecentes(); return; }
     carregarEntregas();
@@ -5658,15 +5695,70 @@ window.PedidoPDF = (function () {
       return;
     }
     var salvos = cmp.aba === "salvos", l = cmp.recentes.filter(function (c) { return (c.status === "salvo") === salvos; });
-    box.innerHTML = '<div class="cmp-dica">' + (salvos ? "Pedidos salvos para continuar depois (ficam 60 dias)." : "Pedidos gerados (PDF) e enviados aos fornecedores. Apagam depois de 15 dias.") + "</div>" +
+    // 11/11 (Marcelo): "Em aberto" (antes "Enviados") com FILTRO DE FORNECEDOR, igual ao do novo pedido
+    var filtroHtml = "";
+    if (!salvos) {
+      if (cmp.filtroRec && !l.some(function (c) { return c.fornecedor === cmp.filtroRec; })) cmp.filtroRec = "";
+      filtroHtml = '<div class="campo cmp-recf"><label for="cmpRecForn">Fornecedor</label><div style="display:flex;gap:8px"><input id="cmpRecForn" autocomplete="off" placeholder="Toque para filtrar por fornecedor" value="' + esc(cmp.filtroRec || "") + '">' +
+        (cmp.filtroRec ? '<button type="button" class="btn btn-cinza" data-recforn-limpar="1" style="min-height:44px">Todos</button>' : "") + '</div><div id="cmpRecFornLista" class="cmp-recf-lista" hidden></div></div>';
+      if (cmp.filtroRec) l = l.filter(function (c) { return c.fornecedor === cmp.filtroRec; });
+    }
+    box.innerHTML = '<div class="cmp-dica">' + (salvos ? "Pedidos salvos para continuar depois (ficam 60 dias)." : "Pedidos gerados, enviados ou não. Ficam aqui até serem baixados no ERP (os que não chegaram ao ERP apagam em 15 dias).") + "</div>" + filtroHtml +
       (l.length ? l.map(function (c) {
         return '<div class="cmp-rec"><div><b>' + (c.numero ? "Nº " + esc(String(c.numero).replace(/^0+/, "")) + " · " : "") + esc(c.fornecedor || "Sem fornecedor") + "</b><small>" + esc(c.quando) + " · " + c.n + (c.n === 1 ? " item" : " itens") + "</small>" +
-          (salvos ? "" : c.enviadoPara ? '<small class="ok">Enviado (' + esc(c.enviadoPara) + ") em " + esc(c.enviadoEm) + "</small>" : "<small>Ainda não enviado</small>") + "</div>" +
+          (salvos ? "" : c.enviadoPara ? '<small class="ok">Enviado (' + esc(c.enviadoPara) + ") em " + esc(c.enviadoEm) + "</small>" : "<small>Ainda não enviado</small>") + (salvos ? "" : htmlCompraErp(c)) + "</div>" +
+          (!salvos && c.erp && c.erp.st === "erro" ? '<button class="ver" data-cerp="' + esc(c.id) + '">Mandar ao ERP de novo</button>' : "") +
+          (!salvos && c.erp && (c.erp.st === "digitado" || (c.receb && c.receb.nfs && c.receb.nfs.length)) ? '<button class="ver" data-cconf="' + esc(c.id) + '">Conferência</button>' : "") +
           (salvos ? '<button class="ver" data-cont-cmp="' + esc(c.id) + '">Continuar</button>'
                   : '<button class="ver pdf" data-cpdf="' + esc(c.id) + '" title="Gerar o PDF de novo para salvar ou mandar">&#128196; Gerar PDF</button>' +   // 11/11 (Marcelo)
                     '<button class="ver" data-cenv="' + esc(c.id) + '">' + (c.enviadoPara ? "Reenviar" : "Enviar") + "</button>") +
           '<button class="ver excluir" data-exc-cmp="' + esc(c.id) + '">Excluir</button></div>';
       }).join("") : '<div class="vazio" style="padding:20px">' + (salvos ? "Nenhum pedido salvo." : "Nenhum pedido gerado nos últimos 15 dias.") + "</div>");
+  }
+  function mostrarRecForn() {   // 11/11: lista de fornecedores dos pedidos em aberto (com quantos pedidos cada um)
+    var box = $("cmpRecFornLista"), inp = $("cmpRecForn"); if (!box || !inp || !Array.isArray(cmp.recentes)) return;
+    var cont = {}; cmp.recentes.forEach(function (c) { if (c.status !== "salvo" && c.fornecedor) cont[c.fornecedor] = (cont[c.fornecedor] || 0) + 1; });
+    var t = semAcento(inp.value.trim()), nomes = Object.keys(cont).sort().filter(function (n) { return !t || semAcento(n).indexOf(t) >= 0; });
+    box.innerHTML = nomes.length ? nomes.map(function (n) { return '<button type="button" data-recforn="' + esc(n) + '">' + esc(n) + "<small>" + cont[n] + (cont[n] === 1 ? " pedido" : " pedidos") + "</small></button>"; }).join("")
+      : '<div class="cmp-dica" style="padding:10px 12px">Nenhum fornecedor com esse nome.</div>';
+    box.hidden = false;
+  }
+  document.addEventListener("focusin", function (e) { if (e.target && e.target.id === "cmpRecForn") mostrarRecForn(); });
+  document.addEventListener("input", function (e) { if (e.target && e.target.id === "cmpRecForn") mostrarRecForn(); });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-recforn]");
+    if (b) { cmp.filtroRec = b.getAttribute("data-recforn"); desenharRecentes(); return; }
+    if (e.target.closest && e.target.closest("[data-recforn-limpar]")) { cmp.filtroRec = ""; desenharRecentes(); return; }
+    var bx = $("cmpRecFornLista"); if (bx && !bx.hidden && e.target.id !== "cmpRecForn" && !e.target.closest("#cmpRecFornLista")) bx.hidden = true;
+  });
+  /* 11/11 (Marcelo): PEDIDO DE COMPRA NO ERP - situação do robô (fila / digitando / digitado nº / erro), total, comprador
+     e o recebimento (notas que chegaram; o que falta). Baixado no ERP ou tudo recebido -> sai do app. */
+  function htmlCompraErp(c) {
+    var e = c.erp || null, h = "<small>Total <b style=\"display:inline\">" + reais(c.total || 0) + "</b>" + (c.comprador ? " · Comprador: " + esc(c.comprador) : "") + "</small>";
+    if (e) {
+      var s = e.st === "digitado" ? ["ERP: digitado nº " + esc(String(e.num || "").replace(/^0+/, "")), "#1d7a35", "#e3f4e8"]
+        : e.st === "digitando" ? ["ERP: robô digitando…", "#b35c00", "#fff1df"]
+        : e.st === "erro" ? ["ERP: erro" + (e.msg ? " – " + esc(e.msg) : ""), "#c62828", "#fdecea"] : ["ERP: na fila do robô", "#1d5fa8", "#e8f1fb"];
+      h += '<span class="cmp-erp" style="color:' + s[1] + ";background:" + s[2] + ";border-color:" + s[1] + '">' + s[0] + "</span>";
+    }
+    var r = c.receb || {};
+    if (r.nfs && r.nfs.length) h += '<small class="cmp-rcb">Recebido ' + (r.pend ? "parcial (falta " + r.pend + (r.pend === 1 ? " produto" : " produtos") + ")" : "") + " · NF " + r.nfs.map(function (n) { return esc(n.nf); }).join(", ") + "</small>";
+    else if (e && e.st === "digitado") h += "<small>Aguardando a entrega</small>";
+    return h;
+  }
+  function abrirConferenciaCompra(id) {
+    modal("Conferência do pedido de compra", '<div class="carregando"><div class="giro"></div>Carregando…</div>');
+    chamar("compraConferencia", [id], function (r) {
+      var corpo = document.getElementById("fichaCorpo") || document.querySelector(".tela.aberta .corpo"); if (!corpo) return;
+      var u = function (v, q) { return q > 1 ? emEmb(v, q) : num(v); };
+      corpo.innerHTML = "<p><b>Nº " + esc(String(r.numero || "").replace(/^0+/, "")) + " · " + esc(r.fornecedor) + "</b><br><small>Total " + reais(r.total) + " · Comprador: " + esc(r.comprador || "") +
+        (r.erp && r.erp.num ? " · ERP nº " + esc(r.erp.num) : "") + "</small></p>" +
+        '<table class="tab-est"><tr><th>Produto</th><th>Pedido</th><th>Recebido</th><th>Falta</th></tr>' + r.itens.map(function (i) { var un = i.q > 1 ? (i.t || "CX") : "UN";
+          return "<tr><td style=\"text-align:left\">" + esc(i.d || i.p) + "<br><small>PLU " + esc(i.p) + " · " + esc(un) + "</small></td><td>" + u(i.pedUn, i.q) + "</td><td" + (i.recUn > 0 ? ' style="color:#1d7a35;font-weight:700"' : "") + ">" + u(i.recUn, i.q) +
+            "</td><td" + (i.faltaUn > 0 ? ' class="neg"' : "") + ">" + (i.faltaUn > 0 ? u(i.faltaUn, i.q) : "✔") + "</td></tr>"; }).join("") + "</table>" +
+        "<p style=\"margin-top:12px\"><b>Notas que chegaram</b></p>" + (r.nfs.length ? r.nfs.map(function (n) { return "<div class=\"cmp-rec\" style=\"margin-bottom:6px\"><div><b>NF " + esc(n.nf) + "</b><small>" + esc(n.data || n.em || "") + " · " + n.itens.length + (n.itens.length === 1 ? " produto" : " produtos") + "</small></div></div>"; }).join("")
+          : "<small>Nenhuma nota ainda. Quando o robô ver a nota de entrada no ERP, ela aparece aqui.</small>");
+    }, function (e) { toast(String(e && e.message || e)); });
   }
   function verProdutosForn() {
     var f = ($("cmpForn").value || "").trim();
@@ -5942,6 +6034,9 @@ window.PedidoPDF = (function () {
       if (!e.target.closest(".forn-wrap") && $("cmpFornLista")) $("cmpFornLista").hidden = true;
       var cc = e.target.closest("[data-cont-cmp]"); if (cc) { continuarCompra(cc.getAttribute("data-cont-cmp")); return; }
       var xc = e.target.closest("[data-exc-cmp]"); if (xc) { excluirCompraTela(xc); return; }
+      var ce = e.target.closest("[data-cerp]");   // 11/11: manda o pedido de compra de novo para o robô digitar no ERP
+      if (ce) { ce.disabled = true; chamar("compraErpReenviar", [ce.getAttribute("data-cerp")], function () { toast("Na fila do robô de novo"); cmp.recentes = null; desenharRecentes(); }, function (x) { ce.disabled = false; toast(String(x && x.message || x)); }); return; }
+      var cc = e.target.closest("[data-cconf]"); if (cc) { abrirConferenciaCompra(cc.getAttribute("data-cconf")); return; }
       var gp = e.target.closest("[data-cpdf]");   // 11/11 (Marcelo): gera o PDF de novo e baixa (para salvar ou mandar de outro jeito)
       if (gp) { if (gp.disabled) return; var tx = gp.innerHTML; gp.disabled = true; gp.textContent = "Gerando…";
         var volta = function () { gp.disabled = false; gp.innerHTML = tx; };
@@ -6280,7 +6375,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.22";
+  var VERSAO_APP = "2026-11-11.25";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
