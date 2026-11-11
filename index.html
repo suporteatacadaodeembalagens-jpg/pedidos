@@ -591,7 +591,7 @@
   body #telaErros .er-topo button[data-er="atualizar"],body #telaExp .exp-topo button[data-exp="atualizar"]{background:var(--azul);color:#fff;border-color:var(--azul)}
   body #telaErros .er-corpo{padding-top:14px}
   /* 11/11 (Marcelo): a barra do topo (logo, usuário e botões) aparece em TODAS as telas: Expedição e Relatório de erros começam abaixo dela */
-  #telaExp,#telaErros{top:var(--topoH,0px)!important}
+  #telaExp,#telaErros,#telaCont{top:var(--topoH,0px)!important}
   /* ===== 11/11 (Marcelo): BOTÕES bem destacados sem poluir =====
      1 cor forte por tela (vermelho = ação principal) · secundários BRANCOS com borda azul clara e texto marinho (aparecem no
      fundo claro sem gritar) · todo botão com altura mínima de 44 px (dedo) e anel azul quando focado. */
@@ -1355,13 +1355,18 @@ window.PedidoPDF = (function () {
     return q > 1 ? reais(cu * q) + " " + (t || "CX") + " c/ " + num(q) + " · " + reais(cu) + " un" : reais(cu) + " un";
   }
   /** custos = {loja: custo unitário} (Diretoria/Administração na Consulta: coluna de custo por loja). emb = {t, q} se o produto não está na lista. */
-  function htmlLojas(plu, so, custos, emb, nd) {   // 10/11: nd = dias da cobertura (pedido de compra): vendas por loja dos N dias
+  /* 11/11 (Marcelo): Pedido de compra > Ver por loja: preço de VENDA UN e CX de cada loja (o mesmo da Consulta de produtos). */
+  var PRL = {};   // {plu: {loja: preço un}}
+  function htmlLojas(plu, so, custos, emb, nd, precos) {   // 10/11: nd = dias da cobertura (pedido de compra): vendas por loja dos N dias
     if (!RES || !RES.lojas || !RES.lojas.length) return "";
     var vl = nd ? (VNL[nd] && VNL[nd][plu]) : null, carregL = !!nd && !vl, tvd = nd ? "Vendas " + nd + " dias" : "Vendas 7 dias";
     var vLoja = function (c, i) { return nd ? (vl ? Number(vl[c]) || 0 : 0) : (Number(l[2 * i + 1]) || 0); };
     var l = RES.d[plu] || [], cods = so ? RES.lojas.filter(function (c) { return c === so; }) : RES.lojas;
     if (!cods.length) return "";
     var it = porPlu[plu] || emb || {}, q = Number(it.q) || 0, t = q > 1 ? (it.t || "CX") : "UN";
+    var cPre = precos ? function (c) { var pu = Number(precos[c]) || 0;
+      return "<td>" + (pu > 0 ? reais(pu) : "—") + "</td>" + (q > 1 ? "<td>" + (pu > 0 ? "<b>" + reais(pu * q) + "</b>" : "—") + "</td>" : ""); } : function () { return ""; };
+    var hPre = precos ? "<th>Preço UN</th>" + (q > 1 ? "<th>Preço " + esc(t) + "</th>" : "") : "", tPre = precos ? "<td></td>" + (q > 1 ? "<td></td>" : "") : "";
     var cCus = custos ? function (c) {
       var cu = Number(custos[c]) || 0;
       return "<td>" + (cu > 0 ? "<b>" + reais(q > 1 ? cu * q : cu) + "</b>" + (q > 1 ? "<small class=\"cu-un\">" + reais(cu) + " un</small>" : "") : "—") + "</td>";
@@ -1371,15 +1376,15 @@ window.PedidoPDF = (function () {
       return '<div class="lojas-mini uma">Loja ' + esc(cods[0]) + " " + esc(RES.nomes[cods[0]] || "") + "<br>Estoque: <b>" + emEmb(e, q) + "</b> " + esc(t) +
         "<br>Vendas 7 dias: <b>" + emEmb(l[2 * i + 1] || 0, q) + "</b> " + esc(t) + "</div>";
     }
-    return '<div class="lojas-mini"><table class="tab-lojas tab-lj"><tr><th>Loja</th><th>Estoque ' + esc(t) + "</th><th>" + tvd + " " + esc(t) + "</th>" + (custos ? "<th>Custo " + esc(t) + "</th>" : "") + "</tr>" +
+    return '<div class="lojas-mini"><table class="tab-lojas tab-lj"><tr><th>Loja</th><th>Estoque ' + esc(t) + "</th><th>" + tvd + " " + esc(t) + "</th>" + (custos ? "<th>Custo " + esc(t) + "</th>" : "") + hPre + "</tr>" +
       cods.map(function (c) {
         var i = RES.idx[c], e = Number(l[2 * i]) || 0;
         return "<tr><td>" + esc(c) + " " + esc(RES.nomes[c] || "") + "</td><td" + (e < 0 ? ' class="neg"' : "") + "><b>" + emEmb(e, q) + "</b></td>" +
-          "<td>" + (carregL ? "…" : emEmb(vLoja(c, i), q)) + "</td>" + cCus(c) + "</tr>";
+          "<td>" + (carregL ? "…" : emEmb(vLoja(c, i), q)) + "</td>" + cCus(c) + cPre(c) + "</tr>";
       }).join("") + (function () {   // total de todas as lojas
         var te = 0, tv = 0;
         cods.forEach(function (c) { var i = RES.idx[c]; te += Number(l[2 * i]) || 0; tv += vLoja(c, i); });
-        return '<tr class="tot-lojas"><td><b>Total lojas</b></td><td><b>' + emEmb(te, q) + "</b></td><td><b>" + (carregL ? "…" : emEmb(tv, q)) + "</b></td>" + (custos ? "<td></td>" : "") + "</tr>";
+        return '<tr class="tot-lojas"><td><b>Total lojas</b></td><td><b>' + emEmb(te, q) + "</b></td><td><b>" + (carregL ? "…" : emEmb(tv, q)) + "</b></td>" + (custos ? "<td></td>" : "") + tPre + "</tr>";
       })() + "</table></div>";
   }
   function aplicarDados(json, deServidor) {
@@ -1576,7 +1581,9 @@ window.PedidoPDF = (function () {
     if (!temCx) h += "<tr><td>UN</td>" + celV(false) + celL(le) + "<td" + (e < 0 ? ' class="neg"' : "") + ">" + num(e) + "</td>" + (comTotal ? celL(tot) : "") + "</tr>";   // UN só quando não tem embalagem de compra
     h += "</table>";
     if (!so && (!umaLoja || (foco && RES && RES.lojas && RES.lojas.length > 1)))
-      h += '<details class="det-lojas"' + (comCusto ? ' data-custo="' + esc(p) + '" data-t="' + esc(t || "") + '" data-q="' + (Number(q) || 0) + '"' : "") + "><summary>Ver por loja</summary>" + htmlLojas(p, null, null, null, nDias > 0 && nDias !== 7 ? nDias : 0) + "</details>";
+      h += '<details class="det-lojas"' + (comCusto ? ' data-custo="' + esc(p) + '" data-t="' + esc(t || "") + '" data-q="' + (Number(q) || 0) + '"' : "") +
+        (comTotal ? ' data-preco="' + esc(p) + '" data-nd="' + (nDias > 0 && nDias !== 7 ? nDias : 0) + '"' : "") +   // 11/11: compra = preço por loja
+        "><summary>Ver por loja</summary>" + htmlLojas(p, null, null, null, nDias > 0 && nDias !== 7 ? nDias : 0, comTotal ? PRL[p] : null) + "</details>";
     return h;
   }
   function subItem(p, t, q, dep, extra) {
@@ -1856,7 +1863,7 @@ window.PedidoPDF = (function () {
   var EXP = { lista: null, aberto: null, loja: "", ver: "separar", mod: "conferencia" };
   // 09/11: módulo Expedição = 4 opções (Conferência, Recebimento, Contagem de estoque, Validade). Abre para o login
   // Expedição e, no início, para o Marcelo (mestre), que fecha e volta ao app.
-  var MODS_EXP = [["conferencia", "Conferência"]];   // 10/11 (Marcelo): Recebimento, Contagem de estoque e Validade saem por enquanto
+  var MODS_EXP = [["conferencia", "Conferência"], ["contagem", "Contagem e validade"]];   // 11/11: contagem por listas + validade (CD)   // 10/11 (Marcelo): Recebimento, Contagem de estoque e Validade saem por enquanto
   function expUsuario() { return sessaoExp || (sessao && ehMestre() ? sessao : null); }
   function expChamar(fn, args, ok, falha) {
     if (!expUsuario()) return;
@@ -1946,6 +1953,7 @@ window.PedidoPDF = (function () {
         else if (k === "mod") { EXP.mod = v; EXP.aberto = null; desenharExpedicao(); if (v === "conferencia" && !EXP.lista) carregarExpedicao(); }
         else if (k === "atualizar") { EXP.lista = null; if (EXP.aberto) abrirPedidoExp(EXP.aberto.id); carregarExpedicao(); }
         else if (k === "ver") { EXP.ver = v; desenharExpedicao(); }
+        else if (k === "contnova") { if (EXP.ct) abrirContNova("exp"); else abrirLoginConf(function () { abrirContNova("exp"); }); return; }
         else if (k === "abrir") { if (EXP.ct) abrirPedidoExp(v); else abrirLoginConf(function () { abrirPedidoExp(v); }); return; }
         else if (k === "nomeconf") { desenharLoginConf(v); return; }
         else if (k === "trocanome") { abrirLoginConf(null); return; }
@@ -2451,6 +2459,9 @@ window.PedidoPDF = (function () {
       '<div class="exp-btns"><button data-exp="diag" title="Testar o leitor do coletor">&#128295;</button><button data-exp="atualizar">&#8635; Atualizar</button>' + (sessaoExp ? '<button data-exp="sair">Sair</button>' : '<button data-exp="fechar">&#10005; Fechar</button>') + '</div></div><div class="exp-corpo">' +
       (MODS_EXP.length < 2 ? "" : '<div class="exp-mods">' + MODS_EXP.map(function (x) { return '<button data-exp="mod" data-v="' + x[0] + '" class="' + (EXP.mod === x[0] ? "ativo" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>");
     if (!MODS_EXP.some(function (x) { return x[0] === EXP.mod; })) EXP.mod = "conferencia";
+    if (EXP.mod === "contagem") {   // 11/11 (Marcelo): CD conta as listas liberadas e registra validade (tela própria)
+      t.innerHTML = h + '<div class="exp-breve"><b>Contagem e validade</b>Listas de contagem liberadas para o CD e registro de validade dos lotes.<br><br><button class="verde" data-exp="contnova" style="padding:14px 18px;font-size:17px;border-radius:12px;border:0;color:#fff;background:linear-gradient(180deg,#e0353a,#c9232a)">Abrir contagem e validade</button></div></div>'; return;
+    }
     if (EXP.mod !== "conferencia") {
       var nm = MODS_EXP.filter(function (x) { return x[0] === EXP.mod; })[0];
       t.innerHTML = h + '<div class="exp-breve"><b>' + esc(nm ? nm[1] : "") + "</b>Em breve: este módulo ainda vai ser montado.</div></div>"; return;
@@ -3744,7 +3755,7 @@ window.PedidoPDF = (function () {
       t.push(tile("consulta", "Consulta de produtos", "Estoque, preço, fornecedor e EAN", ICO.lupa));
       t.push(tile("compra", "Pedido de compra", nc ? nc + (nc === 1 ? " item em andamento" : " itens em andamento") : "Montar o PDF e mandar pelo WhatsApp", ICO.caminhao));
       t.push(tile("analise", "Análise de vendas", "Vendas mês a mês de cada produto, por loja", ICO.grafico));
-      t.push(tile("contagem", "Contagem de estoque", "Itens pedidos para contar e análise por loja", ICO.lista));
+      t.push(tile("contagem", "Contagem e validade", "Listas para contar, relatório e validade", ICO.lista));
       if (ehMestre()) t.push(tile("erros", "Relatório de erros", "Tudo que deu erro: ERP, login, pedidos, app", ICO.lista));
       if (ehMestre()) t.push(tile("expedicao", "Expedição", "Conferência, recebimento, contagem de estoque e validade", ICO.caminhao));   // 09/11: só o Marcelo (e o login Expedição)
     } else {
@@ -3979,6 +3990,291 @@ window.PedidoPDF = (function () {
                     : "Já estava na lista de contagem de " + r.lojas.join(", "));
     });
   }
+  /* 11/11 (Marcelo): CONTAGEM POR LISTAS + VALIDADE — tela própria.
+     Administração/Diretoria montam a LISTA e liberam para lojas e/ou CD; quem conta não vê o estoque (às cegas);
+     RELATÓRIO contado x sistema (em R$), Excel/PDF e "Aprovar ajuste" (fila do robô para o ERP). VALIDADE: lotes e vencimento.
+     modo "app" = login normal; modo "exp" = coletor da Expedição (CD), com o conferente (EXP.ct). */
+  var CN = { aba: "", modo: "app", listas: null, mgr: false, loja: "", nomes: {}, ed: null, rel: null, relId: "", soDif: false,
+             abertaId: "", lojaCont: "", val: null, vBusca: [], tb: 0, digitado: {} };
+  function cnChamar(fn, args, ok, falha) {
+    var f = falha || function (e) { toast(String(e && e.message || e)); };
+    if (CN.modo === "exp") expChamar(fn, (args || []).concat(fn === "contListas" || fn === "contListaContar" || /^validade/.test(fn) ? [EXP.ct || ""] : []), ok, f);
+    else chamar(fn, args || [], ok, f);
+  }
+  function cnNome(c) { return (CN.nomes && CN.nomes[c]) || (RES && RES.nomes && RES.nomes[c]) || c; }
+  function cnLojasTodas() { var n = CN.nomes || {}; return Object.keys(n).sort(); }
+  function abrirContNova(modo) {
+    CN.modo = modo || "app";
+    var tl = document.getElementById("telaCont");
+    if (!tl) {
+      var st = document.createElement("style"); st.id = "cnCss";
+      st.textContent = "#telaCont{position:fixed;inset:0;top:var(--topoH,0px);z-index:93;background:var(--fundo);overflow:auto;-webkit-overflow-scrolling:touch}" +
+        "#telaCont .cn-topo{position:sticky;top:0;z-index:3;background:rgba(255,255,255,.95);border-bottom:1px solid var(--linha);box-shadow:0 6px 16px rgba(15,40,75,.06);padding:10px 14px;display:flex;align-items:center;gap:10px}" +
+        "#telaCont .cn-topo b{font-size:17px;color:var(--marrom);display:block}#telaCont .cn-topo span{font-size:12px;color:var(--sub)}" +
+        "#telaCont .cn-topo button{border:1px solid var(--linha);border-radius:9px;padding:9px 12px;background:var(--creme);color:var(--marrom);font-weight:700;font-size:14px;cursor:pointer}" +
+        "#telaCont .cn-corpo{max-width:980px;margin:0 auto;padding:12px 12px 120px}" +
+        "#telaCont .cn-abas{display:flex;gap:6px;background:linear-gradient(120deg,#0f2f57,#1a4c86 55%,#1d5fa8);padding:8px;border-radius:14px;margin:0 0 12px;overflow-x:auto}" +
+        "#telaCont .cn-abas button{flex:1;min-width:max-content;border:0;border-radius:10px;padding:10px 12px;font-weight:700;font-size:13.5px;background:rgba(255,255,255,.14);color:#d6e6f8;cursor:pointer}" +
+        "#telaCont .cn-abas button.on{background:var(--ouro);color:var(--marrom-esc)}" +
+        "#telaCont .cn-card{background:#fff;border-radius:14px;padding:12px;margin:0 0 10px;box-shadow:0 1px 2px rgba(15,40,75,.06),0 6px 18px rgba(15,40,75,.05);border-left:5px solid #c3d2e5}" +
+        "#telaCont .cn-card h4{margin:0 0 4px;font-size:16px;color:var(--marrom)}#telaCont .cn-card small{color:var(--sub)}" +
+        "#telaCont .cn-chip{display:inline-block;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 8px;margin:0 4px 4px 0}" +
+        "#telaCont .cn-acoes{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}" +
+        "#telaCont .cn-acoes button,#telaCont .cn-bt{border:1.5px solid #c3d2e5;background:#fff;color:var(--marrom);border-radius:10px;padding:9px 12px;font-weight:700;font-size:13px;cursor:pointer;min-height:40px}" +
+        "#telaCont .cn-bt.pri,#telaCont .cn-acoes .pri{background:linear-gradient(180deg,#e0353a,#c9232a);border-color:transparent;color:#fff}" +
+        "#telaCont .cn-bt.azul,#telaCont .cn-acoes .azul{background:var(--azul);border-color:var(--azul);color:#fff}" +
+        "#telaCont .cn-acoes .perigo{color:var(--vermelho);border-color:#f1c4c4}" +
+        "#telaCont input,#telaCont select{width:100%;font-size:16px;padding:11px 12px;border-radius:10px;border:1px solid #d3dde9;background:#fff;box-sizing:border-box}" +
+        "#telaCont label{display:block;font-size:12.5px;color:var(--sub);margin:10px 0 4px;font-weight:700}" +
+        "#telaCont .cn-lojas{display:flex;flex-wrap:wrap;gap:6px}#telaCont .cn-lojas button{border:1.5px solid #c3d2e5;background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}" +
+        "#telaCont .cn-lojas button.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:700}" +
+        "#telaCont .cn-it{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #eef2f7}#telaCont .cn-it>div{flex:1;min-width:0}" +
+        "#telaCont .cn-it b{display:block;font-size:14px}#telaCont .cn-it small{display:block;font-size:12px;color:var(--sub)}" +
+        "#telaCont .cn-it input{width:110px;flex:0 0 110px;text-align:right;font-size:18px;font-weight:700}" +
+        "#telaCont .cn-it.ok{background:#eef9f1}#telaCont .cn-x{border:0;background:none;color:var(--vermelho);font-size:20px;cursor:pointer;padding:4px 8px}" +
+        "#telaCont .cn-rodape{position:fixed;left:0;right:0;bottom:0;z-index:4;background:#fff;border-top:3px solid var(--ouro);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;justify-content:center}" +
+        "#telaCont table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}#telaCont th{text-align:left;background:#eef3f9;color:var(--marrom);padding:8px 6px;position:sticky;top:0}" +
+        "#telaCont td{padding:7px 6px;border-bottom:1px solid #eef2f7}#telaCont td.n{text-align:right;white-space:nowrap}#telaCont .neg{color:#c62828;font-weight:800}#telaCont .pos{color:#1d7a35;font-weight:800}" +
+        "#telaCont .cn-tabwrap{overflow:auto;border-radius:12px;box-shadow:0 1px 2px rgba(15,40,75,.06)}" +
+        "#telaCont .cn-vazio{text-align:center;color:var(--sub);padding:28px 10px}" +
+        "#telaCont .v-venc{border-left-color:#c62828}#telaCont .v-30{border-left-color:#e53935}#telaCont .v-60{border-left-color:#e0a100}#telaCont .v-ok{border-left-color:#2e9d4f}";
+      document.head.appendChild(st);
+      tl = document.createElement("div"); tl.id = "telaCont"; document.body.appendChild(tl);
+      tl.addEventListener("click", cnClique);
+      tl.addEventListener("input", cnDigita);
+      tl.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target.getAttribute && e.target.getAttribute("data-cq") != null) { e.preventDefault(); cnSalvarContagem(); } });
+    }
+    tl.hidden = false; CN.listas = null; CN.ed = null; CN.rel = null; CN.val = null;
+    tl.innerHTML = '<div class="cn-topo"><button data-cn="fechar">&#8592;</button><div style="flex:1;min-width:0"><b>Contagem de estoque</b><span id="cnSub">Carregando…</span></div><button data-cn="atualizar">&#8635;</button></div><div class="cn-corpo" id="cnCorpo"><div class="carregando"><div class="giro"></div>Carregando…</div></div>';
+    cnCarregar();
+  }
+  function cnCarregar() {
+    cnChamar("contListas", [], function (r) {
+      CN.mgr = !!(r && r.mgr); CN.listas = (r && r.listas) || []; CN.loja = (r && r.loja) || ""; CN.nomes = (r && r.nomes) || CN.nomes || {};
+      if (r && r.loja && r.nomeLoja) CN.nomes[r.loja] = r.nomeLoja;
+      if (!CN.aba) CN.aba = CN.mgr ? "listas" : "contar";
+      var s = document.getElementById("cnSub"); if (s) s.textContent = CN.mgr ? "Administração · listas, contagem, relatório e validade" : (CN.modo === "exp" ? "CD - Matriz (coletor)" : cnNome(CN.loja)) + " · contagem às cegas";
+      cnDesenhar();
+    }, function (e) { var c = document.getElementById("cnCorpo"); if (c) c.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+  }
+  function cnAbas() {
+    var a = CN.mgr ? [["listas", "Listas"], ["contar", "Contar"], ["rel", "Relatório"], ["val", "Validade"]] : [["contar", "Contar"], ["val", "Validade"]];
+    if (CN.modo === "app") a.push(["antiga", "Pedidos avulsos"]);
+    return '<div class="cn-abas">' + a.map(function (x) { return '<button data-cn="aba" data-v="' + x[0] + '" class="' + (CN.aba === x[0] ? "on" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>";
+  }
+  function cnStatus(l) {
+    if (l.ajuste) return l.ajuste.st === "feito" ? ["Ajustado no ERP", "#2e9d4f", "#e3f4e8"] : l.ajuste.st === "erro" ? ["Ajuste com erro", "#c62828", "#fdecea"] : ["Ajuste na fila do robô", "#1d5fa8", "#e8f1fb"];
+    return l.status === "liberada" ? ["Liberada p/ contagem", "#e67700", "#fff1df"] : l.status === "fechada" ? ["Fechada", "#2e9d4f", "#e3f4e8"] : ["Rascunho", "#5d6b7c", "#eef1f5"];
+  }
+  function cnDesenhar() {
+    var c = document.getElementById("cnCorpo"); if (!c) return;
+    var h = cnAbas(), rod = "";
+    if (CN.aba === "listas") h += CN.ed ? cnHtmlEditor() : cnHtmlListas();
+    else if (CN.aba === "contar") { var r = cnHtmlContar(); h += r[0]; rod = r[1]; }
+    else if (CN.aba === "rel") h += cnHtmlRel();
+    else if (CN.aba === "val") h += cnHtmlVal();
+    c.innerHTML = h + (rod ? '<div class="cn-rodape">' + rod + "</div>" : "");
+  }
+  // ---------- LISTAS (Administração+) ----------
+  function cnHtmlListas() {
+    var l = CN.listas || [];
+    return '<button class="cn-bt pri" data-cn="nova" style="width:100%;margin:0 0 12px">+ Nova lista de contagem</button>' +
+      (l.length ? l.map(function (x) { var s = cnStatus(x);
+        var prog = (x.lojas || []).map(function (c) { return esc(cnNome(c)) + " " + ((x.prog || {})[c] || 0) + "/" + x.n; }).join(" · ");
+        return '<div class="cn-card" style="border-left-color:' + s[1] + '"><h4>' + esc(x.nome) + "</h4>" +
+          '<span class="cn-chip" style="background:' + s[2] + ";color:" + s[1] + ";border:1px solid " + s[1] + '">' + s[0] + "</span>" +
+          "<small>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · criada " + esc(x.em || "") + (x.liberadaEm ? " · liberada " + esc(x.liberadaEm) : "") + "</small><br><small>Contado: " + prog + "</small>" +
+          '<div class="cn-acoes">' +
+          (x.status !== "fechada" ? '<button data-cn="editar" data-v="' + esc(x.id) + '">Editar</button>' : "") +
+          (x.status === "rascunho" ? '<button class="pri" data-cn="st" data-a="liberar" data-v="' + esc(x.id) + '">Liberar p/ contagem</button>' : "") +
+          (x.status === "liberada" ? '<button data-cn="st" data-a="voltar" data-v="' + esc(x.id) + '">Voltar p/ rascunho</button><button data-cn="st" data-a="fechar" data-v="' + esc(x.id) + '">Fechar lista</button>' : "") +
+          '<button class="azul" data-cn="verrel" data-v="' + esc(x.id) + '">Relatório</button>' +
+          (x.status === "rascunho" ? '<button class="perigo" data-cn="st" data-a="excluir" data-v="' + esc(x.id) + '">Excluir</button>' : "") + "</div></div>"; }).join("")
+        : '<div class="cn-vazio">Nenhuma lista ainda. Toque em "Nova lista de contagem".</div>');
+  }
+  function cnHtmlEditor() {
+    var e = CN.ed, lojas = cnLojasTodas();
+    return '<div class="cn-card" style="border-left-color:var(--azul)"><h4>' + (e.id ? "Editar lista" : "Nova lista") + "</h4>" +
+      '<label>Nome da lista</label><input id="cnNome" maxlength="60" placeholder="Ex.: Copos e pratos - novembro" value="' + esc(e.nome || "") + '">' +
+      '<label>Onde vai ser contada</label><div class="cn-lojas">' + lojas.map(function (c) { return '<button data-cn="ed-loja" data-v="' + c + '" class="' + (e.lojas.indexOf(c) >= 0 ? "on" : "") + '">' + esc(c + " " + cnNome(c)) + "</button>"; }).join("") +
+      '<button data-cn="ed-todas">Todas as lojas</button></div>' +
+      '<label>Adicionar produto (nome, PLU, marca ou código de barras)</label><input id="cnBusca" type="search" placeholder="Digite e escolha abaixo" autocomplete="off">' +
+      '<div id="cnRes"></div>' +
+      '<label>Produtos da lista (' + e.itens.length + ")</label>" +
+      (e.itens.length ? e.itens.map(function (i, k) { return '<div class="cn-it"><div><b>' + esc(i.d || i.p) + "</b><small>PLU " + esc(i.p) + (i.q > 1 ? " · " + esc(i.t || "CX") + " c/ " + i.q : "") + '</small></div><button class="cn-x" data-cn="ed-tira" data-v="' + k + '" title="Tirar">&times;</button></div>'; }).join("")
+        : '<div class="cn-vazio">Nenhum produto ainda.</div>') +
+      '<div class="cn-acoes" style="margin-top:14px"><button data-cn="ed-cancelar">Cancelar</button><button class="azul" data-cn="ed-salvar">Salvar</button><button class="pri" data-cn="ed-salvar" data-a="liberar">Salvar e liberar</button></div></div>';
+  }
+  function cnResBusca(l) {
+    var b = document.getElementById("cnRes"); if (!b) return;
+    if (l === "carregando") { b.innerHTML = '<div class="carregando"><div class="giro"></div>Buscando…</div>'; return; }
+    b.innerHTML = (l || []).slice(0, 30).map(function (x) { var ja = CN.ed && CN.ed.itens.some(function (i) { return i.p === x.p; });
+      return '<div class="cn-it"><div><b>' + esc(x.d) + "</b><small>PLU " + esc(x.p) + (x.m ? " · " + esc(x.m) : "") + (Number(x.q) > 1 ? " · " + esc(x.t || "CX") + " c/ " + x.q : "") + "</small></div>" +
+        (ja ? "<small>na lista</small>" : '<button class="cn-bt azul" data-cn="ed-add" data-p="' + esc(x.p) + '" data-d="' + esc(x.d) + '" data-t="' + esc(x.t || "") + '" data-q="' + (Number(x.q) || 0) + '">+ Pôr</button>') + "</div>"; }).join("") ||
+      (l && l.length === 0 ? '<div class="cn-vazio">Nada encontrado.</div>' : "");
+  }
+  // ---------- CONTAR (às cegas) ----------
+  function cnHtmlContar() {
+    var ls = (CN.listas || []).filter(function (x) { return CN.mgr ? x.status === "liberada" : true; });
+    if (!ls.length) return ['<div class="cn-vazio">Nenhuma lista liberada para contagem' + (CN.mgr ? "." : " na sua loja agora.") + "</div>", ""];
+    var a = ls.filter(function (x) { return x.id === CN.abertaId; })[0];
+    if (!a) return [ls.map(function (x) { var feitos = x.feito ? Object.keys(x.feito).length : null;
+      return '<div class="cn-card" style="border-left-color:#e67700"><h4>' + esc(x.nome) + "</h4><small>" + (x.itens || []).length + " produtos" + (feitos != null ? " · " + feitos + " contados" : "") + (x.liberadaEm ? " · liberada " + esc(x.liberadaEm) : "") +
+        '</small><div class="cn-acoes"><button class="pri" data-cn="abrir" data-v="' + esc(x.id) + '">Contar esta lista</button></div></div>'; }).join(""), ""];
+    var loja = CN.mgr ? (CN.lojaCont && a.lojas.indexOf(CN.lojaCont) >= 0 ? CN.lojaCont : "") : CN.loja;
+    var h = '<div class="cn-card" style="border-left-color:#e67700"><h4>' + esc(a.nome) + '</h4><small>Digite quanto tem de cada produto, em UNIDADES. O estoque do sistema não aparece (contagem às cegas).</small>' +
+      '<div class="cn-acoes"><button data-cn="fecharlista">&#8592; Outras listas</button></div>';
+    if (CN.mgr) h += '<label>Contando para</label><select id="cnLojaCont"><option value="">Escolha a loja…</option>' + a.lojas.map(function (c) { return '<option value="' + c + '"' + (c === loja ? " selected" : "") + ">" + esc(c + " " + cnNome(c)) + "</option>"; }).join("") + "</select>";
+    h += '<label>Procurar na lista</label><input id="cnFiltro" type="search" placeholder="Nome ou PLU" value="' + esc(CN.filtroCont || "") + '"></div>';
+    if (CN.mgr && !loja) return [h, ""];
+    var feito = a.feito || {}, f = semAcento(CN.filtroCont || "");
+    h += '<div class="cn-card" style="padding:4px 10px">' + (a.itens || []).filter(function (i) { return !f || semAcento(i.d + " " + i.p).indexOf(f) >= 0; }).map(function (i) {
+      var v = CN.digitado[a.id + "|" + i.p], ja = feito[i.p];
+      return '<div class="cn-it' + (ja != null ? " ok" : "") + '"><div><b>' + esc(i.d || i.p) + "</b><small>PLU " + esc(i.p) + (i.q > 1 ? " · 1 " + esc(i.t || "CX") + " = " + i.q + " un" : "") + (ja != null ? " · <b style=\"display:inline;color:#1d7a35\">contado: " + ja + " un</b>" : "") + "</small></div>" +
+        '<input data-cq="' + esc(i.p) + '" inputmode="decimal" placeholder="un" value="' + (v != null ? esc(v) : "") + '"></div>'; }).join("") + "</div>";
+    var pend = Object.keys(CN.digitado).filter(function (k) { return k.indexOf(a.id + "|") === 0 && String(CN.digitado[k]).trim() !== ""; }).length;
+    return [h, '<span id="cnPend" style="font-size:13px;color:var(--sub)">' + pend + " para salvar</span><button class=\"cn-bt pri\" data-cn=\"salvarcont\" style=\"min-width:200px\">Salvar contagem</button>"];
+  }
+  function cnSalvarContagem() {
+    var a = (CN.listas || []).filter(function (x) { return x.id === CN.abertaId; })[0]; if (!a) return;
+    var loja = CN.mgr ? CN.lojaCont : CN.loja;
+    if (CN.mgr && !loja) { toast("Escolha a loja da contagem"); return; }
+    var itens = [];
+    Object.keys(CN.digitado).forEach(function (k) { if (k.indexOf(a.id + "|") !== 0) return; var s = String(CN.digitado[k]).trim().replace(",", "."); if (s === "") return;
+      var q = Number(s); if (!isFinite(q) || q < 0) return; itens.push({ p: k.slice(a.id.length + 1), q: q, loja: loja }); });
+    if (!itens.length) { toast("Digite a quantidade de pelo menos um produto"); return; }
+    var bt = document.querySelector('[data-cn="salvarcont"]'); if (bt) { bt.disabled = true; bt.textContent = "Salvando…"; }
+    cnChamar("contListaContar", [a.id, itens], function (r) {
+      itens.forEach(function (x) { delete CN.digitado[a.id + "|" + x.p]; });
+      if (!CN.mgr) a.feito = r.feito; else { a.prog = a.prog || {}; a.prog[loja] = Object.keys(r.feito || {}).length; a.feito = r.feito; }
+      toast("Contagem salva (" + r.n + ")"); cnDesenhar();
+    }, function (e) { toast(String(e && e.message || e)); if (bt) { bt.disabled = false; bt.textContent = "Salvar contagem"; } });
+  }
+  // ---------- RELATÓRIO ----------
+  function cnHtmlRel() {
+    var ls = CN.listas || [];
+    var h = '<div class="cn-card" style="border-left-color:var(--azul)"><label style="margin-top:0">Lista</label><select id="cnRelSel"><option value="">Escolha a lista…</option>' +
+      ls.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === CN.relId ? " selected" : "") + ">" + esc(x.nome) + " (" + cnStatus(x)[0] + ")</option>"; }).join("") + "</select>";
+    if (!CN.relId) return h + "</div>";
+    var r = CN.rel;
+    if (!r || r.id !== CN.relId) return h + '</div><div class="carregando"><div class="giro"></div>Montando o relatório…</div>';
+    var linhas = r.linhas.filter(function (x) { return !CN.soDif || (x.cont != null && Math.abs(x.dif) > 0.0001); });
+    var tot = {}; r.linhas.forEach(function (x) { if (x.cont == null) return; var t = tot[x.loja] = tot[x.loja] || { n: 0, v: 0, dif: 0 }; t.n++; t.v += x.vdif || 0; if (Math.abs(x.dif) > 0.0001) t.dif++; });
+    h += '<div class="cn-acoes"><button data-cn="soDif" class="' + (CN.soDif ? "azul" : "") + '">' + (CN.soDif ? "✔ " : "") + 'Só com diferença</button><button data-cn="excel">Baixar Excel</button><button data-cn="pdf">Gerar PDF</button>' +
+      (!r.ajuste && r.linhas.some(function (x) { return x.cont != null && Math.abs(x.dif) > 0.0001; }) ? '<button class="pri" data-cn="aprovar">Aprovar ajuste no ERP</button>' : "") + "</div>" +
+      (r.ajuste ? '<p><span class="cn-chip" style="background:' + cnStatus(r)[2] + ";color:" + cnStatus(r)[1] + '">' + cnStatus(r)[0] + "</span><small>aprovado por " + esc(r.ajuste.por || "") + " em " + esc(r.ajuste.em || "") + "</small></p>" : "") +
+      "<small>" + Object.keys(tot).map(function (c) { var t = tot[c]; return "<b>" + esc(cnNome(c)) + ":</b> " + t.n + " contados, " + t.dif + " com diferença, " + reais(t.v); }).join(" · ") + "</small></div>";
+    h += '<div class="cn-tabwrap"><table><tr><th>Loja</th><th>Produto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th class="n">R$ dif.</th><th>Quem / quando</th></tr>' +
+      linhas.map(function (x) { var cl = x.dif == null ? "" : x.dif < 0 ? "neg" : x.dif > 0 ? "pos" : "";
+        return "<tr><td>" + esc(x.nomeLoja) + "</td><td>" + esc(x.d || x.p) + "<br><small>PLU " + esc(x.p) + "</small></td>" +
+          '<td class="n">' + (x.sis == null ? "—" : x.sis) + '</td><td class="n">' + (x.cont == null ? "<small>não contado</small>" : "<b>" + x.cont + "</b>") + '</td><td class="n ' + cl + '">' + (x.dif == null ? "" : (x.dif > 0 ? "+" : "") + x.dif) + "</td>" +
+          '<td class="n ' + cl + '">' + (x.vdif == null ? "" : reais(x.vdif)) + "</td><td><small>" + esc(x.por || "") + "<br>" + esc(x.em || "") + "</small></td></tr>"; }).join("") + "</table></div>";
+    return h;
+  }
+  function cnCarregarRel(id) {
+    CN.relId = id; CN.rel = null; cnDesenhar(); if (!id) return;
+    cnChamar("contListaRelatorio", [id], function (r) { CN.rel = r; if (CN.aba === "rel") cnDesenhar(); });
+  }
+  function cnExcel() {
+    var r = CN.rel; if (!r) return;
+    var lin = [["Lista", "Loja", "PLU", "Produto", "Sistema (un)", "Contado (un)", "Diferença (un)", "Custo un", "Diferença R$", "Quem contou", "Quando"]].concat(r.linhas.map(function (x) {
+      return [r.nome, x.nomeLoja, x.p, x.d, x.sis == null ? "" : x.sis, x.cont == null ? "" : x.cont, x.dif == null ? "" : x.dif, x.cu == null ? "" : x.cu, x.vdif == null ? "" : x.vdif, x.por || "", x.em || ""]; }));
+    var csv = "﻿" + lin.map(function (l) { return l.map(function (v) { v = typeof v === "number" ? String(v).replace(".", ",") : String(v == null ? "" : v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(";"); }).join("\r\n");
+    var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = "Contagem_" + String(r.nome).replace(/[^\w\-]+/g, "_") + ".csv"; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+  function cnPdf() {
+    var r = CN.rel; if (!r) return;
+    var w = window.open("", "_blank"); if (!w) { toast("Libere as janelas (pop-up) para gerar o PDF"); return; }
+    var linhas = r.linhas.map(function (x) { return "<tr><td>" + esc(x.nomeLoja) + "</td><td>" + esc(x.p) + "</td><td>" + esc(x.d || "") + "</td><td style='text-align:right'>" + (x.sis == null ? "" : x.sis) + "</td><td style='text-align:right'>" + (x.cont == null ? "não contado" : x.cont) +
+      "</td><td style='text-align:right'>" + (x.dif == null ? "" : x.dif) + "</td><td style='text-align:right'>" + (x.vdif == null ? "" : reais(x.vdif)) + "</td><td>" + esc(x.por || "") + " " + esc(x.em || "") + "</td></tr>"; }).join("");
+    w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>Contagem - " + esc(r.nome) + "</title><style>body{font-family:Arial,sans-serif;font-size:11px;margin:18px}h1{font-size:16px;color:#143d6e;margin:0 0 4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccd;padding:4px}th{background:#eef3f9}</style></head><body>" +
+      "<h1>Atacadão De Embalagens · Relatório de contagem</h1><div>Lista: <b>" + esc(r.nome) + "</b> · " + esc(cnStatus(r)[0]) + " · gerado em " + new Date().toLocaleString("pt-BR") + "</div><br>" +
+      "<table><tr><th>Loja</th><th>PLU</th><th>Produto</th><th>Sistema</th><th>Contado</th><th>Dif.</th><th>R$ dif.</th><th>Quem / quando</th></tr>" + linhas + "</table></body></html>");
+    w.document.close(); setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 400);
+  }
+  // ---------- VALIDADE ----------
+  function cnDiasPara(venc) { var h = new Date(); h.setHours(0, 0, 0, 0); return Math.round((new Date(venc + "T00:00:00") - h) / 864e5); }
+  function cnHtmlVal() {
+    var h = '<div class="cn-card" style="border-left-color:var(--azul)"><h4>Registrar validade (lote)</h4>' +
+      '<label>Produto (PLU ou código de barras' + (CN.modo === "app" ? ", ou procure pelo nome" : "") + ')</label><input id="vProd" placeholder="Ex.: 000833" autocomplete="off" value="' + esc(CN.vProd || "") + '"><div id="vRes"></div>' +
+      '<div style="display:flex;gap:10px"><div style="flex:1"><label>Vence em</label><input id="vVenc" type="date"></div><div style="flex:1"><label>Quantidade (un)</label><input id="vQ" inputmode="numeric" placeholder="un"></div></div>' +
+      (CN.mgr ? '<label>Loja</label><select id="vLoja"><option value="">Escolha…</option>' + cnLojasTodas().map(function (c) { return '<option value="' + c + '">' + esc(c + " " + cnNome(c)) + "</option>"; }).join("") + "</select>" : "") +
+      '<div class="cn-acoes"><button class="pri" data-cn="vsalvar">Registrar lote</button></div></div>';
+    if (!CN.val) { if (!CN.valCarr) { CN.valCarr = 1; cnChamar("validadeLista", [], function (r) { CN.valCarr = 0; CN.val = r; if (r && r.nomes) CN.nomes = r.nomes; if (CN.aba === "val") cnDesenhar(); }, function (e) { CN.valCarr = 0; toast(String(e && e.message || e)); }); }
+      return h + '<div class="carregando"><div class="giro"></div>Carregando lotes…</div>'; }
+    var it = (CN.val.itens || []).filter(function (x) { return !CN.lojaVal || x.loja === CN.lojaVal; });
+    if (CN.mgr) h += '<div class="cn-acoes" style="margin:0 0 10px"><select id="vFiltro" style="max-width:320px"><option value="">Todas as lojas</option>' + cnLojasTodas().map(function (c) { return '<option value="' + c + '"' + (c === CN.lojaVal ? " selected" : "") + ">" + esc(c + " " + cnNome(c)) + "</option>"; }).join("") + "</select></div>";
+    var grupos = [["Vencidos", "v-venc", function (d) { return d < 0; }], ["Vencem em até 30 dias", "v-30", function (d) { return d >= 0 && d <= 30; }], ["Vencem em 31 a 60 dias", "v-60", function (d) { return d > 30 && d <= 60; }], ["Mais de 60 dias", "v-ok", function (d) { return d > 60; }]];
+    h += it.length ? grupos.map(function (g) { var l = it.filter(function (x) { return g[2](cnDiasPara(x.venc)); }); if (!l.length) return "";
+      return '<div style="font-weight:800;color:var(--marrom);margin:14px 2px 6px">' + g[0] + " (" + l.length + ")</div>" + l.map(function (x) { var d = cnDiasPara(x.venc), dt = x.venc.split("-").reverse().join("/");
+        return '<div class="cn-card ' + g[1] + '"><div class="cn-it" style="border:0;padding:0"><div><b>' + esc(x.d || x.p) + "</b><small>PLU " + esc(x.p) + " · " + x.q + " un · " + esc(cnNome(x.loja)) + "</small><small>Vence " + dt + " (" + (d < 0 ? "venceu há " + (-d) + " dia(s)" : d === 0 ? "hoje" : "em " + d + " dia(s)") + ") · registrado por " + esc(x.por || "") + "</small></div>" +
+          '<button class="cn-bt" data-cn="vbaixa" data-v="' + esc(x.id) + '">Dar baixa</button></div></div>'; }).join(""); }).join("") : '<div class="cn-vazio">Nenhum lote registrado.</div>';
+    return h;
+  }
+  function cnSalvarVal() {
+    var p = (document.getElementById("vProd") || {}).value || "", venc = (document.getElementById("vVenc") || {}).value || "", q = (document.getElementById("vQ") || {}).value || "";
+    var lj = document.getElementById("vLoja"), pr = String(p).replace(/\D/g, "");
+    if (!pr) { toast("Informe o PLU ou o código de barras"); return; }
+    var achado = (CN.vBusca || []).filter(function (x) { return x.p === pr || String(x.b || "").split(/[;,\s]+/).indexOf(pr) >= 0; })[0];
+    var x = { p: achado ? achado.p : pr, d: achado ? achado.d : (CN.vDesc || ""), venc: venc, q: Number(q), loja: lj ? lj.value : "" };
+    cnChamar("validadeSalvar", [x], function (it) { (CN.val.itens = CN.val.itens || []).push(it); CN.vProd = ""; CN.vDesc = ""; CN.vBusca = []; toast("Lote registrado"); cnDesenhar(); });
+  }
+  // ---------- eventos ----------
+  function cnClique(e) {
+    var b = e.target.closest("[data-cn]"); if (!b) return;
+    var k = b.getAttribute("data-cn"), v = b.getAttribute("data-v");
+    if (k === "fechar") { document.getElementById("telaCont").hidden = true; return; }
+    if (k === "atualizar") { CN.val = null; CN.rel = null; cnCarregar(); if (CN.relId) cnCarregarRel(CN.relId); return; }
+    if (k === "aba") { if (v === "antiga") { abrirContagem(); return; } CN.aba = v; CN.ed = null; cnDesenhar(); return; }
+    if (k === "nova") { CN.ed = { nome: "", lojas: [], itens: [] }; cnDesenhar(); return; }
+    if (k === "editar") { var l = CN.listas.filter(function (x) { return x.id === v; })[0]; if (!l) return; CN.ed = { id: l.id, nome: l.nome, lojas: (l.lojas || []).slice(), itens: (l.itens || []).slice() }; cnDesenhar(); return; }
+    if (k === "ed-loja") { cnLerNome(); var i = CN.ed.lojas.indexOf(v); if (i >= 0) CN.ed.lojas.splice(i, 1); else CN.ed.lojas.push(v); cnDesenhar(); return; }
+    if (k === "ed-todas") { cnLerNome(); CN.ed.lojas = cnLojasTodas().filter(function (c) { return c !== "001"; }); cnDesenhar(); return; }
+    if (k === "ed-add") { cnLerNome(); CN.ed.itens.push({ p: b.getAttribute("data-p"), d: b.getAttribute("data-d"), t: b.getAttribute("data-t"), q: Number(b.getAttribute("data-q")) || 0 }); var bu = document.getElementById("cnBusca"), tx = bu ? bu.value : ""; cnDesenhar(); var bu2 = document.getElementById("cnBusca"); if (bu2) { bu2.value = tx; cnResBusca(CN.ultBusca); } return; }
+    if (k === "ed-tira") { cnLerNome(); CN.ed.itens.splice(Number(v), 1); cnDesenhar(); return; }
+    if (k === "ed-cancelar") { CN.ed = null; cnDesenhar(); return; }
+    if (k === "ed-salvar") { cnLerNome(); var lib = b.getAttribute("data-a") === "liberar"; b.disabled = true;
+      cnChamar("contListaSalvar", [CN.ed], function (r) {
+        var fim = function () { CN.ed = null; toast(lib ? "Lista salva e liberada" : "Lista salva"); cnCarregar(); };
+        if (lib) cnChamar("contListaStatus", [r.id, "liberar"], fim, function (x) { toast(String(x && x.message || x)); fim(); }); else fim();
+      }, function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
+    if (k === "st") { var a = b.getAttribute("data-a");
+      if ((a === "fechar" && !confirm("Fechar a lista? Ninguém mais conta nela.")) || (a === "excluir" && !confirm("Excluir esta lista?"))) return;
+      b.disabled = true; cnChamar("contListaStatus", [v, a], function () { toast(a === "liberar" ? "Liberada para contagem" : a === "fechar" ? "Lista fechada" : a === "excluir" ? "Lista excluída" : "Voltou para rascunho"); cnCarregar(); },
+        function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
+    if (k === "verrel") { CN.aba = "rel"; cnCarregarRel(v); return; }
+    if (k === "abrir") { CN.abertaId = v; CN.filtroCont = ""; cnDesenhar(); return; }
+    if (k === "fecharlista") { CN.abertaId = ""; cnDesenhar(); return; }
+    if (k === "salvarcont") { cnSalvarContagem(); return; }
+    if (k === "soDif") { CN.soDif = !CN.soDif; cnDesenhar(); return; }
+    if (k === "excel") { cnExcel(); return; }
+    if (k === "pdf") { cnPdf(); return; }
+    if (k === "aprovar") { if (!confirm("Aprovar o ajuste? As diferenças vão para a fila do robô lançar no ERP e a lista é fechada.")) return;
+      b.disabled = true; cnChamar("contListaAprovar", [CN.relId], function () { toast("Ajuste aprovado: na fila do robô"); cnCarregar(); cnCarregarRel(CN.relId); }, function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
+    if (k === "vsalvar") { cnSalvarVal(); return; }
+    if (k === "vescolhe") { CN.vProd = b.getAttribute("data-p"); CN.vDesc = b.getAttribute("data-d"); var vp = document.getElementById("vProd"); if (vp) vp.value = CN.vProd; var vr = document.getElementById("vRes"); if (vr) vr.innerHTML = "<small>" + esc(CN.vDesc) + "</small>"; return; }
+    if (k === "vbaixa") { if (!confirm("Dar baixa neste lote (acabou ou foi retirado)?")) return; b.disabled = true;
+      cnChamar("validadeBaixa", [v], function () { CN.val.itens = CN.val.itens.filter(function (x) { return x.id !== v; }); toast("Baixa feita"); cnDesenhar(); }, function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
+  }
+  function cnLerNome() { var n = document.getElementById("cnNome"); if (n && CN.ed) CN.ed.nome = n.value; }
+  function cnDigita(e) {
+    var t = e.target, id = t.id;
+    if (t.getAttribute && t.getAttribute("data-cq") != null) { CN.digitado[CN.abertaId + "|" + t.getAttribute("data-cq")] = t.value;
+      var n = Object.keys(CN.digitado).filter(function (k) { return k.indexOf(CN.abertaId + "|") === 0 && String(CN.digitado[k]).trim() !== ""; }).length, s = document.getElementById("cnPend"); if (s) s.textContent = n + " para salvar"; return; }
+    if (id === "cnFiltro") { CN.filtroCont = t.value; clearTimeout(CN.tb); CN.tb = setTimeout(function () { var p = t.selectionStart; cnDesenhar(); var f = document.getElementById("cnFiltro"); if (f) { f.focus(); try { f.setSelectionRange(p, p); } catch (x) {} } }, 250); return; }
+    if (id === "cnBusca") { var q = t.value.trim(); clearTimeout(CN.tb); if (semAcento(q).length < 2) { cnResBusca([]); return; }
+      CN.tb = setTimeout(function () { cnResBusca("carregando"); chamar("buscarCadastro", [q], function (l) { CN.ultBusca = l || []; cnResBusca(CN.ultBusca); }, function () { cnResBusca([]); }); }, 350); return; }
+    if (id === "vProd" && CN.modo === "app") { var q2 = t.value.trim(); CN.vProd = q2; clearTimeout(CN.tb); if (semAcento(q2).length < 3) return;
+      CN.tb = setTimeout(function () { chamar(CN.mgr ? "buscarCadastro" : "buscarProdutos", [q2], function (l) { CN.vBusca = l || []; var r = document.getElementById("vRes"); if (!r) return;
+        r.innerHTML = CN.vBusca.slice(0, 8).map(function (x) { return '<div class="cn-it"><div><b>' + esc(x.d) + "</b><small>PLU " + esc(x.p) + '</small></div><button class="cn-bt azul" data-cn="vescolhe" data-p="' + esc(x.p) + '" data-d="' + esc(x.d) + '">Escolher</button></div>'; }).join(""); }, function () {}); }, 400); return; }
+  }
+  document.addEventListener("change", function (e) {
+    if (!e.target || !e.target.id) return;
+    if (e.target.id === "cnLojaCont") { CN.lojaCont = e.target.value; cnDesenhar(); }
+    else if (e.target.id === "cnRelSel") cnCarregarRel(e.target.value);
+    else if (e.target.id === "vFiltro") { CN.lojaVal = e.target.value; cnDesenhar(); }
+  });
   function abrirContagem(aba) {
     contagem.aba = aba || contagem.aba || "sug";
     modal("Contagem de estoque", '<div class="cont-abas" id="contAbas"></div><div id="contRes"><div class="carregando"><div class="giro"></div>Carregando…</div></div>');
@@ -4724,7 +5020,7 @@ window.PedidoPDF = (function () {
     if (acao === "bloq") { avisoBloqueio(); return; }
     if (acao === "erros") { abrirErrosErp(); return; }
     if (acao === "expedicao") { EXP.aberto = null; abrirExpedicao(); return; }
-    if (acao === "contagem") { abrirContagem(); return; }
+    if (acao === "contagem") { abrirContNova("app"); return; }   // 11/11: tela nova (listas, contagem, relatório, validade)
     if (acao === "analise") { if (!dados) { toast("Aguarde a lista de estoque carregar"); return; } abrirAnalise(); return; }
     if (acao === "consulta" || acao === "compra") { tela = acao; $("busca").value = ""; desenharLista(); window.scrollTo(0, 0); return; }
     if (!dados) { toast("Aguarde a lista de estoque carregar"); return; }
@@ -5721,7 +6017,7 @@ window.PedidoPDF = (function () {
     }
   });
   /* 11/11 (Marcelo): barra do topo sempre à vista (as telas cheias ficam abaixo dela); o botão Início também fecha essas telas */
-  function telaCheiaAberta() { return ["telaExp", "telaErros"].some(function (id) { var e = document.getElementById(id); return !!(e && !e.hidden); }); }
+  function telaCheiaAberta() { return ["telaExp", "telaErros", "telaCont"].some(function (id) { var e = document.getElementById(id); return !!(e && !e.hidden); }); }
   function sincTopo() {   // só mexe no que mudou (senão o observador entra em loop)
     var hd = document.querySelector("header"), tp = hd && hd.querySelector(".topo");
     // 11/11: no computador o app tem zoom (html{zoom}); a medida vai SEM o zoom (senão a tela cheia descia demais e abria uma faixa).
@@ -5737,6 +6033,7 @@ window.PedidoPDF = (function () {
   window.addEventListener("resize", sincTopo); sincTopo();
   $("btnInicio").addEventListener("click", function () {
     var er = document.getElementById("telaErros"); if (er) er.hidden = true;
+    var tc = document.getElementById("telaCont"); if (tc) tc.hidden = true;
     var ex = document.getElementById("telaExp"); if (sessao && ex && !ex.hidden) fecharExpedicao();
   });
   $("btnInicio").addEventListener("click", irInicio);
@@ -5816,6 +6113,17 @@ window.PedidoPDF = (function () {
   $("btnLer").addEventListener("click", lerParaBusca);
   $("btnFecharLeitor").addEventListener("click", fecharLeitor);
   $("btnLeitorFoto").addEventListener("click", function () { $("leitorFoto").click(); });
+  // 11/11 (Marcelo): Pedido de compra - ao abrir "Ver por loja", busca o preço de venda de cada loja (1x por produto)
+  document.addEventListener("toggle", function (e) {
+    var d = e.target; if (!d || !d.open || !d.getAttribute || !d.getAttribute("data-preco")) return;
+    var p = d.getAttribute("data-preco"), nd = Number(d.getAttribute("data-nd")) || 0;
+    if (PRL[p] || d._preco) return; d._preco = true;
+    var box = d.querySelector(".lojas-mini"); if (box) box.insertAdjacentHTML("beforeend", '<div class="pr-carr"><small>Buscando o preço de cada loja…</small></div>');
+    chamar("precosPorLoja", [p], function (r) {
+      var m = {}; (r && r.lojas || []).forEach(function (l) { m[l.cod] = l.preco; }); PRL[p] = m;
+      var novo = htmlLojas(p, null, null, null, nd, m), b = d.querySelector(".lojas-mini"); if (b && novo) b.outerHTML = novo;
+    }, function () { d._preco = false; var c = d.querySelector(".pr-carr"); if (c) c.innerHTML = "<small>Não consegui buscar os preços agora.</small>"; });
+  }, true);
   // 04/11: Consulta da Diretoria/Administração - ao abrir "Ver por loja", busca o custo de cada loja e põe na tabela
   document.addEventListener("toggle", function (e) {
     var d = e.target;
@@ -5939,7 +6247,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.19";
+  var VERSAO_APP = "2026-11-11.21";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
