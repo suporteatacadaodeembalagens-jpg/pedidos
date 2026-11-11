@@ -608,7 +608,7 @@
   /* 11/11 (Marcelo): PAPEL TIMBRADO — logo bem clarinho no fundo de todas as telas, atrás dos cartões */
   /* 11/11 v2 (Marcelo): marca d'água mais elegante — em tons de cinza, bem suave e com as BORDAS ESFUMADAS (some o
      "quadrado" da imagem); os cartões ficam quase brancos, deixando a marca aparecer de leve, como papel timbrado. */
-  body::before{content:"";position:fixed;left:50%;top:56%;width:min(80vw,620px);aspect-ratio:1.45;transform:translate(-50%,-50%);background:var(--logoFundo) center / contain no-repeat;opacity:.075;filter:grayscale(1) contrast(1.15);mix-blend-mode:multiply;-webkit-mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 55%,transparent 100%);mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 55%,transparent 100%);pointer-events:none;z-index:0}
+  body::before{content:"";position:fixed;left:50%;top:56%;width:min(80vw,620px);aspect-ratio:1.45;transform:translate(-50%,-50%);background:var(--logoFundo) center / contain no-repeat;opacity:.06;pointer-events:none;z-index:0}   /* 11/11 v3: só caixa + escritos (sem moldura), bem fraquinho */
   main{position:relative;z-index:1}
   .tiles .tile:not(.destaque){background:rgba(255,255,255,.9)}
   /* 11/11 (Marcelo): fundo com TEXTURA leve (grão fininho, como papel) + luz suave nos cantos, para não ficar 100% liso.
@@ -829,7 +829,25 @@
 <div class="toast" id="toast"></div>
 <script>document.getElementById("logoMini").src = document.querySelector(".login .logo").src;
 /* 11/11 (Marcelo): logo da empresa ao fundo, como papel timbrado (a mesma imagem do login, sem baixar nada a mais) */
-document.documentElement.style.setProperty("--logoFundo", 'url("' + document.querySelector(".login .logo").src + '")');</script>
+/* 11/11 v3 (Marcelo): marca d'água SEM a moldura e SEM o fundo da imagem — só a caixa e os escritos, em azul.
+   Recorta a borda do logo e deixa transparente tudo que é claro (feito uma vez, no próprio celular). */
+(function () {
+  var img = document.querySelector(".login .logo");
+  function marca() {
+    try {
+      var W = img.naturalWidth, H = img.naturalHeight; if (!W || !H) return;
+      var cx = Math.round(W * .075), cy = Math.round(H * .075), w = W - 2 * cx, h = H - 2 * cy;
+      var c = document.createElement("canvas"); c.width = w; c.height = h; var g = c.getContext("2d");
+      g.drawImage(img, cx, cy, w, h, 0, 0, w, h);
+      var d = g.getImageData(0, 0, w, h), p = d.data;
+      for (var i = 0; i < p.length; i += 4) { var L = .3 * p[i] + .59 * p[i + 1] + .11 * p[i + 2], a = Math.max(0, Math.min(1, (175 - L) / 90));
+        p[i] = 20; p[i + 1] = 61; p[i + 2] = 110; p[i + 3] = Math.round(a * 255); }
+      g.putImageData(d, 0, 0);
+      document.documentElement.style.setProperty("--logoFundo", 'url("' + c.toDataURL("image/png") + '")');
+    } catch (e) {}
+  }
+  if (img.complete && img.naturalWidth) marca(); else img.addEventListener("load", marca);
+})();</script>
 <script>
 /* Aberto dentro do Google Sites: a barra do Chrome esconde a parte de baixo do app.
    Mede quanto do app fica fora da tela e sobe o rodapé e os painéis (--corte). */
@@ -5899,7 +5917,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.15";
+  var VERSAO_APP = "2026-11-11.16";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
