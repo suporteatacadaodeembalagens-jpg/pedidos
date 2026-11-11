@@ -2893,8 +2893,9 @@ window.PedidoPDF = (function () {
     var nPend = todos.filter(function (x) { return x.status === "pendente"; }).length;
     $("modosMgr").querySelector('[data-mg="pendente"]').textContent = "Aguardando aprovação" + (nPend ? " (" + nPend + ")" : "");
     if (mgr.filtro === "lojas") { desenharEscolhaLoja(); return; }
-    var fatAba = mgr.sub === "faturados";   // 03/11: Aprovados tem 2 abas: A faturar | Faturados (com o nº da NF)
-    var naAba = function (x) { return (mgr.filtro === "pendente") === (x.status === "pendente") && (mgr.filtro !== "aprovado" || !!x.fat === fatAba); };
+    // 11/11 (Marcelo): as abas A faturar | Faturados saíram: o FILTRO DE CORES faz esse papel (Todas = tudo; verde = faturados)
+    var fatAba = mgr.filtro === "aprovado" && mgr.cor === "fat";
+    var naAba = function (x) { return (mgr.filtro === "pendente") === (x.status === "pendente"); };
     var lista = todos.filter(function (x) { return naAba(x) && (!mgr.loja || x.loja === mgr.loja); });
     var dtNf = function (x) { var f = notaDe(x), m = f && /(\d{2})\/(\d{2})\/(\d{4})/.exec(f.data || ""); return m ? Number(m[3] + m[2] + m[1]) : 0; };   // 09/11: mais recente primeiro
     lista.sort(function (a, b) { return (fatAba ? dtNf(b) - dtNf(a) : 0) || ((b.ord || b.ts || 0) - (a.ord || a.ts || 0)); });
@@ -2902,8 +2903,7 @@ window.PedidoPDF = (function () {
     if (mgr.filtro === "aprovado") {
       var apr = todos.filter(function (x) { return x.status !== "pendente" && (!mgr.loja || x.loja === mgr.loja); });
       var nFat = apr.filter(function (x) { return !!x.fat; }).length;
-      html += '<div class="subabas"><button class="btn ' + (fatAba ? "btn-cinza" : "btn-verde") + '" data-subfat="afaturar">A faturar (' + (apr.length - nFat) + ")</button>" +
-        '<button class="btn ' + (fatAba ? "btn-verde" : "btn-cinza") + '" data-subfat="faturados">Faturados (' + nFat + ")</button></div>";
+      // (11/11) abas A faturar / Faturados removidas
     }
     // filtro com TODAS as lojas cadastradas (mesmo sem pedido) + as que aparecem nos pedidos
     var lojas = (mgr.lista.lojas || []).slice(), nPorLoja = {};
@@ -2918,7 +2918,7 @@ window.PedidoPDF = (function () {
       lojas.map(function (l) { var n = nPorLoja[l] || 0;
         return "<option" + (l === mgr.loja ? " selected" : "") + ' value="' + esc(l) + '">' + esc(l) + (n ? " (" + n + ")" : " · sem pedidos") + "</option>"; }).join("") + "</select>";
     if (mgr.filtro === "aprovado") {   // 10/11: filtro por cor (etapa) logo abaixo do filtro de lojas
-      html += legendaEtapas(lista, todos);
+      html += legendaEtapas(lista);
       if (mgr.cor) lista = lista.filter(function (x) { var e = etapaPed(x); return (e ? e.k : "sem") === mgr.cor; });
     }
     if (mgr.filtro === "aprovado") html += '<div class="aviso" style="margin-top:8px"><small>Os pedidos aprovados ficam aqui por ' + mgr.lista.dias + " dias e depois são apagados.</small></div>";
@@ -3634,12 +3634,76 @@ window.PedidoPDF = (function () {
   }
   // Relatório de erros (só o administrador): TUDO que deu erro — robô do ERP, login/senha, pedidos, compras, sessão, tela
   var ERR = { lista: [], filtro: "Todos", dias: 120 };
+  /* 11/11 (Marcelo): RELATÓRIO DE ERROS em tela própria (aba inteira), com cores por tipo, gabarito que filtra (como em
+     Aprovados), gravidade (crítico / atenção / informação), busca e erros agrupados por dia. */
+  var ERR_COR = {
+    "ERP": ["#c62828", "#fdecea", "ERP: item/pedido"], "Revisão ERP": ["#6a1b9a", "#f3e5f5", "Revisão app x ERP"],
+    "Robô": ["#b26a00", "#fff3e0", "Robô"], "Compra": ["#3949ab", "#e8eaf6", "Pedido de compra"], "Pedido": ["#0277bd", "#e1f5fe", "Pedido"],
+    "Pedido excluído": ["#8d6e63", "#efebe9", "Pedido excluído"], "Login/Senha": ["#1f5a97", "#e8f0fa", "Login / senha"],
+    "Sessão": ["#607d8b", "#eceff1", "Sessão vencida"], "Tela": ["#00796b", "#e0f2f1", "App travou (tela)"], "App": ["#455a64", "#eceff1", "App"]
+  };
+  var ERR_GRAV = { crit: ["#c62828", "#fdecea", "Crítico", "precisa resolver"], aten: ["#b26a00", "#fff3e0", "Atenção", "conferir"], info: ["#1f5a97", "#e8f0fa", "Informação", "só aviso"] };
+  function corErro(t) { return ERR_COR[t] || ["#455a64", "#eceff1", t]; }
+  function gravErro(e) {
+    var t = e.tipo || "ERP", m = String(e.motivo || "");
+    if (t === "ERP") return /acima do estoque|maior do que o estoque|não existe no ERP - digitado/i.test(m) ? "aten" : "crit";
+    if (t === "Revisão ERP") return "crit";
+    if (t === "Robô" || t === "Compra" || t === "Pedido" || t === "Tela" || t === "App") return "aten";
+    return "info";
+  }
+  function diaErro(e) { var m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(e.quando || "")); return m ? m[3] + m[2] + m[1] : "00000000"; }
   function abrirErrosErp() {
-    $("fichaTitulo").textContent = "Relatório de erros";
-    $("fichaCorpo").innerHTML = '<div class="carregando"><div class="giro"></div>Carregando…</div>';
-    $("telaFicha").classList.add("aberta");
+    var tl = document.getElementById("telaErros");
+    if (!tl) {
+      var st = document.createElement("style"); st.id = "errCss";
+      st.textContent = "#telaErros{position:fixed;inset:0;z-index:91;background:var(--fundo);overflow:auto;-webkit-overflow-scrolling:touch}" +
+        "#telaErros .er-topo{position:sticky;top:0;z-index:3;background:var(--marrom);color:#fff;border-bottom:3px solid var(--ouro);padding:10px 14px;display:flex;align-items:center;gap:10px}" +
+        "#telaErros .er-topo b{font-size:17px;display:block}#telaErros .er-topo span{font-size:12px;color:#f0dfc0}" +
+        "#telaErros .er-topo button{border:0;border-radius:9px;padding:9px 12px;background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:14px}" +
+        "#telaErros .er-corpo{max-width:920px;margin:0 auto;padding:12px}" +
+        "#telaErros .er-res{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 12px}" +
+        "#telaErros .er-res button{border:1px solid transparent;border-left:5px solid;border-radius:10px;padding:10px;text-align:left;cursor:pointer;font:inherit}" +
+        "#telaErros .er-res b{display:block;font-size:24px;line-height:1.1}#telaErros .er-res small{font-size:12px;opacity:.85}" +
+        "#telaErros .er-res button.on{box-shadow:0 0 0 3px rgba(0,0,0,.18)}" +
+        "#telaErros .er-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}" +
+        "#telaErros .er-chips button{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;font-size:13px;cursor:pointer;border:2px solid #e3d9c6;background:transparent;color:inherit;font-family:inherit}" +
+        "#telaErros .er-chips button.on{background:#fff;font-weight:700}#telaErros .er-chips i{width:12px;height:12px;border-radius:3px;display:inline-block}" +
+        "#telaErros .er-busca{width:100%;font-size:16px;padding:11px 12px;border-radius:10px;border:1px solid var(--linha);margin:0 0 12px}" +
+        "#telaErros .er-dia{margin:14px 0 6px;font-weight:800;color:var(--marrom);font-size:14px;display:flex;justify-content:space-between}" +
+        "#telaErros .er-card{background:#fff;border-radius:12px;border-left:6px solid;padding:10px 12px;margin:0 0 8px;box-shadow:0 1px 2px rgba(63,31,30,.08)}" +
+        "#telaErros .er-l1{display:flex;flex-wrap:wrap;gap:6px;align-items:center}" +
+        "#telaErros .er-tag{font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 7px}" +
+        "#telaErros .er-quem{font-weight:800;margin:6px 0 2px;font-size:15px}#telaErros .er-det{font-size:13px;color:var(--sub)}" +
+        "#telaErros .er-oq{margin:8px 0 0;font-size:14px;line-height:1.4}#telaErros .er-cr{margin:6px 0 0;font-size:14px;line-height:1.4;background:#eef6ee;border-radius:8px;padding:7px 9px}" +
+        "#telaErros details{margin:6px 0 0;font-size:12px;color:#8a7f72}#telaErros .er-acoes{display:flex;justify-content:flex-end;margin-top:8px}" +
+        "#telaErros .er-acoes button{border:1px solid var(--linha);background:#fff;border-radius:8px;padding:7px 12px;font-weight:700;color:#9b1c1c;cursor:pointer}" +
+        "@media (max-width:520px){#telaErros .er-res{grid-template-columns:1fr 1fr 1fr}#telaErros .er-res b{font-size:20px}}";
+      document.head.appendChild(st);
+      tl = document.createElement("div"); tl.id = "telaErros"; document.body.appendChild(tl);
+      tl.addEventListener("click", function (e) {
+        var x = e.target.closest("[data-er]"); if (!x) return;
+        var k = x.getAttribute("data-er"), v = x.getAttribute("data-v");
+        if (k === "voltar") { tl.hidden = true; return; }
+        if (k === "atualizar") { abrirErrosErp(); return; }
+        if (k === "tipo") { ERR.filtro = v; desenharErros(); return; }
+        if (k === "grav") { ERR.grav = ERR.grav === v ? "" : v; desenharErros(); return; }
+        if (k === "apagar") {
+          x.disabled = true;
+          chamar("apagarErro", [v], function () { ERR.lista = ERR.lista.filter(function (y) { return y.id !== v; }); desenharErros(); toast("Erro apagado"); },
+            function (er) { x.disabled = false; toast(String(er && er.message || er)); });
+          return;
+        }
+        if (k === "limpar") {
+          if (!confirm("Apagar TODOS os " + ERR.lista.length + " erros da lista? Não dá para desfazer.")) return;
+          chamar("apagarErro", [""], function () { ERR.lista = []; desenharErros(); toast("Lista de erros limpa"); });
+        }
+      });
+      tl.addEventListener("input", function (e) { if (e.target.id === "erBusca") { ERR.busca = e.target.value; clearTimeout(ERR.tb); ERR.tb = setTimeout(function () { desenharErros(true); }, 200); } });
+    }
+    tl.hidden = false; ERR.busca = ERR.busca || ""; ERR.grav = ERR.grav || "";
+    tl.innerHTML = '<div class="er-topo"><button data-er="voltar">&#8592;</button><div style="flex:1;min-width:0"><b>Relatório de erros</b><span>Carregando…</span></div><button data-er="atualizar">&#8635; Atualizar</button></div><div class="er-corpo"><div class="carregando"><div class="giro"></div>Carregando…</div></div>';
     chamar("errosErp", [], function (r) { ERR.lista = (r && r.erros) || []; ERR.dias = (r && r.dias) || 120; desenharErros(); },
-      function (e) { $("fichaCorpo").innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
+      function (e) { var c = tl.querySelector(".er-corpo"); if (c) c.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
   /** 03/11 (Marcelo): cada erro do relatório explicado em português simples: o que aconteceu e como resolver. */
   function explicarErro(e) {
@@ -3693,36 +3757,59 @@ window.PedidoPDF = (function () {
       /atual\.id = r\.id/.test(m) ? "Já corrigido em 03/11 (salvar duas vezes seguidas). Pode apagar." : "Se a pessoa reclamar ou o erro repetir, mande o print para ajuste. Atualizar o app (fechar e abrir) costuma resolver.");
     return R("Erro no app (" + (e.fn || t) + "): " + m, "Se repetir, mande o print para ajuste.");
   }
-  function desenharErros() {
-    var l = ERR.lista, tipos = ["Todos"];
-    l.forEach(function (e) { if (tipos.indexOf(e.tipo || "ERP") < 0) tipos.push(e.tipo || "ERP"); });
-    if (tipos.indexOf(ERR.filtro) < 0) ERR.filtro = "Todos";
-    var vis = l.filter(function (e) { return ERR.filtro === "Todos" || (e.tipo || "ERP") === ERR.filtro; });
-    var cor = { "Revisão ERP": "#7a2e8a", "Pedido excluído": "#b45309", "Robô": "#6b4f2a", "ERP": "#9b1c1c", "Login/Senha": "#8a5a00", "Pedido": "#1d4e89", "Compra": "#4b3b8f", "Sessão": "#666", "Tela": "#0b6b5a", "App": "#444" };
-    var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">' + tipos.map(function (t) {
-        var n = t === "Todos" ? l.length : l.filter(function (e) { return (e.tipo || "ERP") === t; }).length;
-        return '<button class="btn ' + (t === ERR.filtro ? "btn-verde" : "btn-cinza") + '" style="padding:6px 10px;font-size:13px" data-errfiltro="' + esc(t) + '">' + esc(t) + " (" + n + ")</button>";
-      }).join("") + "</div>";
-    if (!l.length) h += '<div class="aviso">Nenhum erro nos últimos ' + ERR.dias + " dias.</div>";
-    else h += '<button class="btn btn-cinza" style="width:100%;margin:0 0 12px;color:#9b1c1c" data-errlimpar="1">Limpar a lista inteira (' + l.length + ")</button>";
-    h += vis.map(function (e) {
-      var t = e.tipo || "ERP";
+  function desenharErros(soLista) {
+    var tl = document.getElementById("telaErros"); if (!tl) return;
+    var l = ERR.lista || [], tipos = [];
+    l.forEach(function (e) { var t = e.tipo || "ERP"; if (tipos.indexOf(t) < 0) tipos.push(t); });
+    if (ERR.filtro !== "Todos" && tipos.indexOf(ERR.filtro) < 0) ERR.filtro = "Todos";
+    var q = semAcento(String(ERR.busca || "").trim());
+    var base = l.filter(function (e) { return !q || semAcento([e.loja, e.email, e.nome, e.bloco, e.p, e.d, e.motivo, e.fn, e.tipo].join(" ")).indexOf(q) >= 0; });
+    var vis = base.filter(function (e) { return (ERR.filtro === "Todos" || (e.tipo || "ERP") === ERR.filtro) && (!ERR.grav || gravErro(e) === ERR.grav); });
+    var kk = function (e) { return diaErro(e) + ((/(\d{2}:\d{2})/.exec(String(e.quando || "")) || [])[1] || ""); };   // mais recente primeiro (dia + hora)
+    vis.sort(function (a, b) { var x = kk(a), y = kk(b); return y < x ? -1 : y > x ? 1 : (b.ts || 0) - (a.ts || 0); });
+    // lista agrupada por dia
+    var hoje = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; };
+    var kHoje = "" + hoje.getFullYear() + z(hoje.getMonth() + 1) + z(hoje.getDate()), on = new Date(hoje.getTime() - 86400000), kOnt = "" + on.getFullYear() + z(on.getMonth() + 1) + z(on.getDate());
+    var lh = "", diaAt = null, cont = {};
+    vis.forEach(function (e) { var d = diaErro(e); cont[d] = (cont[d] || 0) + 1; });
+    vis.forEach(function (e) {
+      var d = diaErro(e);
+      if (d !== diaAt) { diaAt = d; var dt = d.slice(6) + "/" + d.slice(4, 6) + "/" + d.slice(0, 4);
+        lh += '<div class="er-dia"><span>' + (d === kHoje ? "Hoje · " + dt : d === kOnt ? "Ontem · " + dt : dt) + "</span><small>" + cont[d] + (cont[d] === 1 ? " erro" : " erros") + "</small></div>"; }
+      var t = e.tipo || "ERP", c = corErro(t), g = ERR_GRAV[gravErro(e)], x = explicarErro(e);
       var quem = [e.loja, e.email].filter(Boolean).join(" · ");
       var det = t === "ERP"
-        ? (e.p ? "PLU " + esc(e.p) + (e.d ? " · " + esc(e.d) : "") + (e.q ? " · qtd " + esc(String(e.q)) : "") + "<br>" : "") + (e.nome ? "Pedido: " + esc(e.nome) + (e.bloco ? " · bloco " + esc(e.bloco) : "") + "<br>" : "")
-        : (e.fn ? "Onde: " + esc(e.fn) + "<br>" : "");
-      return '<div style="border:1px solid #e6dccd;border-radius:10px;padding:8px 10px;margin:0 0 8px;display:flex;gap:8px;align-items:flex-start">' +
-        '<div style="flex:1;min-width:0"><span style="display:inline-block;font-size:11px;font-weight:700;color:#fff;background:' + (cor[t] || "#444") + ';border-radius:5px;padding:1px 6px">' + esc(t) + "</span> " +
-        "<small>" + esc(e.quando || "") + "</small>" + (quem ? "<br><b>" + esc(quem) + "</b>" : "") + "<br><small>" + det + "</small>" + (function () {
-          var x = explicarErro(e);
-          return '<div style="margin:6px 0 0;font-size:14px;line-height:1.35"><b style="color:#9b1c1c">O que aconteceu:</b> ' + esc(x[0]) + "</div>" +
-            '<div style="margin:4px 0 0;font-size:14px;line-height:1.35;background:#eef6ee;border-radius:8px;padding:6px 8px"><b style="color:#1d6b2e">Como resolver:</b> ' + esc(x[1]) + "</div>" +
-            '<div style="margin:4px 0 0;font-size:11px;color:#8a7f72">Detalhe técnico: ' + esc(e.motivo || "") + "</div>";
-        })() + "</div>" +
-        '<button class="btn btn-cinza" style="padding:6px 9px;font-size:12px" data-errapagar="' + esc(e.id || "") + '">Apagar</button></div>';
-    }).join("");
-    $("fichaCorpo").innerHTML = h;
+        ? (e.p ? "PLU " + esc(e.p) + (e.d ? " · " + esc(e.d) : "") + (e.q ? " · qtd " + esc(String(e.q)) : "") + "<br>" : "") + (e.nome ? "Pedido: " + esc(e.nome) + (e.bloco ? " · " + esc(e.bloco) : "") : "")
+        : (e.fn ? "Onde: " + esc(e.fn) : "");
+      var hora = (/(\d{2}:\d{2})/.exec(String(e.quando || "")) || [])[1] || "";
+      lh += '<div class="er-card" style="border-left-color:' + c[0] + '">' +
+        '<div class="er-l1"><span class="er-tag" style="background:' + c[0] + ';color:#fff">' + esc(t) + "</span>" +
+        '<span class="er-tag" style="background:' + g[1] + ";color:" + g[0] + ";border:1px solid " + g[0] + '">' + g[2] + "</span>" +
+        '<small style="margin-left:auto;color:var(--sub)">' + esc(hora) + "</small></div>" +
+        (quem ? '<div class="er-quem">' + esc(quem) + "</div>" : "") + (det ? '<div class="er-det">' + det + "</div>" : "") +
+        '<div class="er-oq"><b style="color:' + g[0] + '">O que aconteceu:</b> ' + esc(x[0]) + "</div>" +
+        '<div class="er-cr"><b style="color:#1d6b2e">Como resolver:</b> ' + esc(x[1]) + "</div>" +
+        "<details><summary>Detalhe técnico</summary>" + esc(e.motivo || "") + "</details>" +
+        '<div class="er-acoes"><button data-er="apagar" data-v="' + esc(e.id || "") + '">Apagar</button></div></div>';
+    });
+    if (!vis.length) lh = '<div class="aviso">' + (l.length ? "Nenhum erro com esse filtro." : "Nenhum erro nos últimos " + ERR.dias + " dias. 🎉") + "</div>";
+    if (soLista) { var li = document.getElementById("erLista"); if (li) { li.innerHTML = lh; return; } }
+    // resumo por gravidade (toca para filtrar)
+    var nG = { crit: 0, aten: 0, info: 0 }; base.forEach(function (e) { nG[gravErro(e)]++; });
+    var res = '<div class="er-res">' + ["crit", "aten", "info"].map(function (k) { var g = ERR_GRAV[k];
+      return '<button data-er="grav" data-v="' + k + '" class="' + (ERR.grav === k ? "on" : "") + '" style="background:' + g[1] + ";color:" + g[0] + ";border-color:" + g[0] + '55;border-left-color:' + g[0] + '"><small>' + g[2] + "</small><b>" + nG[k] + "</b><small>" + g[3] + "</small></button>"; }).join("") + "</div>";
+    // gabarito de cores = filtro por tipo (como em Aprovados)
+    var chip = function (k, nome, cor, n) { var on = ERR.filtro === k;
+      return '<button data-er="tipo" data-v="' + esc(k) + '" class="' + (on ? "on" : "") + '" style="' + (on ? "border-color:" + (cor || "#5c2a2a") : "") + '">' + (cor ? '<i style="background:' + cor + '"></i>' : "") + esc(nome) + " (" + n + ")</button>"; };
+    var chips = '<div class="er-chips">' + chip("Todos", "Todos", "", base.length) + tipos.map(function (t) { var c = corErro(t);
+      return chip(t, c[2], c[0], base.filter(function (e) { return (e.tipo || "ERP") === t; }).length); }).join("") + "</div>";
+    var topo = tl.querySelector(".er-topo span"); if (topo) topo.textContent = "Últimos " + ERR.dias + " dias · " + l.length + (l.length === 1 ? " registro" : " registros");
+    var corpo = tl.querySelector(".er-corpo");
+    corpo.innerHTML = res + chips + '<input id="erBusca" class="er-busca" type="search" placeholder="Buscar loja, pedido, PLU, produto ou e-mail" value="' + esc(ERR.busca || "") + '">' +
+      '<div id="erLista">' + lh + "</div>" +
+      (l.length ? '<button class="btn btn-cinza" style="width:100%;margin:16px 0 30px;color:#9b1c1c" data-er="limpar">Limpar a lista inteira (' + l.length + ")</button>" : "");
   }
+
   // ---------------- CONTAGEM DE ESTOQUE ----------------
   // Consulta > "Pedir contagem de estoque" (todos os logins): loja -> a própria loja; Diretoria/Administração escolhem as lojas.
   // Página "Contagem de estoque" (Gerência, Administração e Diretoria) > aba "Análise de estoque por loja".
@@ -5396,10 +5483,7 @@ window.PedidoPDF = (function () {
     }
     if (ehManager()) {
       var sf = e.target.closest("[data-subfat]"); if (sf) { mgr.sub = sf.getAttribute("data-subfat"); desenharManager(); window.scrollTo(0, 0); return; }
-      var cf = e.target.closest("[data-corfiltro]"); if (cf) {   // 10/11: Faturado (verde) leva para a aba Faturados; as outras cores para A faturar
-        var kc = cf.getAttribute("data-corfiltro"), irFat = kc === "fat", aba = kc === "" ? mgr.sub : irFat ? "faturados" : "afaturar";
-        if (aba !== mgr.sub) { mgr.sub = aba; mgr.cor = irFat ? "" : kc; window.scrollTo(0, 0); } else mgr.cor = kc;
-        desenharManager(); return; }
+      var cf = e.target.closest("[data-corfiltro]"); if (cf) { mgr.cor = cf.getAttribute("data-corfiltro"); desenharManager(); return; }   // 11/11: só o filtro de cores
       var lb = e.target.closest("[data-liberar]"); if (lb) { liberarExp(lb); return; }
       var xp = e.target.closest("[data-excpend]"); if (xp) { excluirPendente({ id: xp.getAttribute("data-excpend"), nome: xp.getAttribute("data-exnome"), loja: xp.getAttribute("data-exloja") }); return; }
       var ab = e.target.closest("[data-abrir]"); if (ab) { abrirPedidoMgr(ab.getAttribute("data-abrir")); return; }
@@ -5678,7 +5762,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-10.25";
+  var VERSAO_APP = "2026-11-11.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
