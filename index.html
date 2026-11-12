@@ -6173,12 +6173,20 @@ window.PedidoPDF = (function () {
   });
   $("btnInicio").addEventListener("click", irInicio);
   /* 11/11 (Marcelo): RODAPÉ do Início — direitos reservados + botão "Entre em contato com o suporte".
-     Por enquanto o botão só avisa que vem em breve (no futuro: abre conversa com o número do suporte). */
+     12/11 (Marcelo): o botão abre o WhatsApp do suporte (11 94789-8809) com mensagem pronta: nome, loja e versão do app. */
   function rodapeApp() {
     return '<div class="rodape-app" role="contentinfo"><button type="button" class="btn btn-cinza btn-suporte" data-suporte="1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1"/></svg> Entre em contato com o suporte</button>' +
       '<p>© ' + new Date().getFullYear() + ' Atacadão De Embalagens Santos LTDA. Todos os direitos reservados.</p></div>';
   }
-  document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-suporte]")) toast("Em breve: contato direto com o suporte pelo WhatsApp."); });
+  var ZAP_SUPORTE = "5511947898809";
+  function abrirSuporte() {
+    var s = sessao || {}, quem = s.nome || s.email || "", loja = s.loja || s.nivelNome || s.perfil || "";
+    var msg = "Olá, " + (quem ? "sou " + quem + (loja ? " (" + loja + ")" : "") + " e " : "") + "preciso de ajuda com o app de pedidos (versão " + VERSAO_APP + ").";
+    var url = "https://wa.me/" + ZAP_SUPORTE + "?text=" + encodeURIComponent(msg);
+    var w = null; try { w = window.open(url, "_blank"); if (w) w.opener = null; } catch (er) {}   // "noopener" faria o open devolver null e abrir 2x
+    if (!w) location.href = url;
+  }
+  document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-suporte]")) abrirSuporte(); });
   $("btnFinalizarCompra").addEventListener("click", gerarCompra);
   $("btnSalvarCompra").addEventListener("click", salvarCompraServidor);
   $("lista").addEventListener("focusin", function (e) { if (e.target.id === "cmpForn") mostrarForn(); if (e.target.id === "consForn") mostrarFornCons(); });
@@ -6382,7 +6390,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-11.26";
+  var VERSAO_APP = "2026-11-12.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
