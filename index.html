@@ -46,6 +46,28 @@
     };
     return ler ? vez().catch(function () { return new Promise(function (s) { setTimeout(s, 800); }).then(vez); }) : vez();
   }
+  /* 13/11 (Marcelo: app mais fluido): as LISTAS que mais aparecem ficam guardadas NO CELULAR (por login). Ao abrir uma
+     tela, o app mostra NA HORA a última versão guardada e busca a nova em segundo plano; se mudou, a tela se atualiza
+     sozinha. Antes cada tela esperava ~1-5 s do servidor. Ler essas listas também não apaga mais as consultas guardadas. */
+  var GUARDA = { pedidosManager: 1, rascunhosManager: 1, historico: 1, listarRascunhos: 1, listarCompras: 1, errosErp: 1,
+    precosManager: 1, precosLoja: 1, custosMinhaLoja: 1, fornecedoresCompra: 1, lojasResumo: 1 };
+  var GUARDA_HORAS = 36, ultGravacao = 0;   // logo depois de gravar algo (aprovar, salvar...) busca direto do servidor
+  function chaveGuarda(fn, args) {
+    var em = String(sessao && sessao.email || "").toLowerCase();
+    return em ? "swr|" + em + "|" + fn + "|" + JSON.stringify(args.slice(1)) : "";   // args[0] = token (muda a cada login)
+  }
+  function lerGuarda(k) {
+    if (!k) return null;
+    try { var v = localStorage.getItem(k); if (!v) return null; var o = JSON.parse(v); return Date.now() - o.ts < GUARDA_HORAS * 3600000 ? o : null; } catch (e) { return null; }
+  }
+  function gravarGuarda(k, s) {
+    if (!k) return;
+    var v = JSON.stringify({ ts: Date.now(), s: s });
+    try { localStorage.setItem(k, v); }
+    catch (e) {   // celular sem espaço: apaga as listas guardadas mais velhas e tenta 1 vez
+      try { Object.keys(localStorage).filter(function (x) { return x.indexOf("swr|") === 0; }).forEach(function (x) { localStorage.removeItem(x); }); localStorage.setItem(k, v); } catch (e2) {}
+    }
+  }
   function runner(ok, falha) {
     return new Proxy({}, { get: function (_, fn) {
       if (fn === "withSuccessHandler") return function (f) { return runner(f, falha); };
@@ -53,18 +75,27 @@
       return function () {
         var args = Array.prototype.slice.call(arguments), doToque = Date.now() - ultToque < 1500;
         var ler = !!LEITURA[fn], chave = ler ? fn + "|" + JSON.stringify(args) : "";
-        if (!ler) memo = {};   // qualquer gravação limpa o que estava guardado (nada fica velho)
+        var kg = GUARDA[fn] ? chaveGuarda(fn, args) : "", g = kg && Date.now() - ultGravacao > 120000 ? lerGuarda(kg) : null;
+        if (!ler && !GUARDA[fn]) { memo = {}; ultGravacao = Date.now(); }   // qualquer gravação limpa o que estava guardado (nada fica velho)
         var m = ler && memo[chave];
         if (m && m.s !== undefined && Date.now() - m.ts < 60000) { var s0 = m.s; setTimeout(function () { if (ok) ok(JSON.parse(s0)); }, 0); return; }   // cópia nova (ninguém estraga o guardado)
         if (m && m.p) { m.p.push([ok, falha]); return; }   // a mesma consulta já está a caminho: espera a mesma resposta
         var esp = [[ok, falha]]; if (ler) memo[chave] = { p: esp };
         var entrega = function (i, v, s) { esp.forEach(function (f) { if (f[i]) f[i](s !== undefined ? JSON.parse(s) : v); }); };
-        inicio(doToque);
-        enviar(fn, args, ler).then(function (j) {
-          fim(doToque);
-          if (j && j.ok) { if (!ler) { entrega(0, j.r); return; } var s = JSON.stringify(j.r === undefined ? null : j.r); memo[chave] = { s: s, ts: Date.now() }; entrega(0, j.r, esp.length > 1 ? s : undefined); }
-          else { if (ler) delete memo[chave]; entrega(1, new Error((j && j.erro) || "Erro no servidor.")); }
-        }, function () { fim(doToque); if (ler) delete memo[chave]; entrega(1, new Error("Sem conexão com o servidor. Confira a internet e tente de novo.")); });
+        if (g) setTimeout(function () { try { if (ok) ok(JSON.parse(g.s)); } catch (e) {} }, 0);   // mostra já a última versão guardada
+        inicio(doToque && !g);
+        enviar(fn, args, ler || !!GUARDA[fn]).then(function (j) {
+          fim(doToque && !g);
+          if (j && j.ok) {
+            var s = JSON.stringify(j.r === undefined ? null : j.r);
+            if (kg) gravarGuarda(kg, s);
+            if (ler) memo[chave] = { s: s, ts: Date.now() };
+            if (g && g.s === s) return;   // nada mudou: a tela já está certa
+            if (!ler && !g) { entrega(0, j.r); return; }
+            entrega(0, j.r, esp.length > 1 || g ? s : undefined);
+          }
+          else { if (ler) delete memo[chave]; if (!g) entrega(1, new Error((j && j.erro) || "Erro no servidor.")); else if (/LOGIN:/.test(String(j && j.erro))) entrega(1, new Error(j.erro)); }
+        }, function () { fim(doToque && !g); if (ler) delete memo[chave]; if (!g) entrega(1, new Error("Sem conexão com o servidor. Confira a internet e tente de novo.")); });
       };
     } });
   }
@@ -3620,6 +3651,7 @@ window.PedidoPDF = (function () {
     if (expirou && sessao) LS.set("pedidoDono", sessao.email);
     sessao = null; LS.set("sessao", null); FOTOS = null; hist = null; filtroLoja = ""; rasc = null; comoLoja = null; LS.set("comoLoja", null);
     if (!expirou) {
+      try { Object.keys(localStorage).forEach(function (x) { if (x.indexOf("swr|") === 0) localStorage.removeItem(x); }); } catch (e) {}   // 13/11: saiu de verdade = apaga as listas guardadas
       atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", {}); LS.set("pedidoDono", null);
       compra = compraVazia(); try { localStorage.removeItem("compra"); } catch (e) {}   // custos/preços não ficam no celular
       cmp.forn = null; cmp.fornNome = ""; cmp.busca = null; cmp.termo = ""; cmp.recentes = null; cmp.fornDados = {};
@@ -6395,7 +6427,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-12.2";
+  var VERSAO_APP = "2026-11-13.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
