@@ -4091,7 +4091,7 @@ window.PedidoPDF = (function () {
              abertaId: "", lojaCont: "", val: null, vBusca: [], tb: 0, digitado: {} };
   function cnChamar(fn, args, ok, falha) {
     var f = falha || function (e) { toast(String(e && e.message || e)); };
-    if (CN.modo === "exp") expChamar(fn, (args || []).concat(fn === "contListas" || fn === "contListaContar" || /^validade/.test(fn) ? [EXP.ct || ""] : []), ok, f);
+    if (CN.modo === "exp") expChamar(fn, (args || []).concat(fn === "contListas" || fn === "contListaContar" || fn === "contListaFinalizar" || /^validade/.test(fn) ? [EXP.ct || ""] : []), ok, f);
     else chamar(fn, args || [], ok, f);
   }
   function cnNome(c) { return (CN.nomes && CN.nomes[c]) || (RES && RES.nomes && RES.nomes[c]) || c; }
@@ -4139,7 +4139,7 @@ window.PedidoPDF = (function () {
       tl.addEventListener("input", cnDigita);
       tl.addEventListener("focusin", function (e) { if (e.target.id === "cnForn") cnMostrarForn(); });
       tl.addEventListener("click", function (e) { var bx = document.getElementById("cnFornLista"); if (bx && !bx.hidden && !e.target.closest("#cnFornLista") && e.target.id !== "cnForn") bx.hidden = true; }, true);
-      tl.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target.getAttribute && e.target.getAttribute("data-cq") != null) { e.preventDefault(); cnSalvarContagem(); } });
+      tl.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target.getAttribute && e.target.getAttribute("data-cq") != null) { e.preventDefault(); cnSalvarContagem(false, e.target.getAttribute("data-cq")); } });   // 13/11: Enter salva o produto (fica verde) e vai para o próximo
     }
     tl.hidden = false; CN.listas = null; CN.ed = null; CN.rel = null; CN.val = null;
     tl.innerHTML = '<div class="cn-topo"><button data-cn="fechar">&#8592;</button><div style="flex:1;min-width:0"><b>Contagem de estoque</b><span id="cnSub">Carregando…</span></div><button data-cn="atualizar">&#8635;</button></div><div class="cn-corpo" id="cnCorpo"><div class="carregando"><div class="giro"></div>Carregando…</div></div>';
@@ -4176,7 +4176,7 @@ window.PedidoPDF = (function () {
     var l = CN.listas || [];
     return '<button class="cn-bt pri" data-cn="nova" style="width:100%;margin:0 0 12px">+ Nova lista de contagem</button>' +
       (l.length ? l.map(function (x) { var s = cnStatus(x);
-        var prog = (x.lojas || []).map(function (c) { return esc(cnNome(c)) + " " + ((x.prog || {})[c] || 0) + "/" + x.n; }).join(" · ");
+        var prog = (x.lojas || []).map(function (c) { return esc(cnNome(c)) + " " + ((x.prog || {})[c] || 0) + "/" + x.n + ((x.fim || {})[c] ? " ✔" : ""); }).join(" · ");
         return '<div class="cn-card" style="border-left-color:' + s[1] + '"><h4>' + esc(x.nome) + "</h4>" +
           '<span class="cn-chip" style="background:' + s[2] + ";color:" + s[1] + ";border:1px solid " + s[1] + '">' + s[0] + "</span>" +
           "<small>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · criada " + esc(x.em || "") + (x.liberadaEm ? " · liberada " + esc(x.liberadaEm) : "") + "</small><br><small>Contado: " + prog + "</small>" +
@@ -4242,34 +4242,50 @@ window.PedidoPDF = (function () {
     if (!a) return [ls.map(function (x) { var feitos = x.feito ? Object.keys(x.feito).length : null;
       return '<div class="cn-card" style="border-left-color:#e67700"><h4>' + esc(x.nome) + "</h4><small>" + (x.itens || []).length + " produtos" + (feitos != null ? " · " + feitos + " contados" : "") + (x.liberadaEm ? " · liberada " + esc(x.liberadaEm) : "") +
         '</small><div class="cn-acoes"><button class="pri" data-cn="abrir" data-v="' + esc(x.id) + '">Contar esta lista</button></div></div>'; }).join(""), ""];
-    var loja = CN.mgr ? (CN.lojaCont && a.lojas.indexOf(CN.lojaCont) >= 0 ? CN.lojaCont : "") : CN.loja;
-    var h = '<div class="cn-card" style="border-left-color:#e67700"><h4>' + esc(a.nome) + '</h4><small>Digite quanto tem de cada produto, em UNIDADES. O estoque do sistema não aparece (contagem às cegas).</small>' +
+    var loja = CN.mgr ? (CN.lojaCont && a.lojas.indexOf(CN.lojaCont) >= 0 && !(a.fim || {})[CN.lojaCont] ? CN.lojaCont : "") : CN.loja;
+    var h = '<div class="cn-card" style="border-left-color:#e67700"><h4>' + esc(a.nome) + '</h4><small>Digite quanto tem de cada produto, em UNIDADES, e aperte <b>Enter</b>: o produto fica verde e já está salvo. No fim toque em <b>Salvar e encerrar contagem</b> (as diferenças vão para o robô ajustar no ERP). O estoque do sistema não aparece (contagem às cegas).</small>' +
       '<div class="cn-acoes"><button data-cn="fecharlista">&#8592; Outras listas</button></div>';
-    if (CN.mgr) h += '<label>Contando para</label><select id="cnLojaCont"><option value="">Escolha a loja…</option>' + a.lojas.map(function (c) { return '<option value="' + c + '"' + (c === loja ? " selected" : "") + ">" + esc(c + " " + cnNome(c)) + "</option>"; }).join("") + "</select>";
+    if (CN.mgr) h += '<label>Contando para</label><select id="cnLojaCont"><option value="">Escolha a loja…</option>' + a.lojas.map(function (c) { var enc = (a.fim || {})[c]; return '<option value="' + c + '"' + (c === loja ? " selected" : "") + (enc ? " disabled" : "") + ">" + esc(c + " " + cnNome(c)) + (enc ? " (encerrada)" : "") + "</option>"; }).join("") + "</select>";
     h += '<label>Procurar na lista</label><input id="cnFiltro" type="search" placeholder="Nome ou PLU" value="' + esc(CN.filtroCont || "") + '"></div>';
     if (CN.mgr && !loja) return [h, ""];
-    var feito = a.feito || {}, f = semAcento(CN.filtroCont || "");
+    var feito = (CN.mgr ? (a.feitoLoja || {})[loja] : a.feito) || {}, f = semAcento(CN.filtroCont || "");
     h += '<div class="cn-card" style="padding:4px 10px">' + (a.itens || []).filter(function (i) { return !f || semAcento(i.d + " " + i.p).indexOf(f) >= 0; }).map(function (i) {
       var v = CN.digitado[a.id + "|" + i.p], ja = feito[i.p];
       return '<div class="cn-it' + (ja != null ? " ok" : "") + '"><div><b>' + esc(i.d || i.p) + "</b><small>PLU " + esc(i.p) + (i.q > 1 ? " · 1 " + esc(i.t || "CX") + " = " + i.q + " un" : "") + (ja != null ? " · <b style=\"display:inline;color:#1d7a35\">contado: " + ja + " un</b>" : "") + "</small></div>" +
         '<input data-cq="' + esc(i.p) + '" inputmode="decimal" placeholder="un" value="' + (v != null ? esc(v) : "") + '"></div>'; }).join("") + "</div>";
     var pend = Object.keys(CN.digitado).filter(function (k) { return k.indexOf(a.id + "|") === 0 && String(CN.digitado[k]).trim() !== ""; }).length;
-    return [h, '<span id="cnPend" style="font-size:13px;color:var(--sub)">' + pend + " para salvar</span><button class=\"cn-bt pri\" data-cn=\"salvarcont\" style=\"min-width:200px\">Salvar contagem</button>"];
+    var nf = Object.keys(feito).length;
+    return [h, '<span id="cnPend" style="font-size:13px;color:var(--sub)">' + nf + " de " + (a.itens || []).length + " contados" + (pend ? " · " + pend + " sem salvar" : "") + '</span><button class="cn-bt pri" data-cn="encerrarcont" style="min-width:220px">Salvar e encerrar contagem</button>'];
   }
-  function cnSalvarContagem() {
+  // 13/11 (Marcelo): Enter salva o que foi digitado (produto fica verde) e pula para o próximo.
+  // "Salvar e encerrar contagem" salva o resto e ENCERRA a loja: as diferenças vão direto para a fila do robô (sem aprovar).
+  function cnSalvarContagem(fim, pAtual) {
     var a = (CN.listas || []).filter(function (x) { return x.id === CN.abertaId; })[0]; if (!a) return;
     var loja = CN.mgr ? CN.lojaCont : CN.loja;
     if (CN.mgr && !loja) { toast("Escolha a loja da contagem"); return; }
     var itens = [];
     Object.keys(CN.digitado).forEach(function (k) { if (k.indexOf(a.id + "|") !== 0) return; var s = String(CN.digitado[k]).trim().replace(",", "."); if (s === "") return;
       var q = Number(s); if (!isFinite(q) || q < 0) return; itens.push({ p: k.slice(a.id.length + 1), q: q, loja: loja }); });
-    if (!itens.length) { toast("Digite a quantidade de pelo menos um produto"); return; }
-    var bt = document.querySelector('[data-cn="salvarcont"]'); if (bt) { bt.disabled = true; bt.textContent = "Salvando…"; }
+    var bt = document.querySelector('[data-cn="encerrarcont"]');
+    var travar = function (t) { if (bt) { bt.disabled = !!t; bt.textContent = t || "Salvar e encerrar contagem"; } };
+    var encerrar = function () {
+      travar("Encerrando…");
+      cnChamar("contListaFinalizar", [a.id, loja], function (r) {
+        toast("Contagem encerrada" + (r.ajustes ? ": " + r.ajustes + " ajuste(s) na fila do robô" : ": sem diferença para ajustar"));
+        CN.abertaId = ""; cnCarregar();
+      }, function (e) { toast(String(e && e.message || e)); travar(""); });
+    };
+    if (!itens.length) { if (fim) encerrar(); else toast("Digite a quantidade"); return; }
+    if (fim) travar("Salvando…");
     cnChamar("contListaContar", [a.id, itens], function (r) {
       itens.forEach(function (x) { delete CN.digitado[a.id + "|" + x.p]; });
-      if (!CN.mgr) a.feito = r.feito; else { a.prog = a.prog || {}; a.prog[loja] = Object.keys(r.feito || {}).length; a.feito = r.feito; }
-      toast("Contagem salva (" + r.n + ")"); cnDesenhar();
-    }, function (e) { toast(String(e && e.message || e)); if (bt) { bt.disabled = false; bt.textContent = "Salvar contagem"; } });
+      if (!CN.mgr) a.feito = r.feito; else { a.feitoLoja = a.feitoLoja || {}; a.feitoLoja[loja] = r.feito; a.prog = a.prog || {}; a.prog[loja] = Object.keys(r.feito || {}).length; }
+      if (fim) { encerrar(); return; }
+      var ins = [].slice.call(document.querySelectorAll("#telaCont [data-cq]")).map(function (x) { return x.getAttribute("data-cq"); });
+      var prox = pAtual ? ins[ins.indexOf(pAtual) + 1] : "";
+      cnDesenhar();
+      var el = prox && document.querySelector('#telaCont [data-cq="' + prox + '"]'); if (el) { el.focus(); el.scrollIntoView({ block: "center" }); }
+    }, function (e) { toast(String(e && e.message || e)); travar(""); });
   }
   // ---------- RELATÓRIO ----------
   function cnHtmlRel() {
@@ -4282,7 +4298,10 @@ window.PedidoPDF = (function () {
     var linhas = r.linhas.filter(function (x) { return !CN.soDif || (x.cont != null && Math.abs(x.dif) > 0.0001); });
     var tot = {}; r.linhas.forEach(function (x) { if (x.cont == null) return; var t = tot[x.loja] = tot[x.loja] || { n: 0, v: 0, dif: 0 }; t.n++; t.v += x.vdif || 0; if (Math.abs(x.dif) > 0.0001) t.dif++; });
     h += '<div class="cn-acoes"><button data-cn="soDif" class="' + (CN.soDif ? "azul" : "") + '">' + (CN.soDif ? "✔ " : "") + 'Só com diferença</button><button data-cn="excel">Baixar Excel</button><button data-cn="pdf">Gerar PDF</button>' +
-      (!r.ajuste && r.linhas.some(function (x) { return x.cont != null && Math.abs(x.dif) > 0.0001; }) ? '<button class="pri" data-cn="aprovar">Aprovar ajuste no ERP</button>' : "") + "</div>" +
+      "</div>" +
+      ((r.lojas || []).length ? "<p style=\"margin:6px 0\">" + r.lojas.map(function (c) { var aj = (r.ajustes || []).filter(function (z) { return z.loja === c; })[0], fm = (r.fim || {})[c];
+        var t = aj ? (aj.st === "feito" ? ["Ajustado no ERP", "#2e9d4f", "#e3f4e8"] : aj.st === "erro" ? ["Ajuste com erro", "#c62828", "#fdecea"] : ["Ajuste na fila do robô (" + aj.n + ")", "#1d5fa8", "#e8f1fb"]) : fm ? ["Encerrada sem diferença", "#2e9d4f", "#e3f4e8"] : ["Contando", "#e67700", "#fff1df"];
+        return '<span class="cn-chip" style="background:' + t[2] + ";color:" + t[1] + '">' + esc(cnNome(c)) + ": " + t[0] + "</span>"; }).join("") + "</p>" : "") +
       (r.ajuste ? '<p><span class="cn-chip" style="background:' + cnStatus(r)[2] + ";color:" + cnStatus(r)[1] + '">' + cnStatus(r)[0] + "</span><small>aprovado por " + esc(r.ajuste.por || "") + " em " + esc(r.ajuste.em || "") + "</small></p>" : "") +
       "<small>" + Object.keys(tot).map(function (c) { var t = tot[c]; return "<b>" + esc(cnNome(c)) + ":</b> " + t.n + " contados, " + t.dif + " com diferença, " + reais(t.v); }).join(" · ") + "</small></div>";
     h += '<div class="cn-tabwrap"><table><tr><th>Loja</th><th>Produto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th class="n">R$ dif.</th><th>Quem / quando</th></tr>' +
@@ -4372,6 +4391,12 @@ window.PedidoPDF = (function () {
     if (k === "abrir") { CN.abertaId = v; CN.filtroCont = ""; cnDesenhar(); return; }
     if (k === "fecharlista") { CN.abertaId = ""; cnDesenhar(); return; }
     if (k === "salvarcont") { cnSalvarContagem(); return; }
+    if (k === "encerrarcont") { var aa = (CN.listas || []).filter(function (x) { return x.id === CN.abertaId; })[0], lj = CN.mgr ? CN.lojaCont : CN.loja;
+      if (!aa) return; if (CN.mgr && !lj) { toast("Escolha a loja da contagem"); return; }
+      var nf = Object.keys((CN.mgr ? (aa.feitoLoja || {})[lj] : aa.feito) || {}).length + Object.keys(CN.digitado).filter(function (x) { return x.indexOf(aa.id + "|") === 0 && String(CN.digitado[x]).trim() !== ""; }).length;
+      var falta = (aa.itens || []).length - nf;
+      if (!confirm("Encerrar a contagem de " + cnNome(lj) + "?" + (falta > 0 ? "\n" + falta + " produto(s) sem contar ficam sem ajuste." : "") + "\nAs diferenças vão direto para o robô ajustar no ERP e não dá para contar de novo nesta lista.")) return;
+      cnSalvarContagem(true); return; }
     if (k === "soDif") { CN.soDif = !CN.soDif; cnDesenhar(); return; }
     if (k === "excel") { cnExcel(); return; }
     if (k === "pdf") { cnPdf(); return; }
@@ -6440,7 +6465,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-13.3";
+  var VERSAO_APP = "2026-11-13.4";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
