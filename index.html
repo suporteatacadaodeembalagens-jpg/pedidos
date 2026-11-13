@@ -3851,7 +3851,7 @@ window.PedidoPDF = (function () {
       t.push(tile("consulta", "Consulta de produtos", "Estoque, fornecedor e EAN", ICO.lupa));
       if (nivelNum() >= 2) t.push(tile("analise", "Análise de vendas", "Vendas mês a mês da sua loja", ICO.grafico));
       else t.push(tile("bloq", "Análise de vendas", "Gerência, Administração e Diretoria", ICO.grafico, "bloq"));
-      t.push(tile("contagem", "Contagem de estoque", "Sugestão de contagem e contar os produtos da loja", ICO.lista));
+      t.push(tile("contagem", "Contagem de estoque", "Contar as listas liberadas pela Administração", ICO.lista));
       // funções de Diretoria/Administração: aparecem com cadeado (não somem)
       t.push(tile("bloq", "Aguardando aprovação", "Diretoria e Administração", ICO.relogio, "bloq"));
       t.push(tile("bloq", "Pedido de compra", "Diretoria e Administração", ICO.caminhao, "bloq"));
@@ -4048,31 +4048,41 @@ window.PedidoPDF = (function () {
   function itemQualquer(plu) {
     return porPlu[plu] || (cons.extra && cons.extra.lista || []).filter(function (x) { return x.p === plu; })[0] || { p: plu };
   }
+  // 13/11 (Marcelo): só Administração e Diretoria pedem contagem, e sempre numa LISTA em montagem.
+  // A loja só conta depois que a lista for FECHADA e liberada (tela Contagem de estoque > Listas).
+  var pedCont = { plu: "", montando: [] };
   function contagemClique(plu) {
-    if (ehMgrLogin() && !comoLoja) {   // Diretoria/Administração: escolhe uma ou várias lojas
-      var cods = (RES && RES.lojas && RES.lojas.length > 1 ? RES.lojas : ["002", "003", "004", "005", "006", "007", "008", "009", "010"])
-        .filter(function (c) { return c !== "001"; });
-      var it = itemQualquer(plu);
-      modal("Pedir contagem de estoque", (it.d ? '<p style="margin:0 0 6px"><b>' + esc(it.d) + "</b><br><small>PLU " + esc(plu) + "</small></p>" : "") +
-        '<p style="margin:0 0 8px">Em quais lojas contar?</p>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 10px">' + cods.map(function (c) {
-          return '<label style="display:flex;gap:6px;align-items:center;background:#f1f5fa;border-radius:8px;padding:8px"><input type="checkbox" data-contck="1" value="' + esc(c) + '">' +
-            esc(c) + " " + esc(RES && RES.nomes && RES.nomes[c] || "") + "</label>";
-        }).join("") + "</div>" +
-        '<div style="display:flex;gap:8px"><button class="btn btn-cinza" style="flex:1" data-conttodas="1">Marcar todas</button>' +
-        '<button class="btn btn-verde" style="flex:1" data-contok="' + esc(plu) + '">Pedir contagem</button></div>');
-      return;
-    }
-    pedirContagem(plu, []);
+    if (!ehMgrLogin() || comoLoja) { toast("Só Administração e Diretoria pedem contagem"); return; }
+    pedCont.plu = plu; var it = itemQualquer(plu);
+    modal("Pedir contagem de estoque", '<div class="carregando"><div class="giro"></div>Buscando as listas em montagem…</div>');
+    chamar("contListas", [], function (r) {
+      if (pedCont.plu !== plu) return;
+      pedCont.montando = ((r && r.listas) || []).filter(function (l) { return l.status === "rascunho"; });
+      var nomes = (r && r.nomes) || (RES && RES.nomes) || {}, cods = Object.keys(nomes).sort();
+      var h = (it.d ? '<p style="margin:0 0 6px"><b>' + esc(it.d) + "</b><br><small>PLU " + esc(plu) + "</small></p>" : "") +
+        '<p style="margin:0 0 8px">Colocar em qual lista de contagem? <small>(a loja só vê quando a lista for fechada e liberada)</small></p>' +
+        pedCont.montando.map(function (l, k) { var tem = (l.itens || []).some(function (i) { return Number(i.p) === Number(plu); });
+          return '<label style="display:flex;gap:8px;align-items:center;background:#f1f5fa;border-radius:8px;padding:9px;margin:0 0 6px"><input type="radio" name="pcLista" value="' + esc(l.id) + '"' + (k === 0 ? " checked" : "") + ">" +
+            "<span><b>" + esc(l.nome) + "</b><br><small>" + (l.n || 0) + " produto(s) · " + esc((l.lojas || []).map(function (c) { return nomes[c] || c; }).join(", ")) + (tem ? " · já tem este produto" : "") + "</small></span></label>"; }).join("") +
+        '<label style="display:flex;gap:8px;align-items:center;background:#f1f5fa;border-radius:8px;padding:9px;margin:0 0 6px"><input type="radio" name="pcLista" value=""' + (pedCont.montando.length ? "" : " checked") + "><b>Nova lista</b></label>" +
+        '<div id="pcNova"' + (pedCont.montando.length ? " hidden" : "") + '><input id="pcNome" maxlength="60" placeholder="Nome da lista (opcional)" style="width:100%;box-sizing:border-box;font-size:16px;padding:10px;border:1px solid #d3dde9;border-radius:8px;margin:0 0 8px">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 8px">' + cods.map(function (c) {
+          return '<label style="display:flex;gap:6px;align-items:center;background:#f1f5fa;border-radius:8px;padding:8px"><input type="checkbox" data-contck="1" value="' + esc(c) + '">' + esc(c) + " " + esc(nomes[c] || "") + "</label>"; }).join("") + "</div>" +
+        '<button class="btn btn-cinza" style="width:100%;margin:0 0 8px" data-conttodas="1">Marcar todas</button></div>' +
+        '<button class="btn btn-verde" style="width:100%" data-contok="' + esc(plu) + '">Colocar na lista</button>';
+      modal("Pedir contagem de estoque", h);
+    }, function (e) { fecharModal(); toast(String(e && e.message || e)); });
   }
   function pedirContagem(plu, cods) {
-    var it = itemQualquer(plu);
-    chamar("contagemPedir", [plu, it.d || "", cods], function (r) {
-      fecharModal(); contagem.itens = null;
-      toast(r.novos ? "Contagem pedida: " + r.lojas.join(", ") + (r.ja ? " (" + r.ja + " já estava na lista)" : "")
-                    : "Já estava na lista de contagem de " + r.lojas.join(", "));
+    var it = itemQualquer(plu), sel = $("fichaCorpo").querySelector("[name=pcLista]:checked"), id = sel ? sel.value : "";
+    if (!id && !cods.length) { toast("Marque pelo menos uma loja"); return; }
+    var nm = $("pcNome") ? $("pcNome").value : "";
+    chamar("contListaAdd", [{ id: id, nome: nm, lojas: cods, p: plu, d: it.d || "", t: it.t || "", q: it.q || 0 }], function (r) {
+      fecharModal(); CN.listas = null;
+      toast(r.ja ? "Já estava na lista " + r.nome : "Na lista " + r.nome + " (" + r.n + " produtos). Para a loja contar: Contagem > Fechar e liberar");
     });
   }
+
   /* 11/11 (Marcelo): CONTAGEM POR LISTAS + VALIDADE — tela própria.
      Administração/Diretoria montam a LISTA e liberam para lojas e/ou CD; quem conta não vê o estoque (às cegas);
      RELATÓRIO contado x sistema (em R$), Excel/PDF e "Aprovar ajuste" (fila do robô para o ERP). VALIDADE: lotes e vencimento.
@@ -4150,7 +4160,7 @@ window.PedidoPDF = (function () {
   }
   function cnStatus(l) {
     if (l.ajuste) return l.ajuste.st === "feito" ? ["Ajustado no ERP", "#2e9d4f", "#e3f4e8"] : l.ajuste.st === "erro" ? ["Ajuste com erro", "#c62828", "#fdecea"] : ["Ajuste na fila do robô", "#1d5fa8", "#e8f1fb"];
-    return l.status === "liberada" ? ["Liberada p/ contagem", "#e67700", "#fff1df"] : l.status === "fechada" ? ["Fechada", "#2e9d4f", "#e3f4e8"] : ["Rascunho", "#5d6b7c", "#eef1f5"];
+    return l.status === "liberada" ? ["Liberada p/ contagem", "#e67700", "#fff1df"] : l.status === "fechada" ? ["Encerrada", "#2e9d4f", "#e3f4e8"] : ["Montando (loja ainda não vê)", "#5d6b7c", "#eef1f5"];
   }
   function cnDesenhar() {
     var c = document.getElementById("cnCorpo"); if (!c) return;
@@ -4171,9 +4181,9 @@ window.PedidoPDF = (function () {
           '<span class="cn-chip" style="background:' + s[2] + ";color:" + s[1] + ";border:1px solid " + s[1] + '">' + s[0] + "</span>" +
           "<small>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · criada " + esc(x.em || "") + (x.liberadaEm ? " · liberada " + esc(x.liberadaEm) : "") + "</small><br><small>Contado: " + prog + "</small>" +
           '<div class="cn-acoes">' +
-          (x.status !== "fechada" ? '<button data-cn="editar" data-v="' + esc(x.id) + '">Editar</button>' : "") +
-          (x.status === "rascunho" ? '<button class="pri" data-cn="st" data-a="liberar" data-v="' + esc(x.id) + '">Liberar p/ contagem</button>' : "") +
-          (x.status === "liberada" ? '<button data-cn="st" data-a="voltar" data-v="' + esc(x.id) + '">Voltar p/ rascunho</button><button data-cn="st" data-a="fechar" data-v="' + esc(x.id) + '">Fechar lista</button>' : "") +
+          (x.status === "rascunho" ? '<button data-cn="editar" data-v="' + esc(x.id) + '">Editar</button>' : "") +
+          (x.status === "rascunho" ? '<button class="pri" data-cn="st" data-a="liberar" data-v="' + esc(x.id) + '">Fechar lista e liberar p/ contagem</button>' : "") +
+          (x.status === "liberada" ? (Object.keys(x.prog || {}).some(function (c) { return x.prog[c]; }) ? "" : '<button data-cn="st" data-a="voltar" data-v="' + esc(x.id) + '">Voltar a montar</button>') + '<button data-cn="st" data-a="fechar" data-v="' + esc(x.id) + '">Encerrar contagem</button>' : "") +
           '<button class="azul" data-cn="verrel" data-v="' + esc(x.id) + '">Relatório</button>' +
           (x.status === "rascunho" ? '<button class="perigo" data-cn="st" data-a="excluir" data-v="' + esc(x.id) + '">Excluir</button>' : "") + "</div></div>"; }).join("")
         : '<div class="cn-vazio">Nenhuma lista ainda. Toque em "Nova lista de contagem".</div>');
@@ -4192,7 +4202,7 @@ window.PedidoPDF = (function () {
       '<label>Produtos da lista (' + e.itens.length + ")</label>" +
       (e.itens.length ? e.itens.map(function (i, k) { return '<div class="cn-it"><div><b>' + esc(i.d || i.p) + "</b><small>PLU " + esc(i.p) + (i.q > 1 ? " · " + esc(i.t || "CX") + " c/ " + i.q : "") + '</small></div><button class="cn-x" data-cn="ed-tira" data-v="' + k + '" title="Tirar">&times;</button></div>'; }).join("")
         : '<div class="cn-vazio">Nenhum produto ainda.</div>') +
-      '<div class="cn-acoes" style="margin-top:14px"><button data-cn="ed-cancelar">Cancelar</button><button class="azul" data-cn="ed-salvar">Salvar</button><button class="pri" data-cn="ed-salvar" data-a="liberar">Salvar e liberar</button></div></div>';
+      '<div class="cn-acoes" style="margin-top:14px"><button data-cn="ed-cancelar">Cancelar</button><button class="azul" data-cn="ed-salvar">Salvar</button><button class="pri" data-cn="ed-salvar" data-a="liberar">Salvar, fechar e liberar</button></div></div>';
   }
   function cnHtmlFornProd() {
     var fp = CN.fornProd; if (!CN.fornNome) return "";
@@ -4349,14 +4359,14 @@ window.PedidoPDF = (function () {
     if (k === "forn-todos") { cnLerNome(); (Array.isArray(CN.fornProd) ? CN.fornProd : []).forEach(function (x) { if (!CN.ed.itens.some(function (i) { return i.p === x.p; })) CN.ed.itens.push({ p: x.p, d: x.d, t: x.t || "", q: Number(x.q) || 0 }); }); cnDesenhar(); toast("Produtos do fornecedor na lista"); return; }
     if (k === "ed-tira") { cnLerNome(); CN.ed.itens.splice(Number(v), 1); cnDesenhar(); return; }
     if (k === "ed-cancelar") { CN.ed = null; cnDesenhar(); return; }
-    if (k === "ed-salvar") { cnLerNome(); var lib = b.getAttribute("data-a") === "liberar"; b.disabled = true;
+    if (k === "ed-salvar") { cnLerNome(); var lib = b.getAttribute("data-a") === "liberar"; if (lib && !confirm("Fechar a lista e liberar para a loja contar? Depois não dá para mudar os produtos.")) return; b.disabled = true;
       cnChamar("contListaSalvar", [CN.ed], function (r) {
-        var fim = function () { CN.ed = null; toast(lib ? "Lista salva e liberada" : "Lista salva"); cnCarregar(); };
+        var fim = function () { CN.ed = null; toast(lib ? "Lista fechada e liberada para contagem" : "Lista salva (em montagem)"); cnCarregar(); };
         if (lib) cnChamar("contListaStatus", [r.id, "liberar"], fim, function (x) { toast(String(x && x.message || x)); fim(); }); else fim();
       }, function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
     if (k === "st") { var a = b.getAttribute("data-a");
-      if ((a === "fechar" && !confirm("Fechar a lista? Ninguém mais conta nela.")) || (a === "excluir" && !confirm("Excluir esta lista?"))) return;
-      b.disabled = true; cnChamar("contListaStatus", [v, a], function () { toast(a === "liberar" ? "Liberada para contagem" : a === "fechar" ? "Lista fechada" : a === "excluir" ? "Lista excluída" : "Voltou para rascunho"); cnCarregar(); },
+      if ((a === "liberar" && !confirm("Fechar a lista e liberar para a loja contar? Depois não dá para mudar os produtos.")) || (a === "fechar" && !confirm("Encerrar a contagem? Ninguém mais conta nesta lista.")) || (a === "excluir" && !confirm("Excluir esta lista?"))) return;
+      b.disabled = true; cnChamar("contListaStatus", [v, a], function () { toast(a === "liberar" ? "Lista fechada e liberada para contagem" : a === "fechar" ? "Contagem encerrada" : a === "excluir" ? "Lista excluída" : "Voltou para montagem"); cnCarregar(); },
         function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
     if (k === "verrel") { CN.aba = "rel"; cnCarregarRel(v); return; }
     if (k === "abrir") { CN.abertaId = v; CN.filtroCont = ""; cnDesenhar(); return; }
@@ -5342,7 +5352,7 @@ window.PedidoPDF = (function () {
       var c = compra.itens[it.p];
       acao = '<button class="btn btn-verde" data-cpr="' + esc(it.p) + '">' + (c ? "Na compra: " + c.qtd + " " + esc((c.t || "un").toLowerCase()) + " (+1)" : "Lançar no pedido de compra") + "</button>";
     } else acao = '<button class="btn btn-verde bloq" disabled title="Só quem faz pedido de compra">\uD83D\uDD12 Pedido de compra</button>';
-    if (sessao) acao = '<div class="linha-acao"><button class="btn btn-cont" data-cont="' + esc(it.p) + '">Pedir contagem de estoque</button>' + acao + "</div>";   // à ESQUERDA do outro botão, na mesma linha (todos os logins)
+    if (sessao && ehMgrLogin() && !comoLoja) acao = '<div class="linha-acao"><button class="btn btn-cont" data-cont="' + esc(it.p) + '">Pedir contagem de estoque</button>' + acao + "</div>";   // à ESQUERDA do outro botão, na mesma linha (todos os logins)
     if (sessao) acao += '<div class="linha-acao"><button class="btn btn-cinza btn-fav" data-fav="' + esc(it.p) + '">&#9733; Adicionar ao pedido loja</button>' +   // favoritos do próximo pedido da loja
       // 04/11 (Marcelo): ao lado, a Análise de vendas DESTE produto (Gerência, Administração e Diretoria; Operacional vê com cadeado)
       // 06/11 (Marcelo): só Gerência para cima (Operacional não vê o botão); abre a análise EMBAIXO, aqui na Consulta
@@ -6246,7 +6256,8 @@ window.PedidoPDF = (function () {
   $("fichaCorpo").addEventListener("click", function (e) {
     var b = e.target.closest("[data-favloja]"); if (b) { addFavorito(b.getAttribute("data-favplu"), b.getAttribute("data-favloja")); return; }
     if (e.target.closest("[data-conttodas]")) { var cks = $("fichaCorpo").querySelectorAll("[data-contck]"), liga = false; for (var k = 0; k < cks.length; k++) if (!cks[k].checked) liga = true; for (k = 0; k < cks.length; k++) cks[k].checked = liga; return; }
-    var cok = e.target.closest("[data-contok]"); if (cok) { var sel = [].slice.call($("fichaCorpo").querySelectorAll("[data-contck]:checked")).map(function (x) { return x.value; }); if (!sel.length) { toast("Marque pelo menos uma loja"); return; } pedirContagem(cok.getAttribute("data-contok"), sel); return; }
+    var pcl = e.target.closest("[name=pcLista]"); if (pcl && $("pcNova")) { $("pcNova").hidden = !!pcl.value; }
+    var cok = e.target.closest("[data-contok]"); if (cok) { var sel = [].slice.call($("fichaCorpo").querySelectorAll("[data-contck]:checked")).map(function (x) { return x.value; }); pedirContagem(cok.getAttribute("data-contok"), sel); return; }
     var tf = e.target.closest("[data-tirarfoto]"); if (tf) { tirarFoto(tf.getAttribute("data-tirarfoto"), tf.getAttribute("data-galeria") === "1"); return; }
     var cfl = e.target.closest("[data-contfiltro]"); if (cfl) { contagem.filtro = cfl.getAttribute("data-contfiltro"); desenharContagemAba(); return; }
     var ctab = e.target.closest("[data-conttab]"); if (ctab) { contagem.aba = ctab.getAttribute("data-conttab"); contagem.filtro = ""; desenharContagemAba(); return; }
@@ -6429,7 +6440,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-13.2";
+  var VERSAO_APP = "2026-11-13.3";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
