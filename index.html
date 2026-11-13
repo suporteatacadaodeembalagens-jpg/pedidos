@@ -53,7 +53,8 @@
     precosManager: 1, precosLoja: 1, custosMinhaLoja: 1, fornecedoresCompra: 1, lojasResumo: 1 };
   var GUARDA_HORAS = 36, ultGravacao = 0;   // logo depois de gravar algo (aprovar, salvar...) busca direto do servidor
   function chaveGuarda(fn, args) {
-    var em = String(sessao && sessao.email || "").toLowerCase();
+    var em = "";   // 13/11: o runner fica num <script> separado (sem a variável sessao): lê o login guardado
+    try { var ss = JSON.parse(localStorage.getItem("sessao") || "null"); em = String(ss && ss.email || "").toLowerCase(); } catch (e) {}
     return em ? "swr|" + em + "|" + fn + "|" + JSON.stringify(args.slice(1)) : "";   // args[0] = token (muda a cada login)
   }
   function lerGuarda(k) {
@@ -75,7 +76,8 @@
       return function () {
         var args = Array.prototype.slice.call(arguments), doToque = Date.now() - ultToque < 1500;
         var ler = !!LEITURA[fn], chave = ler ? fn + "|" + JSON.stringify(args) : "";
-        var kg = GUARDA[fn] ? chaveGuarda(fn, args) : "", g = kg && Date.now() - ultGravacao > 120000 ? lerGuarda(kg) : null;
+        var kg = "", g = null;
+        try { kg = GUARDA[fn] ? chaveGuarda(fn, args) : ""; g = kg && Date.now() - ultGravacao > 120000 ? lerGuarda(kg) : null; } catch (e) { kg = ""; g = null; }   // nunca trava a chamada
         if (!ler && !GUARDA[fn]) { memo = {}; ultGravacao = Date.now(); }   // qualquer gravação limpa o que estava guardado (nada fica velho)
         var m = ler && memo[chave];
         if (m && m.s !== undefined && Date.now() - m.ts < 60000) { var s0 = m.s; setTimeout(function () { if (ok) ok(JSON.parse(s0)); }, 0); return; }   // cópia nova (ninguém estraga o guardado)
@@ -6427,7 +6429,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-13.1";
+  var VERSAO_APP = "2026-11-13.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
