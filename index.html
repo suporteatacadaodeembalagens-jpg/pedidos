@@ -4158,7 +4158,18 @@ window.PedidoPDF = (function () {
     var a = CN.mgr ? [["listas", "Listas"], ["contar", "Contar"], ["rel", "Relatório"], ["val", "Validade"]] : [["contar", "Contar"], ["val", "Validade"]];
     return '<div class="cn-abas">' + a.map(function (x) { return '<button data-cn="aba" data-v="' + x[0] + '" class="' + (CN.aba === x[0] ? "on" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>";
   }
+  // 13/11 (Marcelo): situação da lista com cor (também é o filtro do Relatório). [texto, cor, fundo, chave]
   function cnStatus(l) {
+    var aj = l.ajustes || [];
+    if (aj.some(function (a) { return a.st === "erro"; })) return ["Ajuste com erro", "#c62828", "#fdecea", "erro"];
+    if (aj.some(function (a) { return a.st === "fila"; })) return ["Em ajuste (robô)", "#1d5fa8", "#e8f1fb", "ajuste"];
+    if (l.status === "liberada") return ["Contando", "#e67700", "#fff1df", "contando"];
+    if (l.status === "fechada" && aj.length) return ["Ajustado pelo robô", "#2e9d4f", "#e3f4e8", "ajustado"];
+    if (l.status === "fechada" && !l.ajuste) return ["Encerrada sem diferença", "#0f7b72", "#e0f4f1", "semdif"];
+    if (l.status === "rascunho") return ["Montando (loja ainda não vê)", "#5d6b7c", "#eef1f5", "montando"];
+    return cnStatusAntigo(l);
+  }
+  function cnStatusAntigo(l) {
     if (l.ajuste) return l.ajuste.st === "feito" ? ["Ajustado no ERP", "#2e9d4f", "#e3f4e8"] : l.ajuste.st === "erro" ? ["Ajuste com erro", "#c62828", "#fdecea"] : ["Ajuste na fila do robô", "#1d5fa8", "#e8f1fb"];
     return l.status === "liberada" ? ["Liberada p/ contagem", "#e67700", "#fff1df"] : l.status === "fechada" ? ["Encerrada", "#2e9d4f", "#e3f4e8"] : ["Montando (loja ainda não vê)", "#5d6b7c", "#eef1f5"];
   }
@@ -4290,9 +4301,25 @@ window.PedidoPDF = (function () {
   // ---------- RELATÓRIO ----------
   function cnHtmlRel() {
     var ls = CN.listas || [];
-    var h = '<div class="cn-card" style="border-left-color:var(--azul)"><label style="margin-top:0">Lista</label><select id="cnRelSel"><option value="">Escolha a lista…</option>' +
-      ls.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === CN.relId ? " selected" : "") + ">" + esc(x.nome) + " (" + cnStatus(x)[0] + ")</option>"; }).join("") + "</select>";
-    if (!CN.relId) return h + "</div>";
+    // 13/11 (Marcelo): todas as listas na tela, com filtro por cor (situação); toca e abre o relatório
+    if (!CN.relId) {
+      var FIL = [["", "Todas", "#1a4c86"], ["ajustado", "Ajustado pelo robô", "#2e9d4f"], ["ajuste", "Em ajuste (robô)", "#1d5fa8"], ["contando", "Contando", "#e67700"], ["erro", "Com erro", "#c62828"], ["semdif", "Sem diferença", "#0f7b72"], ["montando", "Montando", "#5d6b7c"]];
+      var cont = {}; ls.forEach(function (x) { var k = cnStatus(x)[3] || ""; cont[k] = (cont[k] || 0) + 1; });
+      var fl = CN.relFiltro || "", vis = ls.filter(function (x) { return !fl || cnStatus(x)[3] === fl; });
+      return '<div class="cn-lojas" style="margin:0 0 10px">' + FIL.filter(function (f) { return !f[0] || cont[f[0]]; }).map(function (f) {
+          var on = fl === f[0], n = f[0] ? cont[f[0]] : ls.length;
+          return '<button data-cn="relfil" data-v="' + f[0] + '" style="border-color:' + f[2] + ";" + (on ? "background:" + f[2] + ";color:#fff;font-weight:700" : "color:" + f[2]) + '">' + f[1] + " (" + n + ")</button>"; }).join("") + "</div>" +
+        (vis.length ? vis.map(function (x) { var st = cnStatus(x);
+          var lj = (x.lojas || []).map(function (c) { var a = (x.ajustes || []).filter(function (z) { return z.loja === c; })[0];
+            return esc(cnNome(c)) + " " + ((x.prog || {})[c] || 0) + "/" + x.n + (a ? (a.st === "feito" ? " ✔ ajustado" : a.st === "erro" ? " ✖ erro" : " ⏳ no robô") : (x.fim || {})[c] ? " ✔" : ""); }).join(" · ");
+          return '<div class="cn-card" data-cn="verrel" data-v="' + esc(x.id) + '" style="border-left-color:' + st[1] + ';cursor:pointer"><h4>' + esc(x.nome) + "</h4>" +
+            '<span class="cn-chip" style="background:' + st[2] + ";color:" + st[1] + ";border:1px solid " + st[1] + '">' + st[0] + "</span>" +
+            "<small>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · criada " + esc(x.em || "") + (x.fechadaEm ? " · encerrada " + esc(x.fechadaEm) : "") + "</small><br><small>" + lj + "</small></div>"; }).join("")
+          : '<div class="cn-vazio">Nenhuma lista nesta situação.</div>');
+    }
+    var st0 = cnStatus(ls.filter(function (x) { return x.id === CN.relId; })[0] || {});
+    var h = '<div class="cn-card" style="border-left-color:' + st0[1] + '"><div class="cn-acoes" style="margin:0 0 6px"><button data-cn="relvoltar">&#8592; Todas as listas</button></div>' +
+      "<h4>" + esc((ls.filter(function (x) { return x.id === CN.relId; })[0] || {}).nome || "") + '</h4><span class="cn-chip" style="background:' + st0[2] + ";color:" + st0[1] + '">' + st0[0] + "</span>";
     var r = CN.rel;
     if (!r || r.id !== CN.relId) return h + '</div><div class="carregando"><div class="giro"></div>Montando o relatório…</div>';
     var linhas = r.linhas.filter(function (x) { return !CN.soDif || (x.cont != null && Math.abs(x.dif) > 0.0001); });
@@ -4388,6 +4415,8 @@ window.PedidoPDF = (function () {
       b.disabled = true; cnChamar("contListaStatus", [v, a], function () { toast(a === "liberar" ? "Lista fechada e liberada para contagem" : a === "fechar" ? "Contagem encerrada" : a === "excluir" ? "Lista excluída" : "Voltou para montagem"); cnCarregar(); },
         function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
     if (k === "verrel") { CN.aba = "rel"; cnCarregarRel(v); return; }
+    if (k === "relfil") { CN.relFiltro = v || ""; cnDesenhar(); return; }
+    if (k === "relvoltar") { CN.relId = ""; CN.rel = null; cnDesenhar(); return; }
     if (k === "abrir") { CN.abertaId = v; CN.filtroCont = ""; cnDesenhar(); return; }
     if (k === "fecharlista") { CN.abertaId = ""; cnDesenhar(); return; }
     if (k === "salvarcont") { cnSalvarContagem(); return; }
@@ -6465,7 +6494,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-13.4";
+  var VERSAO_APP = "2026-11-13.5";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
