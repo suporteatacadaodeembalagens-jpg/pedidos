@@ -1941,7 +1941,7 @@ window.PedidoPDF = (function () {
   // 09/11: módulo Expedição = 4 opções (Conferência, Recebimento, Contagem de estoque, Validade). Abre para o login
   // Expedição e, no início, para o Marcelo (mestre), que fecha e volta ao app.
   var MODS_EXP = [["conferencia", "Conferência"], ["contagem", "Contagem e validade"]];   // 11/11: contagem por listas + validade (CD)   // 10/11 (Marcelo): Recebimento, Contagem de estoque e Validade saem por enquanto
-  function expUsuario() { return sessaoExp || (sessao && ehMestre() ? sessao : null); }
+  function expUsuario() { return sessaoExp || (sessao && ehMgrLogin() ? sessao : null); }   // 19/11: Administração+ também
   function expChamar(fn, args, ok, falha) {
     if (!expUsuario()) return;
     var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
@@ -3840,7 +3840,7 @@ window.PedidoPDF = (function () {
       t.push(tile("analise", "Análise de vendas", "Vendas mês a mês de cada produto, por loja", ICO.grafico));
       t.push(tile("contagem", "Contagem e validade", "Listas para contar, relatório e validade", ICO.lista));
       if (ehMestre()) t.push(tile("erros", "Relatório de erros", "Tudo que deu erro: ERP, login, pedidos, app", ICO.lista));
-      if (ehMestre()) t.push(tile("expedicao", "Expedição", "Conferência, recebimento, contagem de estoque e validade", ICO.caminhao));   // 09/11: só o Marcelo (e o login Expedição)
+      t.push(tile("expedicao", "Expedição", "Conferência, contagem e validade do CD", ICO.caminhao));   // 19/11 (Marcelo): Administração e Diretoria (antes só o Marcelo)
     } else {
       var n = atual && dados ? contarPedidoDep(ATUAL) : 0;
       t.push(tile("lj:lista", "Novo pedido", atual ? "Continuar: " + atual.nome : "Começar ou continuar um pedido", ICO.carrinho, "destaque"));
@@ -6494,7 +6494,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-13.5";
+  var VERSAO_APP = "2026-11-19.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
