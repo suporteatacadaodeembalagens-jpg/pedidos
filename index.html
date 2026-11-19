@@ -2931,7 +2931,7 @@ window.PedidoPDF = (function () {
       ETAPAS_COR.map(function (e) { return bt(e.k, e.nome, e.cor); }).join("") + (n.sem ? bt("sem", "Sem cor (aguardando ERP)", "#c9c2b6") : "") + "</div>";
   }
   function botaoLiberar(x) {
-    if (x.status === "pendente" || x.conf || (nivelNum() < 4 && !ehMestre())) return "";   // só a Diretoria e o Marcelo liberam
+    if (x.status === "pendente" || x.conf || !ehMgrLogin()) return "";   // 19/11 (Marcelo): Administração e Diretoria liberam
     if (notaDe(x)) return "";   // 11/11 (Marcelo): pedido JÁ FATURADO não precisa de liberação para a expedição
     if (x.libEnviando) return '<button class="ver" disabled style="background:#fff1df;color:#b35c00;font-size:12px;opacity:.85">&#10004; ' + (x.lib ? "Liberado" : "Desfazendo") + '<br><small>salvando…</small></button>';
     return x.lib ? '<button class="ver" style="background:#fff1df;color:#b35c00;font-size:12px" data-liberar="' + esc(x.id) + '" data-lib="0">&#10004; Liberado<br><small>desfazer</small></button>'
@@ -2958,7 +2958,8 @@ window.PedidoPDF = (function () {
     return x.status === "pendente" ? '<span class="chip pend">Aguardando aprovação</span>'
       : (x.direto || (x.erp && x.erp.direto) ? '<span class="chip dir">Direto do ERP</span>'
         : '<span class="chip ok">Aprovado' + (x.aprovadoEm ? " em " + esc(x.aprovadoEm) : "") + "</span>") +
-        (x.editado ? '<span class="chip ed">com alterações</span>' : "") + chipErp(x.erp) + chipFat(x);
+        (x.editado ? '<span class="chip ed">com alterações</span>' : "") + chipErp(x.erp) + chipFat(x) +
+        (x.lib && x.lib.por ? '<span class="chip" style="background:#fff1df;color:#b35c00;border:1px solid #f0b46b">Liberado p/ expedição por ' + esc(x.lib.por) + (x.lib.em ? " em " + esc(x.lib.em) : "") + "</span>" : "");   // 19/11: registro de quem liberou
   }
   /** 03/11: pedido já FATURADO no ERP (a revisão do robô achou a Nota Fiscal de transferência). */
   function notaDe(x) { return x && x.fat && x.fat.nf ? x.fat : (x && x.erp && x.erp.nf ? { nf: x.erp.nf, data: x.erp.nfData } : null); }
@@ -6494,7 +6495,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-19.1";
+  var VERSAO_APP = "2026-11-19.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
