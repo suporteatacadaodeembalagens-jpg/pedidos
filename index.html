@@ -679,7 +679,7 @@
   #cmpCob.cob-alta{border-color:#c62828!important;background:#fdecea;box-shadow:0 0 0 3px rgba(198,40,40,.15)}
   .cob-msg{color:#b71c1c;font-size:13px;font-weight:700;margin-top:6px}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
-.item[data-quem]::after{content:"\270E  " attr(data-quem);display:block;font-size:11.5px;font-weight:700;color:#1d5fa8;margin-top:3px}#sincBar{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:60;background:#0f2f57;color:#fff;border-radius:999px;padding:7px 8px 7px 14px;font-size:13px;display:flex;gap:8px;align-items:center;box-shadow:0 6px 18px rgba(15,40,75,.3);max-width:calc(100% - 24px)}#sincBar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#sincBar button{border:0;border-radius:999px;padding:6px 10px;background:#f5c400;color:#0f2f57;font-weight:800;font-size:12.5px;cursor:pointer;white-space:nowrap}</style>
+.item[data-quem]::after{content:"\270E  " attr(data-quem);display:block;font-size:11.5px;font-weight:700;color:#1d5fa8;margin-top:3px}#sincBar{position:static;display:flex;gap:8px;align-items:center;justify-content:space-between;margin:0 auto 6px;width:calc(100% - 24px);max-width:960px;box-sizing:border-box;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:4px 4px 4px 12px;font-size:12.5px}#sincBar[hidden]{display:none}#sincBar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#sincBar button{border:0;border-radius:999px;padding:4px 10px;background:#f5c400;color:#0f2f57;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap;flex:0 0 auto}</style>
 </head>
 <body>
 <header>
@@ -2966,7 +2966,7 @@ window.PedidoPDF = (function () {
     var b = document.getElementById("sincBar");
     var ver = sincAtivo() && atual.id && !vendoSalvos();
     if (!ver) { if (b) b.hidden = true; return; }
-    if (!b) { b = document.createElement("div"); b.id = "sincBar"; document.body.appendChild(b);
+    if (!b) { b = document.createElement("div"); b.id = "sincBar"; var tp = document.querySelector("header .topo"); if (tp) tp.insertAdjacentElement("afterend", b); else document.body.appendChild(b);   // 23/11: no topo, sem tapar o pedido
       b.addEventListener("click", function (e) { if (e.target.closest("[data-ajudante]")) chamarAjudante(); }); }
     var outros = (SINC.gente || []).filter(function (g) { return !g.eu; }).map(function (g) { return g.quem; });
     var seg = SINC.ult ? Math.round((Date.now() - SINC.ult) / 1000) : null;
@@ -6629,7 +6629,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-23.1";
+  var VERSAO_APP = "2026-11-23.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
