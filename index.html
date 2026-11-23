@@ -679,7 +679,7 @@
   #cmpCob.cob-alta{border-color:#c62828!important;background:#fdecea;box-shadow:0 0 0 3px rgba(198,40,40,.15)}
   .cob-msg{color:#b71c1c;font-size:13px;font-weight:700;margin-top:6px}
   body.tela-cheia .tela{z-index:95}body.tela-cheia .leitor{z-index:97}body.tela-cheia .toast{z-index:98}body.tela-cheia .login{z-index:99}
-</style>
+.item[data-quem]::after{content:"\270E  " attr(data-quem);display:block;font-size:11.5px;font-weight:700;color:#1d5fa8;margin-top:3px}#sincBar{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:60;background:#0f2f57;color:#fff;border-radius:999px;padding:7px 8px 7px 14px;font-size:13px;display:flex;gap:8px;align-items:center;box-shadow:0 6px 18px rgba(15,40,75,.3);max-width:calc(100% - 24px)}#sincBar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#sincBar button{border:0;border-radius:999px;padding:6px 10px;background:#f5c400;color:#0f2f57;font-weight:800;font-size:12.5px;cursor:pointer;white-space:nowrap}</style>
 </head>
 <body>
 <header>
@@ -1308,7 +1308,7 @@ window.PedidoPDF = (function () {
     if (u) u.textContent = nm + (nm && cg ? " - " : "") + cg;   // 03/11: "Marcelo - Administrativo"
     return (EM_APPS_SCRIPT ? "" : "DEMONSTRAÇÃO · ") + (dados ? txtLista() : (semDados || "Carregando os dados…"));
   }
-  function salvarPedido() { LS.set("pedido", pedido); atualizarRodape(); }
+  function salvarPedido() { LS.set("pedido", pedido); atualizarRodape(); try { sincLogo(); } catch (e) {} }   // 23/11: pedido em conjunto
   function lojaAtual() { return comoLoja || cfg.loja; }
   // manager pela loja: o servidor recebe "token~Loja" e age como a loja (guardando quem é o manager)
   function tk() { return sessao.token + (comoLoja ? "~" + encodeURIComponent(comoLoja) : ""); }
@@ -1892,6 +1892,7 @@ window.PedidoPDF = (function () {
   function atualizarItem(plu) {
     var el = $("lista").querySelector('.item[data-plu="' + plu + '"]');
     if (!el) return;
+    try { var qm = SINC.quem[plu]; if (qm && (pedido[plu] || 0) > 0) el.setAttribute("data-quem", qm); else el.removeAttribute("data-quem"); } catch (e) {}
     var q = pedido[plu] || 0;
     el.classList.toggle("com-pedido", q > 0);
     el.querySelector(".qtd b").textContent = q;
@@ -2709,6 +2710,7 @@ window.PedidoPDF = (function () {
       $("lista").innerHTML = html + '<div class="vazio" style="padding:14px">Para continuar um pedido salvo, toque em <b>Pedidos salvos</b> lá em cima.</div>';
       return;
     }
+    html += '<div style="display:flex;justify-content:flex-end;margin:0 0 8px"><button class="btn btn-cinza" style="width:auto;padding:8px 14px" data-codigo-ped="1">Entrar com código do pedido</button></div>';   // 23/11
     html += '<div class="aviso">Pedidos que a loja salvou e ainda não enviou. <b>Continuar</b> abre o pedido para terminar e enviar.<br><small>Cada pedido salvo fica aqui por 30 dias (contados do último salvamento) e depois é apagado.</small></div>';   // 03/11: mesmo layout do painel
     if (!rasc) {
       var guardado = LS.get("rascCache", null);   // mostra na hora o que já tinha; atualiza em seguida
@@ -2866,7 +2868,7 @@ window.PedidoPDF = (function () {
     var meu = atual;                            // (erro 'atual.id = r.id' no relatório: o pedido fechou antes da resposta)
     salvarAtual.indo = true;
     var b = $("btnSalvarPed"); b.disabled = true; b.textContent = "Salvando…";
-    chamar("salvarRascunho", [{ id: meu.id, base: meu.ts || 0, nome: meu.nome, dataLista: dados.data, semana: dados.semana || "", itens: pedido }], function (r) {
+    chamar("salvarRascunho", [{ id: meu.id, base: meu.ts || 0, nome: meu.nome, dataLista: dados.data, semana: dados.semana || "", itens: pedido, quem: meuApelido() }], function (r) {
       salvarAtual.indo = false;
       b.disabled = false; b.textContent = "Salvar";
       meu.id = r.id; meu.ts = r.ts; if (atual === meu) LS.set("pedidoAtual", atual); rasc = null;
@@ -2890,6 +2892,138 @@ window.PedidoPDF = (function () {
     if (Object.keys(pedido).length || (atual && atual.id)) salvarAtual(function () { toast("Pedido salvo"); fecharPedido(); });
     else fecharPedido();
   }
+
+  // ---------------- 23/11 (Marcelo): PEDIDO FEITO POR VÁRIAS PESSOAS AO MESMO TEMPO (mesmo login) ----------------
+  // Com um pedido aberto, a cada ~5 s o aparelho manda só os produtos que ELE mudou e recebe o que os OUTROS mudaram.
+  // Mesmo produto: vale a última alteração que chegou ao servidor. O que a pessoa está digitando não é apagado.
+  var SINC = { id: "", seq: 0, base: {}, quem: {}, gente: [], indo: false, ult: 0, criando: false, tLogo: 0, link: "" };
+  try { var mL = location.search.match(/[?&]pedido=([A-Za-z0-9-]{6,12})/); if (mL) { SINC.link = mL[1]; history.replaceState(null, "", location.pathname + location.hash); } } catch (e) {}
+  function aparelhoId() { var a = LS.get("aparelho", ""); if (!a) { a = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); LS.set("aparelho", a); } return a; }
+  function meuApelido() { return LS.get("apelido", "") || ""; }
+  function pedirApelido() {
+    if (meuApelido()) return;
+    var n = window.prompt("Seu nome neste aparelho (aparece para quem estiver no mesmo pedido). Ex.: Carlos", "");
+    n = String(n || "").replace(/[<>\"]/g, "").trim().slice(0, 20);
+    LS.set("apelido", n || ("Aparelho " + aparelhoId().slice(-3).toUpperCase()));
+  }
+  function sincAtivo() { return !!(atual && dados && sessao && tela === "app" && (!ehManager() || comoLoja)); }
+  function sincLogo() { if (!sincAtivo()) return; clearTimeout(SINC.tLogo); SINC.tLogo = setTimeout(sincTick, 1500); }
+  function sincTick() {
+    if (SINC.link && dados && sessao && !SINC.indo) { abrirPedidoPorCodigo(SINC.link); SINC.link = ""; return; }
+    if (!sincAtivo() || SINC.indo || document.hidden) { desenharSincBar(); return; }
+    if (!atual.id) {   // pedido novo: salva na 1ª alteração para ganhar número (e os ajudantes poderem entrar)
+      if (!Object.keys(pedido).length || SINC.criando) return;
+      SINC.criando = true; var meu = atual;
+      chamar("salvarRascunho", [{ id: "", base: 0, nome: meu.nome, dataLista: dados.data, semana: dados.semana || "", itens: pedido, quem: meuApelido() }], function (r) {
+        SINC.criando = false; meu.id = r.id; meu.ts = r.ts; if (atual === meu) LS.set("pedidoAtual", atual); rasc = null;
+        SINC.id = r.id; SINC.seq = r.ts || 0; SINC.base = {}; Object.keys(r.itens || {}).forEach(function (k) { SINC.base[k] = Number(r.itens[k]); });
+      }, function () { SINC.criando = false; });
+      return;
+    }
+    pedirApelido();
+    if (SINC.id !== atual.id) { SINC.id = atual.id; SINC.seq = 0; SINC.quem = {}; SINC.gente = []; SINC.base = {}; Object.keys(pedido).forEach(function (k) { SINC.base[k] = pedido[k]; }); }
+    var ops = [], vistos = {};
+    Object.keys(pedido).concat(Object.keys(SINC.base)).forEach(function (k) {
+      if (vistos[k]) return; vistos[k] = 1;
+      var a = Number(pedido[k]) || 0, b = Number(SINC.base[k]) || 0;
+      if (a !== b) ops.push({ p: k, q: a });
+    });
+    var id = atual.id, meu = atual; SINC.indo = true;
+    chamar("sincRascunho", [id, ops, SINC.seq, aparelhoId(), meuApelido()], function (r) {
+      SINC.indo = false;
+      if (atual !== meu || SINC.id !== id) return;
+      if (r && r.fim) { sincFim(r.fim); return; }
+      ops.forEach(function (o) { SINC.base[o.p] = o.q; });
+      var mud = (r && r.mud) || {}, mudou = [], eu = meuApelido();
+      Object.keys(mud).forEach(function (k) {
+        var q = Number(mud[k][0]) || 0, quem = mud[k][1] || "";
+        if (quem && quem !== eu) SINC.quem[k] = quem; else if (quem === eu) delete SINC.quem[k];
+        if ((Number(pedido[k]) || 0) !== (Number(SINC.base[k]) || 0)) return;   // a pessoa mexeu neste produto agora: manda na próxima
+        SINC.base[k] = q;
+        if ((Number(pedido[k]) || 0) === q) return;
+        if (!porPlu[k]) return;   // produto fora da lista deste aparelho
+        if (q > 0) pedido[k] = q; else delete pedido[k];
+        mudou.push(k);
+      });
+      SINC.seq = r.seq || SINC.seq; SINC.gente = r.gente || []; SINC.ult = Date.now(); if (r.ts) { meu.ts = r.ts; LS.set("pedidoAtual", atual); }
+      if (mudou.length) {
+        LS.set("pedido", pedido); atualizarRodape();
+        var editando = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains("edita");
+        if (abaAtual === ATUAL && !editando && !$("busca").value.trim()) desenharLista(); else mudou.forEach(atualizarItem);
+        desenharAbasLeve();
+      }
+      marcarQuemMudou(); desenharSincBar();
+    }, function () { SINC.indo = false; desenharSincBar(true); });
+  }
+  function marcarQuemMudou() {
+    Array.prototype.forEach.call($("lista").querySelectorAll(".item[data-plu]"), function (el) {
+      var q = SINC.quem[el.getAttribute("data-plu")];
+      if (q && (pedido[el.getAttribute("data-plu")] || 0) > 0) { if (el.getAttribute("data-quem") !== q) el.setAttribute("data-quem", q); }
+      else if (el.hasAttribute("data-quem")) el.removeAttribute("data-quem");
+    });
+  }
+  function desenharSincBar(erro) {
+    var b = document.getElementById("sincBar");
+    var ver = sincAtivo() && atual.id && !vendoSalvos();
+    if (!ver) { if (b) b.hidden = true; return; }
+    if (!b) { b = document.createElement("div"); b.id = "sincBar"; document.body.appendChild(b);
+      b.addEventListener("click", function (e) { if (e.target.closest("[data-ajudante]")) chamarAjudante(); }); }
+    var outros = (SINC.gente || []).filter(function (g) { return !g.eu; }).map(function (g) { return g.quem; });
+    var seg = SINC.ult ? Math.round((Date.now() - SINC.ult) / 1000) : null;
+    b.hidden = false;
+    b.innerHTML = "<span>" + (outros.length ? "\uD83D\uDC65 Junto com: <b>" + esc(outros.join(", ")) + "</b>" : "\uD83D\uDC64 Só você neste pedido") +
+      (erro ? " · sem conexão" : seg != null ? " · ✓ " + (seg < 8 ? "atualizado" : "há " + seg + " s") : "") + "</span>" +
+      '<button data-ajudante="1">Chamar ajudante</button>';
+  }
+  function sincFim(fim) {
+    var msg = fim.oque === "enviado" ? "Este pedido foi ENVIADO" + (fim.por ? " por " + fim.por : "") + (fim.quando ? " às " + fim.quando : "") + "."
+      : fim.oque === "excluido" ? "Este pedido foi EXCLUÍDO" + (fim.por ? " por " + fim.por : "") + (fim.quando ? " às " + fim.quando : "") + "."
+      : "Este pedido não está mais salvo (foi enviado ou excluído em outro aparelho).";
+    SINC.id = ""; SINC.base = {}; SINC.quem = {};
+    atual = null; LS.set("pedidoAtual", null); pedido = {}; LS.set("pedido", pedido); rasc = null; hist = null;
+    desenharAbas(); desenharLista(); desenharSincBar(); atualizarRodape();
+    modal("Pedido fechado", "<p style=\"font-size:16px\">" + esc(msg) + "</p><p>O que você digitou já estava junto no pedido.</p>" +
+      '<button class="btn btn-verde" style="width:100%" onclick="document.getElementById(\'telaFicha\').classList.remove(\'aberta\')">OK</button>');
+  }
+  function linkDoPedido(id) { return location.origin + location.pathname + "?pedido=" + encodeURIComponent(id); }
+  function chamarAjudante() {
+    if (!atual || !atual.id) { toast("Coloque um produto no pedido primeiro"); return; }
+    var id = atual.id, link = linkDoPedido(id);
+    modal("Chamar ajudante", '<p style="margin:0 0 8px">Peça para a pessoa entrar no app com o <b>mesmo login</b> (' + esc(sessao.email || "") + ') e:</p>' +
+      '<p style="margin:0 0 6px"><b>1.</b> Ler este QR com a câmera do celular</p><div id="qrPed" style="display:flex;justify-content:center;margin:6px 0 10px"><div class="carregando"><div class="giro"></div></div></div>' +
+      '<p style="margin:0 0 6px"><b>2.</b> Ou em <b>Pedidos salvos</b> > <b>Entrar com código</b>, digitar:</p>' +
+      '<div style="font-size:28px;font-weight:800;letter-spacing:3px;text-align:center;background:#f1f5fa;border-radius:10px;padding:8px;margin:0 0 10px">' + esc(id) + "</div>" +
+      '<a class="btn btn-verde" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent("Entra no pedido " + (atual.nome || "") + " comigo: " + link) + '">Mandar o link pelo WhatsApp</a>');
+    desenharQR(link);
+  }
+  function desenharQR(texto) {
+    function pinta() { var bx = document.getElementById("qrPed"); if (!bx) return;
+      try { var q = window.qrcode(0, "M"); q.addData(texto); q.make(); bx.innerHTML = q.createSvgTag({ cellSize: 6, margin: 2 }); }
+      catch (e) { bx.innerHTML = '<small>Não consegui desenhar o QR. Use o código abaixo.</small>'; } }
+    if (window.qrcode) { pinta(); return; }
+    var sc = document.createElement("script"); sc.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+    sc.onload = pinta; sc.onerror = function () { var bx = document.getElementById("qrPed"); if (bx) bx.innerHTML = '<small>Sem QR agora (sem internet?). Use o código abaixo.</small>'; };
+    document.head.appendChild(sc);
+  }
+  function abrirPedidoPorCodigo(cod) {
+    cod = String(cod || "").trim();
+    if (!cod) return;
+    if (ehManager() && !comoLoja) { toast("Para entrar no pedido da loja, use o login da loja (ou 'Fazer pedido por uma loja')."); return; }
+    if (atual && atual.id === cod) { toast("Você já está neste pedido"); return; }
+    chamar("listarRascunhos", [], function (l) {
+      rasc = l || []; LS.set("rascCache", rasc);
+      var r = rasc.filter(function (x) { return x.id === cod; })[0];
+      if (!r) { toast("Pedido " + cod + " não encontrado neste login (já enviado, excluído ou de outra loja)"); return; }
+      tela = "app"; continuarPedido(cod); setTimeout(function () { toast("Você entrou no pedido " + r.nome); }, 400);
+    });
+  }
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("[data-codigo-ped]")) {
+      var c = window.prompt("Código do pedido (aparece em 'Chamar ajudante' no aparelho de quem abriu o pedido):", "");
+      if (c) abrirPedidoPorCodigo(c.replace(/\s/g, ""));
+    }
+  });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) sincLogo(); });
 
   // ---------------- PAINEL DO MANAGER (v2.0) ----------------
   // Managers veem os pedidos de todas as lojas e todos editam e aprovam.
@@ -3618,7 +3752,7 @@ window.PedidoPDF = (function () {
       toast("Operacional monta e salva o pedido. Para enviar, a Gerência entra com o e-mail da loja e envia."); return;
     }
     if (!enviar.cid) enviar.cid = "c" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);   // mesmo envio = mesmo id
-    var corpo = { loja: lojaAtual(), nome: atual ? atual.nome : "", rascunhoId: atual ? atual.id : null, dataLista: dados.data, itens: itensDoPedido(), cid: enviar.cid };
+    var corpo = { loja: lojaAtual(), nome: atual ? atual.nome : "", rascunhoId: atual ? atual.id : null, dataLista: dados.data, itens: itensDoPedido(), cid: enviar.cid, quem: meuApelido() };
     var b = $("btnEnviar"); b.disabled = true; b.textContent = "Enviando…";
     function ok(r) {
       enviar.cid = null;
@@ -6495,7 +6629,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-19.2";
+  var VERSAO_APP = "2026-11-23.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
@@ -6541,6 +6675,7 @@ window.PedidoPDF = (function () {
   document.addEventListener("visibilitychange", function () { if (!document.hidden) checarVersaoNova(); });
   window.addEventListener("focus", checarVersaoNova);
   setInterval(checarVersaoNova, 600000);
+  setInterval(sincTick, 5000);   // 23/11: pedido em conjunto (a cada 5 s com o pedido aberto)
   setTimeout(checarVersaoNova, 2500);
 
   if (ENVIO_TICKET && EM_APPS_SCRIPT) {   // aba só de envio: não precisa de login, só mostra o pedido e o botão
