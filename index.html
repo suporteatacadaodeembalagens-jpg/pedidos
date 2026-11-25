@@ -4227,7 +4227,7 @@ window.PedidoPDF = (function () {
              abertaId: "", lojaCont: "", val: null, vBusca: [], tb: 0, digitado: {} };
   function cnChamar(fn, args, ok, falha) {
     var f = falha || function (e) { toast(String(e && e.message || e)); };
-    if (CN.modo === "exp") expChamar(fn, (args || []).concat(fn === "contListas" || fn === "contListaContar" || fn === "contListaFinalizar" || /^validade/.test(fn) || /^contDireta|^contBuscar/.test(fn) ? [EXP.ct || ""] : []), ok, f);
+    if (CN.modo === "exp") expChamar(fn, (args || []).concat(fn === "contListas" || fn === "contListaContar" || fn === "contListaFinalizar" || /^validade/.test(fn) || /^contDireta|^contBuscar|^contAContar/.test(fn) ? [EXP.ct || ""] : []), ok, f);
     else chamar(fn, args || [], ok, f);
   }
   function cnNome(c) { return (CN.nomes && CN.nomes[c]) || (RES && RES.nomes && RES.nomes[c]) || c; }
@@ -4306,7 +4306,7 @@ window.PedidoPDF = (function () {
     }, function (e) { var c = document.getElementById("cnCorpo"); if (c) c.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
   function cnAbas() {
-    var a = [["contar", "Contar"], ["rel", "Relatório"], ["val", "Validade"]];   // 25/11: as Listas saíram
+    var a = [["contar", "Contar"], ["acontar", "A contar"], ["rel", "Relatório"], ["val", "Validade"]];   // 25/11: A contar   // 25/11: as Listas saíram
     return '<div class="cn-abas">' + a.map(function (x) { return '<button data-cn="aba" data-v="' + x[0] + '" class="' + (CN.aba === x[0] ? "on" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>";
   }
   // 13/11 (Marcelo): situação da lista com cor (também é o filtro do Relatório). [texto, cor, fundo, chave]
@@ -4328,6 +4328,7 @@ window.PedidoPDF = (function () {
     var c = document.getElementById("cnCorpo"); if (!c) return;
     var h = cnAbas(), rod = "";
     if (CN.aba === "contar") h += cdHtmlContar();   // 25/11: contagem DIRETA
+    else if (CN.aba === "acontar") h += acHtml();
     else if (CN.aba === "rel") h += cdHtmlRel();
     else if (CN.aba === "val") h += cnHtmlVal();
     c.innerHTML = h + (rod ? '<div class="cn-rodape">' + rod + "</div>" : "");
@@ -4336,8 +4337,8 @@ window.PedidoPDF = (function () {
   // Busca igual à da Consulta (nome, PLU/EAN exato, marca, fornecedor, Linha/Fora de linha, % = todos) e um CARD por produto:
   // UN [▲ 0 ▼] + CX [▲ 0 ▼] -> total em UN; validade opcional; "ENVIAR CONTAGEM" = fila do robô de ajuste + Relatório (card verde).
   var CD = { termo: "", forn: "", linha: "linha", lim: 40, vals: {}, env: {}, lojaSel: "", rel: null, relFil: "", relLoja: "", tb: 0, res: null, mais: false, forns: null, seq: 0, buscando: false };
-  function cdLoja() { return CN.mgr ? CD.lojaSel : CN.loja; }
-  function cdItem(p) { return ((CD.res || []).filter(function (x) { return x.p === p; })[0]) || (typeof porPlu !== "undefined" && porPlu[p]) || null; }
+  function cdLoja() { return CN.mgr ? (CN.aba === "acontar" && typeof AC !== "undefined" && AC.lojaSel ? AC.lojaSel : CD.lojaSel) : CN.loja; }
+  function cdItem(p) { return ((CD.res || []).concat((AC.l && AC.l.itens) || []).filter(function (x) { return x.p === p; })[0]) || (typeof porPlu !== "undefined" && porPlu[p]) || null; }
   /* 25/11 (2): a busca é no CADASTRO INTEIRO, no servidor (produto com estoque positivo, zero ou negativo). */
   function cdBuscar() {
     var termo = String(CD.termo || "").trim(), sq = ++CD.seq;
@@ -4405,6 +4406,69 @@ window.PedidoPDF = (function () {
       '<div class="cd-filtros">' + [["linha", "Linha"], ["fora", "Fora de linha"], ["todos", "Todos"]].map(function (o) { return '<button type="button" data-cn="cdlinha" data-v="' + o[0] + '" class="' + (CD.linha === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div></div>";
     return h + '<div id="cdRes">' + cdHtmlRes() + "</div>";
   }
+  /* 25/11 (Marcelo): RELATÓRIO "A CONTAR": a loja escolhe o período; o que NÃO foi contado nele vira a lista, em 2 partes
+     (COM venda nos últimos 30 dias / SEM venda). Os cards são os mesmos da contagem; contou = sai da lista. */
+  var AC = { grupo: "com", l: null, ini: 0, termo: "", carr: false, tb: 0, de: "", ate: "", lojaSel: "" };
+  function acLoja() { return CN.mgr ? (AC.lojaSel || CD.lojaSel) : CN.loja; }
+  function acHoje(d) { var x = d || new Date(); return x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2) + "-" + ("0" + x.getDate()).slice(-2); }
+  function acCarregar(mais) {
+    var lj = acLoja(); if (!lj) { AC.l = { vazio: true, semLoja: true }; cnDesenhar(); return; }
+    AC.carr = true; if (!mais) { AC.ini = 0; }
+    cnChamar("contAContarLista", [{ loja: lj, grupo: AC.grupo, ini: AC.ini, n: 60, termo: AC.termo }], function (r) {
+      AC.carr = false;
+      if (mais && AC.l && AC.l.itens && !r.vazio) { r.itens = AC.l.itens.concat(r.itens); }
+      AC.l = r; if (CN.aba === "acontar") { var b = document.getElementById("acLista"); if (b && mais) b.innerHTML = acHtmlLista(); else cnDesenhar(); }
+    }, function (e) { AC.carr = false; toast(String(e && e.message || e)); });
+  }
+  function acHtmlLista() {
+    var l = AC.l; if (!l || l.vazio) return "";
+    var its = l.itens || [];
+    if (!its.length) return '<div class="cn-vazio">' + (AC.termo ? "Nada com essa busca nesta parte." : "Nada para contar nesta parte. &#10004;") + "</div>";
+    return '<div style="font-weight:700;color:var(--sub);margin:4px 2px 8px">' + its.length + " de " + l.total + "</div>" +
+      its.map(function (it) { var h = cdCard(it); return it.v != null ? h.replace("</small>", " · <b>vendeu " + num(it.v) + " un em 30 dias</b></small>") : h; }).join("") +
+      (its.length < l.total ? '<button class="cn-bt" data-cn="acmais" style="width:100%">Mostrar mais (' + (l.total - its.length) + ")</button>" : "");
+  }
+  function acHtml() {
+    if (!AC.de) { var d = new Date(); AC.ate = acHoje(d); AC.de = acHoje(new Date(d.getFullYear(), d.getMonth(), 1)); }
+    var h = "";
+    if (CN.mgr) h += '<div class="cn-card" style="border-left-color:var(--ouro)"><label style="margin-top:0">Loja</label><select id="acLojaSel"><option value="">Escolha a loja…</option>' +
+      cnLojasTodas().map(function (c) { return '<option value="' + c + '"' + (c === acLoja() ? " selected" : "") + ">" + esc(c + " " + cnNome(c)) + "</option>"; }).join("") + "</select></div>";
+    h += '<div class="cn-card" style="border-left-color:var(--azul)"><h4>Gerar relatório "a contar"</h4><small>O que NÃO foi contado no período vira a lista abaixo (substitui a lista anterior desta loja).</small>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>De</label><input type="date" id="acDe" value="' + esc(AC.de) + '"></div><div style="flex:1;min-width:140px"><label>Até</label><input type="date" id="acAte" value="' + esc(AC.ate) + '"></div></div>' +
+      '<div class="cn-acoes"><button class="pri" data-cn="acgerar">Gerar lista</button>' + (AC.l && !AC.l.vazio ? '<button data-cn="acexcel">Baixar Excel</button>' : "") + "</div></div>";
+    if (!AC.l) { if (!AC.carr) setTimeout(function () { acCarregar(false); }, 0); return h + '<div class="carregando"><div class="giro"></div>Carregando a lista…</div>'; }
+    if (AC.l.semLoja) return h + '<div class="cn-vazio">Escolha a loja.</div>';
+    if (AC.l.vazio) return h + '<div class="cn-vazio">Esta loja ainda não gerou a lista "a contar". Escolha o período e toque em Gerar lista.</div>';
+    var r = AC.l.resumo || {};
+    h += '<div style="color:var(--sub);font-size:13px;margin:0 2px 8px">Lista de ' + esc(AC.l.nomeLoja || "") + " · período " + esc(String(r.de || "").split("-").reverse().join("/")) + " a " + esc(String(r.ate || "").split("-").reverse().join("/")) + " · gerada " + esc(r.em || "") + (r.por ? " por " + esc(r.por) : "") + "</div>" +
+      '<div class="cd-filtros" style="margin:0 0 8px">' + [["com", "Com venda nos últimos 30 dias (" + (r.nCom || 0) + ")"], ["sem", "Sem venda (" + (r.nSem || 0) + ")"]].map(function (o) {
+        return '<button type="button" data-cn="acgrupo" data-v="' + o[0] + '" class="' + (AC.grupo === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>" +
+      '<input id="acFiltro" type="search" autocomplete="off" placeholder="Procurar nesta lista (nome, PLU, código de barras, marca, fornecedor)" value="' + esc(AC.termo) + '" style="margin:0 0 10px">';
+    return h + '<div id="acLista">' + (AC.carr ? '<div class="carregando"><div class="giro"></div>Carregando…</div>' : acHtmlLista()) + "</div>";
+  }
+  function acGerar() {
+    var lj = acLoja(); if (!lj) { toast("Escolha a loja"); return; }
+    var de = (document.getElementById("acDe") || {}).value || "", ate = (document.getElementById("acAte") || {}).value || "";
+    if (!de || !ate || de > ate) { toast("Escolha o período (de / até)"); return; }
+    if (AC.l && !AC.l.vazio && !confirm("Gerar uma lista nova para " + cnNome(lj) + "? Ela SUBSTITUI a lista \"a contar\" atual desta loja.")) return;
+    AC.de = de; AC.ate = ate; toast("Gerando a lista… (pode levar alguns segundos)");
+    cnChamar("contAContarGerar", [{ loja: lj, de: de, ate: ate }], function (r) {
+      toast("Lista gerada: " + r.nCom + " com venda e " + r.nSem + " sem venda (" + r.contados + " já contados no período)");
+      AC.grupo = "com"; AC.termo = ""; AC.l = null; cnDesenhar();
+    });
+  }
+  function acExcel() {
+    var lj = acLoja(); toast("Montando o Excel…");
+    var linhas = [["Grupo", "PLU", "Descrição", "Marca", "Fornecedor", "Código de barras", "Embalagem", "Venda 30 dias (un)"]], falta = 2;
+    function fim() { if (--falta) return;
+      var csv = "\ufeff" + linhas.map(function (l) { return l.map(function (c) { c = String(c == null ? "" : c); return /[;"\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(";"); }).join("\r\n");
+      var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = "a_contar_" + lj + "_" + acHoje() + ".csv"; document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 500); }
+    ["com", "sem"].forEach(function (g) {
+      cnChamar("contAContarLista", [{ loja: lj, grupo: g, todos: 1 }], function (r) {
+        (r.itens || []).forEach(function (x) { linhas.push([g === "com" ? "Com venda" : "Sem venda", x.p, x.d, x.m, x.f, x.b, (x.t || "") + (x.q > 1 ? " c/ " + x.q : ""), x.v != null ? String(x.v).replace(".", ",") : "0"]); });
+        fim(); }, function (e) { toast(String(e && e.message || e)); });
+    });
+  }
   function cdRedesenharRes() { var b = document.getElementById("cdRes"); if (b) b.innerHTML = cdHtmlRes(); }
   function cdAtualTot(p) { var it = cdItem(p) || {}, el = document.querySelector('[data-cdtot="' + p + '"]'); if (el) el.textContent = num(cdTotal(p, it)) + " UN"; }
   function cdEnviar(p, somar) {
@@ -4436,11 +4500,17 @@ window.PedidoPDF = (function () {
     if (k === "cdlinha") { CD.linha = v; CD.lim = 40; cnDesenhar(); cdBuscar(); return true; }
     if (k === "cdmaisres") { CD.lim += 40; cdRedesenharRes(); return true; }
     if (k === "cdrelfil") { CD.relFil = v || ""; cnDesenhar(); return true; }
+    if (k === "acgerar") { acGerar(); return true; }
+    if (k === "acexcel") { acExcel(); return true; }
+    if (k === "acgrupo") { AC.grupo = v; AC.l = Object.assign({}, AC.l, { itens: null }); acCarregar(false); var bl = document.getElementById("acLista"); if (bl) bl.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando…</div>'; return true; }
+    if (k === "acmais") { AC.ini = (AC.l && AC.l.itens ? AC.l.itens.length : 0); acCarregar(true); return true; }
     return false;
   }
   function cdDigita(e) {
     var t = e.target;
     if (t.getAttribute && t.getAttribute("data-cdq") != null) { var p = t.getAttribute("data-cdq"), o = CD.vals[p] = CD.vals[p] || {}; o[t.getAttribute("data-k")] = t.value; cdAtualTot(p); return true; }
+    if (t.id === "acFiltro") { AC.termo = t.value; clearTimeout(AC.tb); AC.tb = setTimeout(function () { AC.ini = 0;
+        cnChamar("contAContarLista", [{ loja: acLoja(), grupo: AC.grupo, ini: 0, n: 60, termo: AC.termo }], function (r) { AC.l = r; var b = document.getElementById("acLista"); if (b) b.innerHTML = acHtmlLista(); }); }, 450); return true; }
     if (t.id === "cdBusca") { CD.termo = t.value; CD.lim = 40; clearTimeout(CD.tb); CD.tb = setTimeout(cdBuscar, 450); return true; }
     return false;
   }
@@ -4450,6 +4520,9 @@ window.PedidoPDF = (function () {
     if (t.id === "cdForn") { CD.forn = t.value; CD.lim = 40; cdBuscar(); return; }
     if (t.id === "cdLoja") { CD.lojaSel = t.value; cdRedesenharRes(); return; }
     if (t.id === "cdRelLoja") { CD.relLoja = t.value; cnDesenhar(); return; }
+    if (t.id === "acLojaSel") { AC.lojaSel = t.value; AC.l = null; cnDesenhar(); return; }
+    if (t.id === "acDe") { AC.de = t.value; return; }
+    if (t.id === "acAte") { AC.ate = t.value; return; }
   }
   var CD_ST = { fila: ["Na fila do robô", "#1d5fa8", "#e8f1fb"], feito: ["Ajustado no ERP", "#2e9d4f", "#e3f4e8"], erro: ["Erro no ajuste", "#c62828", "#fdecea"], substituido: ["Recontado (vale a nova)", "#5d6b7c", "#eef1f5"] };
   function cdHtmlRel() {
@@ -4462,11 +4535,11 @@ window.PedidoPDF = (function () {
       '<div class="cd-filtros" style="margin:0 0 10px"><button type="button" data-cn="cdrelfil" data-v="" class="' + (!CD.relFil ? "on" : "") + '">Todas (' + base.length + ")</button>" +
       Object.keys(CD_ST).map(function (k) { var s = CD_ST[k]; return '<button type="button" data-cn="cdrelfil" data-v="' + k + '" class="' + (CD.relFil === k ? "on" : "") + '" style="' + (CD.relFil === k ? "" : "border-color:" + s[1] + ";color:" + s[1]) + '">' + s[0] + " (" + (cont[k] || 0) + ")</button>"; }).join("") + "</div>";
     if (!l.length) return h + '<div class="cn-vazio">Nenhuma contagem' + (CD.relFil ? " nesse filtro" : " ainda") + ".</div>";
-    return h + '<div class="cn-tabwrap"><table><tr><th>Produto</th>' + (CN.mgr ? "<th>Loja</th>" : "") + '<th class="n">Contado</th>' + (CN.mgr ? '<th class="n">Sistema</th><th class="n">Dif.</th><th class="n">R$</th>' : "") + "<th>Quem / quando</th><th>Situação</th></tr>" +
+    return h + '<div class="cn-tabwrap"><table><tr><th>Produto</th>' + (CN.mgr ? "<th>Loja</th>" : "") + '<th class="n">Contado</th>' + (CN.mgr ? '<th class="n">Sistema</th><th class="n">Dif.</th>' : "")   /* 25/11: sem R$ */ + "<th>Quem / quando</th><th>Situação</th></tr>" +
       l.slice(0, 600).map(function (x) { var s = CD_ST[x.st] || [x.st || "—", "#5d6b7c", "#eef1f5"], det = (x.cx ? num(x.un) + " UN + " + num(x.cx) + " " + esc(x.t || "CX") : "") + (x.soma ? (x.cx ? " · " : "") + "somado: " + num(x.soma.base) + " + " + num(x.soma.add) : "");
         return "<tr><td><b>" + esc(x.d || x.p) + "</b><br><small>PLU " + esc(x.p) + (x.venc ? " · val. " + esc(x.venc.split("-").reverse().join("/")) : "") + "</small></td>" + (CN.mgr ? "<td>" + esc(x.loja + " " + cnNome(x.loja)) + "</td>" : "") +
           '<td class="n"><b>' + num(x.q) + " UN</b>" + (det ? "<br><small>" + det + "</small>" : "") + "</td>" +
-          (CN.mgr ? '<td class="n">' + (x.sis == null ? "—" : num(x.sis)) + '</td><td class="n ' + (x.dif < 0 ? "neg" : x.dif > 0 ? "pos" : "") + '">' + (x.dif == null ? "—" : (x.dif > 0 ? "+" : "") + num(x.dif)) + '</td><td class="n ' + (x.vdif < 0 ? "neg" : x.vdif > 0 ? "pos" : "") + '">' + (x.vdif == null ? "—" : reais(x.vdif)) + "</td>" : "") +
+          (CN.mgr ? '<td class="n">' + (x.sis == null ? "—" : num(x.sis)) + '</td><td class="n ' + (x.dif < 0 ? "neg" : x.dif > 0 ? "pos" : "") + '">' + (x.dif == null ? "—" : (x.dif > 0 ? "+" : "") + num(x.dif)) + "</td>" : "") +
           "<td><small>" + esc(x.por || "") + "<br>" + esc(x.em || "") + "</small></td>" +
           '<td><span class="cn-chip" style="color:' + s[1] + ";background:" + s[2] + ";border:1px solid " + s[1] + '">' + s[0] + "</span>" + (x.msg ? "<br><small>" + esc(x.msg) + "</small>" : "") + "</td></tr>"; }).join("") + "</table></div>";
   }
@@ -4663,8 +4736,8 @@ window.PedidoPDF = (function () {
     var grupos = [["Vencidos", "v-venc", function (d) { return d < 0; }], ["Vencem em até 30 dias", "v-30", function (d) { return d >= 0 && d <= 30; }], ["Vencem em 31 a 60 dias", "v-60", function (d) { return d > 30 && d <= 60; }], ["Mais de 60 dias", "v-ok", function (d) { return d > 60; }]];
     h += it.length ? grupos.map(function (g) { var l = it.filter(function (x) { return g[2](cnDiasPara(x.venc)); }); if (!l.length) return "";
       return '<div style="font-weight:800;color:var(--marrom);margin:14px 2px 6px">' + g[0] + " (" + l.length + ")</div>" + l.map(function (x) { var d = cnDiasPara(x.venc), dt = x.venc.split("-").reverse().join("/");
-        return '<div class="cn-card ' + g[1] + '"><div class="cn-it" style="border:0;padding:0"><div><b>' + esc(x.d || x.p) + "</b><small>PLU " + esc(x.p) + " · " + x.q + " un · " + esc(cnNome(x.loja)) + "</small><small>Vence " + dt + " (" + (d < 0 ? "venceu há " + (-d) + " dia(s)" : d === 0 ? "hoje" : "em " + d + " dia(s)") + ") · registrado por " + esc(x.por || "") + "</small></div>" +
-          '<button class="cn-bt" data-cn="vbaixa" data-v="' + esc(x.id) + '">Dar baixa</button></div></div>'; }).join(""); }).join("") : '<div class="cn-vazio">Nenhum lote registrado.</div>';
+        return '<div class="cn-card ' + g[1] + '"><div class="cn-it" style="border:0;padding:0"><div><b>' + esc(x.d || x.p) + "</b><small>PLU " + esc(x.p) + " · " + esc(cnNome(x.loja)) + "</small><small>Quantidade inicial: <b>" + num(x.q) + " un</b>" + (x.atual != null ? " · Quantidade real: <b>" + num(x.atual) + " un</b> (ajustada " + esc(x.ajEm || "") + (x.ajPor ? " por " + esc(x.ajPor) : "") + ")" : "") + "</small><small>Vence " + dt + " (" + (d < 0 ? "venceu há " + (-d) + " dia(s)" : d === 0 ? "hoje" : "em " + d + " dia(s)") + ") · registrado por " + esc(x.por || "") + "</small></div>" +
+          '<div style="display:flex;flex-direction:column;gap:6px"><button class="cn-bt azul" data-cn="vajustar" data-v="' + esc(x.id) + '">Ajustar quantidade</button><button class="cn-bt" data-cn="vbaixa" data-v="' + esc(x.id) + '">Dar baixa</button></div></div></div>'; }).join(""); }).join("") : '<div class="cn-vazio">Nenhum lote registrado.</div>';
     return h;
   }
   function cnSalvarVal() {
@@ -4721,6 +4794,10 @@ window.PedidoPDF = (function () {
       b.disabled = true; cnChamar("contListaAprovar", [CN.relId], function () { toast("Ajuste aprovado: na fila do robô"); cnCarregar(); cnCarregarRel(CN.relId); }, function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
     if (k === "vsalvar") { cnSalvarVal(); return; }
     if (k === "vescolhe") { CN.vProd = b.getAttribute("data-p"); CN.vDesc = b.getAttribute("data-d"); var vp = document.getElementById("vProd"); if (vp) vp.value = CN.vProd; var vr = document.getElementById("vRes"); if (vr) vr.innerHTML = "<small>" + esc(CN.vDesc) + "</small>"; return; }
+    if (k === "vajustar") { var lv = (CN.val.itens || []).filter(function (x) { return x.id === v; })[0]; if (!lv) return;
+      var nq = prompt("Quantidade REAL que ainda tem deste lote (em unidades)\nQuantidade inicial: " + lv.q + " un" + (lv.atual != null ? "\nÚltima quantidade real: " + lv.atual + " un" : ""), lv.atual != null ? lv.atual : lv.q);
+      if (nq == null) return; nq = String(nq).replace(",", ".").trim(); if (nq === "" || !(Number(nq) >= 0)) { toast("Quantidade inválida"); return; }
+      b.disabled = true; cnChamar("validadeAjustar", [v, Number(nq)], function (r) { Object.assign(lv, r); toast("Quantidade real do lote: " + num(r.atual) + " un"); cnDesenhar(); }, function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
     if (k === "vbaixa") { if (!confirm("Dar baixa neste lote (acabou ou foi retirado)?")) return; b.disabled = true;
       cnChamar("validadeBaixa", [v], function () { CN.val.itens = CN.val.itens.filter(function (x) { return x.id !== v; }); toast("Baixa feita"); cnDesenhar(); }, function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
   }
@@ -6782,7 +6859,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-25.6";
+  var VERSAO_APP = "2026-11-25.8";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
