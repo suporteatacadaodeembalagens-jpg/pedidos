@@ -4277,6 +4277,7 @@ window.PedidoPDF = (function () {
         "#telaCont .cd-val{display:flex;align-items:center;gap:6px;margin:0}#telaCont .cd-val input{width:auto;padding:7px 8px;font-size:14px}" +
         "#telaCont .cd-env{width:100%;margin-top:6px;background:linear-gradient(180deg,#1f9d4c,#178a40) !important;border-color:transparent !important;color:#fff !important;font-size:15px !important;min-height:48px !important}" +
         "#telaCont .cd-ok .cd-env{background:#fff !important;color:#178a40 !important;border:1.5px solid #9fd5b0 !important}" +
+        "#telaCont .cd-aviso{margin:6px 0 0;font-size:12.5px;font-weight:700;color:#8a5a00;background:#fff6dc;border:1px solid #f0d58a;border-radius:8px;padding:6px 8px}" +
         "#telaCont .cd-card.cd-erro{border-left-color:#c62828;background:#fdf2f2}#telaCont .cd-st.erro{color:#c62828;margin:6px 0 4px}" +
         "#telaCont .cd-st{margin:6px 0 0;font-size:13px;font-weight:700;color:#1d7a35}#telaCont .cd-filtros{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}" +
         "#telaCont .cd-filtros button{border:1.5px solid #c3d2e5;background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}#telaCont .cd-filtros button.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:700}" +
@@ -4369,16 +4370,17 @@ window.PedidoPDF = (function () {
   function cdCard(it) {
     var p = it.p, v = CD.vals[p] || {}, emb = Number(it.q) || 0, temCx = emb > 1, tipo = it.t && it.t !== "UN" ? it.t : "CX", s = cdSit(p);
     var cab = '<h4>' + esc(it.d || ("PLU " + p)) + "</h4><small>PLU " + esc(p) + (it.m ? " · " + esc(it.m) : "") + (temCx ? " · " + esc(tipo) + " c/ " + num(emb) + " un" : "") + "</small>";
-    // 25/11 (Marcelo): enviado e esperando o robô = card verde SEM botão (só volta a enviar se o robô não conseguir ajustar)
-    if (s && s.st === "fila") return '<div class="cn-card cd-card cd-ok" data-cdp="' + esc(p) + '">' + cab +
-      '<div class="cd-st">&#10004; Enviado ' + esc(s.em) + " · " + num(s.q) + " UN · na fila do robô</div></div>";
-    return '<div class="cn-card cd-card' + (s && s.st === "erro" ? " cd-erro" : "") + '" data-cdp="' + esc(p) + '">' + cab +
+    // 25/11 (Marcelo, 2ª): o card mostra a última contagem/ajuste e SEMPRE deixa enviar outra, avisando que a nova substitui
+    var subst = s && (s.st === "fila" || s.st === "feito" || s.st === "erro");
+    return '<div class="cn-card cd-card' + (s && s.st === "erro" ? " cd-erro" : s && s.st === "fila" ? " cd-ok" : "") + '" data-cdp="' + esc(p) + '">' + cab +
+      (s && s.st === "fila" ? '<div class="cd-st">&#10004; Enviado ' + esc(s.em) + " · " + num(s.q) + " UN · na fila do robô</div>" : "") +
       (s && s.st === "erro" ? '<div class="cd-st erro">&#10006; O robô NÃO conseguiu ajustar a contagem ' + esc(s.em) + (s.msg ? " (" + esc(s.msg) + ")" : "") + ": conte e envie de novo</div>" : "") +
       (s && s.st === "feito" ? '<div class="cd-st">&#10004; Último ajuste no ERP: ' + num(s.q) + " UN, contado " + esc(s.em) + "</div>" : "") +
       '<div class="cd-lin">' + cdCont(p, "un", "UN", v.un) + (temCx ? '<span class="cd-mais">+</span>' + cdCont(p, "cx", tipo, v.cx) : "") + "</div>" +
       '<div class="cd-rod"><span class="cd-tot">Total: <b data-cdtot="' + esc(p) + '">' + num(cdTotal(p, it)) + " UN</b></span>" +
       '<label class="cd-val">Validade <input type="date" data-cdv="' + esc(p) + '" value="' + esc(v.venc || "") + '"></label></div>' +
-      '<button class="cn-bt cd-env" data-cn="cdenviar" data-v="' + esc(p) + '">' + (s && s.st === "erro" ? "Enviar de novo" : "ENVIAR CONTAGEM") + "</button></div>";
+      (subst ? '<div class="cd-aviso">&#9888; Se enviar outra contagem, ela SUBSTITUI a anterior (' + num(s.q) + " UN" + (s.st === "fila" ? ", ainda na fila do robô" : "") + ").</div>" : "") +
+      '<button class="cn-bt cd-env" data-cn="cdenviar" data-v="' + esc(p) + '">' + (s && s.st === "erro" ? "Enviar de novo" : subst ? "ENVIAR NOVA CONTAGEM" : "ENVIAR CONTAGEM") + "</button></div>";
   }
   function cdHtmlRes() {
     if (CD.buscando) return '<div class="carregando"><div class="giro"></div>Procurando no cadastro…</div>';
@@ -4409,11 +4411,12 @@ window.PedidoPDF = (function () {
     var v = CD.vals[p] || {}, it = cdItem(p) || { p: p };
     var un = String(v.un == null ? "" : v.un).replace(",", ".").trim(), cx = String(v.cx == null ? "" : v.cx).replace(",", ".").trim();
     if (un === "" && cx === "") { toast("Digite a quantidade contada (UN e/ou CX)"); return; }
+    var s0 = cdSit(p); if (s0 && (s0.st === "fila" || s0.st === "feito") && !confirm("Esta nova contagem SUBSTITUI a anterior (" + num(s0.q) + " UN " + s0.em + "). Enviar?")) return;
     if ((un !== "" && !(Number(un) >= 0)) || (cx !== "" && !(Number(cx) >= 0))) { toast("Quantidade inválida"); return; }
     var card = document.querySelector('[data-cdp="' + p + '"]'), bt = card && card.querySelector(".cd-env"); if (bt) { bt.disabled = true; bt.textContent = "Enviando…"; }
     cnChamar("contDiretaSalvar", [{ p: p, d: it.d || "", un: Number(un) || 0, cx: Number(cx) || 0, venc: v.venc || "", loja: CN.mgr ? loja : "" }], function (r) {
       CD.env[loja + "|" + p] = { q: r.q, em: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
-      CD.vals[p] = {}; CD.relVelho = true;   // 25/11 (4): o relatório recarrega ao abrir; os cards continuam sabendo o que já foi
+      CD.vals[p] = {}; CD.relVelho = true; if (CD.rel) CD.rel.forEach(function (y) { if (y.loja === loja && y.p === p && y.st === "fila") y.st = "substituido"; });   // 25/11 (4): o relatório recarrega ao abrir; os cards continuam sabendo o que já foi
       toast("Contagem enviada: " + num(r.q) + " UN" + (r.nomeLoja ? " · " + r.nomeLoja : "") + " → robô" + (r.validade ? " (validade registrada)" : ""));
       if (card) { var tmp = document.createElement("div"); tmp.innerHTML = cdCard(it.d ? it : { p: p, d: it.d || ("PLU " + p), q: r.emb, t: r.t }); card.parentNode.replaceChild(tmp.firstChild, card); }
     }, function (e) { if (bt) { bt.disabled = false; bt.textContent = "ENVIAR CONTAGEM"; } toast(String(e && e.message || e)); });
@@ -6774,7 +6777,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-25.4";
+  var VERSAO_APP = "2026-11-25.5";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
