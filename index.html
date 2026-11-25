@@ -4277,6 +4277,7 @@ window.PedidoPDF = (function () {
         "#telaCont .cd-val{display:flex;align-items:center;gap:6px;margin:0}#telaCont .cd-val input{width:auto;padding:7px 8px;font-size:14px}" +
         "#telaCont .cd-env{width:100%;margin-top:6px;background:linear-gradient(180deg,#1f9d4c,#178a40) !important;border-color:transparent !important;color:#fff !important;font-size:15px !important;min-height:48px !important}" +
         "#telaCont .cd-ok .cd-env{background:#fff !important;color:#178a40 !important;border:1.5px solid #9fd5b0 !important}" +
+        "#telaCont .cd-card.cd-erro{border-left-color:#c62828;background:#fdf2f2}#telaCont .cd-st.erro{color:#c62828;margin:6px 0 4px}" +
         "#telaCont .cd-st{margin:6px 0 0;font-size:13px;font-weight:700;color:#1d7a35}#telaCont .cd-filtros{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}" +
         "#telaCont .cd-filtros button{border:1.5px solid #c3d2e5;background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}#telaCont .cd-filtros button.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:700}" +
         "#telaCont .v-venc{border-left-color:#c62828}#telaCont .v-30{border-left-color:#e53935}#telaCont .v-60{border-left-color:#e0a100}#telaCont .v-ok{border-left-color:#2e9d4f}";
@@ -4359,15 +4360,25 @@ window.PedidoPDF = (function () {
       '<input inputmode="decimal" autocomplete="off" data-cdq="' + esc(p) + '" data-k="' + k + '" value="' + esc(val == null ? "" : String(val)) + '" placeholder="0">' +
       '<button type="button" data-cn="cdmais" data-v="' + esc(p) + '" data-k="' + k + '" aria-label="mais 1">&#9650;</button></div></div>';   // 25/11: ▼ à esquerda, ▲ à direita
   }
+  /* 25/11 (4): situação do produto NESTA loja: o que acabou de enviar (CD.env) ou a última contagem do relatório. */
+  function cdSit(p) {
+    var lj = cdLoja(), e = CD.env[lj + "|" + p]; if (e) return { st: "fila", em: "às " + e.em, q: e.q };
+    var x = (CD.rel || []).filter(function (y) { return y.loja === lj && y.p === p && y.st && y.st !== "substituido"; }).sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); })[0];
+    return x ? { st: x.st, em: "em " + (x.em || ""), q: x.q, msg: x.msg || "" } : null;
+  }
   function cdCard(it) {
-    var p = it.p, v = CD.vals[p] || {}, emb = Number(it.q) || 0, temCx = emb > 1, tipo = it.t && it.t !== "UN" ? it.t : "CX", e = CD.env[cdLoja() + "|" + p];
-    return '<div class="cn-card cd-card' + (e ? " cd-ok" : "") + '" data-cdp="' + esc(p) + '"><h4>' + esc(it.d || ("PLU " + p)) + "</h4><small>PLU " + esc(p) +
-      (it.m ? " · " + esc(it.m) : "") + (temCx ? " · " + esc(tipo) + " c/ " + num(emb) + " un" : "") + "</small>" +
+    var p = it.p, v = CD.vals[p] || {}, emb = Number(it.q) || 0, temCx = emb > 1, tipo = it.t && it.t !== "UN" ? it.t : "CX", s = cdSit(p);
+    var cab = '<h4>' + esc(it.d || ("PLU " + p)) + "</h4><small>PLU " + esc(p) + (it.m ? " · " + esc(it.m) : "") + (temCx ? " · " + esc(tipo) + " c/ " + num(emb) + " un" : "") + "</small>";
+    // 25/11 (Marcelo): enviado e esperando o robô = card verde SEM botão (só volta a enviar se o robô não conseguir ajustar)
+    if (s && s.st === "fila") return '<div class="cn-card cd-card cd-ok" data-cdp="' + esc(p) + '">' + cab +
+      '<div class="cd-st">&#10004; Enviado ' + esc(s.em) + " · " + num(s.q) + " UN · na fila do robô</div></div>";
+    return '<div class="cn-card cd-card' + (s && s.st === "erro" ? " cd-erro" : "") + '" data-cdp="' + esc(p) + '">' + cab +
+      (s && s.st === "erro" ? '<div class="cd-st erro">&#10006; O robô NÃO conseguiu ajustar a contagem ' + esc(s.em) + (s.msg ? " (" + esc(s.msg) + ")" : "") + ": conte e envie de novo</div>" : "") +
+      (s && s.st === "feito" ? '<div class="cd-st">&#10004; Último ajuste no ERP: ' + num(s.q) + " UN, contado " + esc(s.em) + "</div>" : "") +
       '<div class="cd-lin">' + cdCont(p, "un", "UN", v.un) + (temCx ? '<span class="cd-mais">+</span>' + cdCont(p, "cx", tipo, v.cx) : "") + "</div>" +
       '<div class="cd-rod"><span class="cd-tot">Total: <b data-cdtot="' + esc(p) + '">' + num(cdTotal(p, it)) + " UN</b></span>" +
       '<label class="cd-val">Validade <input type="date" data-cdv="' + esc(p) + '" value="' + esc(v.venc || "") + '"></label></div>' +
-      (e ? '<div class="cd-st">&#10004; Enviado às ' + esc(e.em) + " · " + num(e.q) + " UN · na fila do robô</div>" : "") +
-      '<button class="cn-bt cd-env" data-cn="cdenviar" data-v="' + esc(p) + '">' + (e ? "Enviar de novo" : "ENVIAR CONTAGEM") + "</button></div>";
+      '<button class="cn-bt cd-env" data-cn="cdenviar" data-v="' + esc(p) + '">' + (s && s.st === "erro" ? "Enviar de novo" : "ENVIAR CONTAGEM") + "</button></div>";
   }
   function cdHtmlRes() {
     if (CD.buscando) return '<div class="carregando"><div class="giro"></div>Procurando no cadastro…</div>';
@@ -4402,7 +4413,7 @@ window.PedidoPDF = (function () {
     var card = document.querySelector('[data-cdp="' + p + '"]'), bt = card && card.querySelector(".cd-env"); if (bt) { bt.disabled = true; bt.textContent = "Enviando…"; }
     cnChamar("contDiretaSalvar", [{ p: p, d: it.d || "", un: Number(un) || 0, cx: Number(cx) || 0, venc: v.venc || "", loja: CN.mgr ? loja : "" }], function (r) {
       CD.env[loja + "|" + p] = { q: r.q, em: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
-      CD.vals[p] = {}; CD.rel = null;
+      CD.vals[p] = {}; CD.relVelho = true;   // 25/11 (4): o relatório recarrega ao abrir; os cards continuam sabendo o que já foi
       toast("Contagem enviada: " + num(r.q) + " UN" + (r.nomeLoja ? " · " + r.nomeLoja : "") + " → robô" + (r.validade ? " (validade registrada)" : ""));
       if (card) { var tmp = document.createElement("div"); tmp.innerHTML = cdCard(it.d ? it : { p: p, d: it.d || ("PLU " + p), q: r.emb, t: r.t }); card.parentNode.replaceChild(tmp.firstChild, card); }
     }, function (e) { if (bt) { bt.disabled = false; bt.textContent = "ENVIAR CONTAGEM"; } toast(String(e && e.message || e)); });
@@ -4434,7 +4445,7 @@ window.PedidoPDF = (function () {
   }
   var CD_ST = { fila: ["Na fila do robô", "#1d5fa8", "#e8f1fb"], feito: ["Ajustado no ERP", "#2e9d4f", "#e3f4e8"], erro: ["Erro no ajuste", "#c62828", "#fdecea"], substituido: ["Recontado (vale a nova)", "#5d6b7c", "#eef1f5"] };
   function cdHtmlRel() {
-    if (!CD.rel) { if (!CD.relCarr) { CD.relCarr = 1; cnChamar("contDiretaLista", [], function (r) { CD.relCarr = 0; CD.rel = (r && r.itens) || []; if (CN.aba === "rel") cnDesenhar(); }, function (e) { CD.relCarr = 0; toast(String(e && e.message || e)); }); }
+    if (!CD.rel || CD.relVelho) { if (!CD.relCarr) { CD.relCarr = 1; cnChamar("contDiretaLista", [], function (r) { CD.relCarr = 0; CD.rel = (r && r.itens) || []; CD.relVelho = false; if (CN.aba === "rel") cnDesenhar(); }, function (e) { CD.relCarr = 0; toast(String(e && e.message || e)); }); }
       return '<div class="carregando"><div class="giro"></div>Carregando o relatório…</div>'; }
     var base = CD.rel.filter(function (x) { return !CD.relLoja || x.loja === CD.relLoja; }), cont = {};
     base.forEach(function (x) { cont[x.st] = (cont[x.st] || 0) + 1; });
@@ -6763,7 +6774,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-25.3";
+  var VERSAO_APP = "2026-11-25.4";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
