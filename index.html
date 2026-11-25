@@ -4277,7 +4277,7 @@ window.PedidoPDF = (function () {
         "#telaCont .cd-val{display:flex;align-items:center;gap:6px;margin:0}#telaCont .cd-val input{width:auto;padding:7px 8px;font-size:14px}" +
         "#telaCont .cd-env{width:100%;margin-top:6px;background:linear-gradient(180deg,#1f9d4c,#178a40) !important;border-color:transparent !important;color:#fff !important;font-size:15px !important;min-height:48px !important}" +
         "#telaCont .cd-ok .cd-env{background:#fff !important;color:#178a40 !important;border:1.5px solid #9fd5b0 !important}" +
-        "#telaCont .cd-aviso{margin:6px 0 0;font-size:12.5px;font-weight:700;color:#8a5a00;background:#fff6dc;border:1px solid #f0d58a;border-radius:8px;padding:6px 8px}" +
+        "#telaCont .cd-somar{background:linear-gradient(180deg,#1d5fa8,#174c88) !important}#telaCont .cd-aviso{margin:6px 0 0;font-size:12.5px;font-weight:700;color:#8a5a00;background:#fff6dc;border:1px solid #f0d58a;border-radius:8px;padding:6px 8px}" +
         "#telaCont .cd-card.cd-erro{border-left-color:#c62828;background:#fdf2f2}#telaCont .cd-st.erro{color:#c62828;margin:6px 0 4px}" +
         "#telaCont .cd-st{margin:6px 0 0;font-size:13px;font-weight:700;color:#1d7a35}#telaCont .cd-filtros{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}" +
         "#telaCont .cd-filtros button{border:1.5px solid #c3d2e5;background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}#telaCont .cd-filtros button.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:700}" +
@@ -4379,8 +4379,9 @@ window.PedidoPDF = (function () {
       '<div class="cd-lin">' + cdCont(p, "un", "UN", v.un) + (temCx ? '<span class="cd-mais">+</span>' + cdCont(p, "cx", tipo, v.cx) : "") + "</div>" +
       '<div class="cd-rod"><span class="cd-tot">Total: <b data-cdtot="' + esc(p) + '">' + num(cdTotal(p, it)) + " UN</b></span>" +
       '<label class="cd-val">Validade <input type="date" data-cdv="' + esc(p) + '" value="' + esc(v.venc || "") + '"></label></div>' +
-      (subst ? '<div class="cd-aviso">&#9888; Se enviar outra contagem, ela SUBSTITUI a anterior (' + num(s.q) + " UN" + (s.st === "fila" ? ", ainda na fila do robô" : "") + ").</div>" : "") +
-      '<button class="cn-bt cd-env" data-cn="cdenviar" data-v="' + esc(p) + '">' + (s && s.st === "erro" ? "Enviar de novo" : subst ? "ENVIAR NOVA CONTAGEM" : "ENVIAR CONTAGEM") + "</button></div>";
+      (subst ? '<div class="cd-aviso">&#9888; Já tem contagem deste produto (' + num(s.q) + " UN" + (s.st === "fila" ? ", na fila do robô" : "") + "). <b>SOMAR</b> = soma o que você contou com ela (outra pessoa achou mais em outro lugar). <b>ENVIAR NOVA</b> = a sua contagem SUBSTITUI a anterior.</div>" : "") +
+      (subst ? '<button class="cn-bt cd-env cd-somar" data-cn="cdsomar" data-v="' + esc(p) + '">SOMAR com a anterior (' + num(s.q) + " + contado)</button>" : "") +
+      '<button class="cn-bt cd-env" data-cn="cdenviar" data-v="' + esc(p) + '">' + (s && s.st === "erro" ? "Enviar de novo" : subst ? "ENVIAR NOVA CONTAGEM (substitui)" : "ENVIAR CONTAGEM") + "</button></div>";   // 25/11: SOMAR
   }
   function cdHtmlRes() {
     if (CD.buscando) return '<div class="carregando"><div class="giro"></div>Procurando no cadastro…</div>';
@@ -4406,18 +4407,21 @@ window.PedidoPDF = (function () {
   }
   function cdRedesenharRes() { var b = document.getElementById("cdRes"); if (b) b.innerHTML = cdHtmlRes(); }
   function cdAtualTot(p) { var it = cdItem(p) || {}, el = document.querySelector('[data-cdtot="' + p + '"]'); if (el) el.textContent = num(cdTotal(p, it)) + " UN"; }
-  function cdEnviar(p) {
+  function cdEnviar(p, somar) {
     var loja = cdLoja(); if (!loja) { toast("Escolha a loja da contagem"); var s = document.getElementById("cdLoja"); if (s) s.focus(); return; }
     var v = CD.vals[p] || {}, it = cdItem(p) || { p: p };
     var un = String(v.un == null ? "" : v.un).replace(",", ".").trim(), cx = String(v.cx == null ? "" : v.cx).replace(",", ".").trim();
     if (un === "" && cx === "") { toast("Digite a quantidade contada (UN e/ou CX)"); return; }
-    var s0 = cdSit(p); if (s0 && (s0.st === "fila" || s0.st === "feito") && !confirm("Esta nova contagem SUBSTITUI a anterior (" + num(s0.q) + " UN " + s0.em + "). Enviar?")) return;
+    var s0 = cdSit(p), qn = (Number(un) || 0) + (Number(cx) || 0) * ((Number(it.q) || 0) > 1 ? Number(it.q) : 1);
+    if (somar) { if (!s0) { toast("Não tem contagem anterior para somar"); return; }
+      if (!confirm("SOMAR " + num(qn) + " UN à contagem anterior (" + num(s0.q) + " UN " + s0.em + ")?\nO robô vai ajustar o produto para " + num(s0.q + qn) + " UN.")) return; }
+    else if (s0 && (s0.st === "fila" || s0.st === "feito") && !confirm("Esta nova contagem SUBSTITUI a anterior (" + num(s0.q) + " UN " + s0.em + ").\nO robô vai ajustar o produto para " + num(qn) + " UN. Enviar?")) return;
     if ((un !== "" && !(Number(un) >= 0)) || (cx !== "" && !(Number(cx) >= 0))) { toast("Quantidade inválida"); return; }
-    var card = document.querySelector('[data-cdp="' + p + '"]'), bt = card && card.querySelector(".cd-env"); if (bt) { bt.disabled = true; bt.textContent = "Enviando…"; }
-    cnChamar("contDiretaSalvar", [{ p: p, d: it.d || "", un: Number(un) || 0, cx: Number(cx) || 0, venc: v.venc || "", loja: CN.mgr ? loja : "" }], function (r) {
+    var card = document.querySelector('[data-cdp="' + p + '"]'), bt = card && card.querySelector(somar ? ".cd-somar" : '[data-cn="cdenviar"]'); if (bt) { bt.disabled = true; bt.textContent = "Enviando…"; }
+    cnChamar("contDiretaSalvar", [{ p: p, d: it.d || "", un: Number(un) || 0, cx: Number(cx) || 0, venc: v.venc || "", loja: CN.mgr ? loja : "", somar: somar ? 1 : 0 }], function (r) {
       CD.env[loja + "|" + p] = { q: r.q, em: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
       CD.vals[p] = {}; CD.relVelho = true; if (CD.rel) CD.rel.forEach(function (y) { if (y.loja === loja && y.p === p && y.st === "fila") y.st = "substituido"; });   // 25/11 (4): o relatório recarrega ao abrir; os cards continuam sabendo o que já foi
-      toast("Contagem enviada: " + num(r.q) + " UN" + (r.nomeLoja ? " · " + r.nomeLoja : "") + " → robô" + (r.validade ? " (validade registrada)" : ""));
+      toast((r.soma ? "Somado: " + num(r.soma.base) + " + " + num(r.soma.add) + " = " : "Contagem enviada: ") + num(r.q) + " UN" + (r.nomeLoja ? " · " + r.nomeLoja : "") + " → robô" + (r.validade ? " (validade registrada)" : ""));
       if (card) { var tmp = document.createElement("div"); tmp.innerHTML = cdCard(it.d ? it : { p: p, d: it.d || ("PLU " + p), q: r.emb, t: r.t }); card.parentNode.replaceChild(tmp.firstChild, card); }
     }, function (e) { if (bt) { bt.disabled = false; bt.textContent = "ENVIAR CONTAGEM"; } toast(String(e && e.message || e)); });
   }
@@ -4428,6 +4432,7 @@ window.PedidoPDF = (function () {
       var n = Math.max(0, (Number(String(o[q] || "").replace(",", ".")) || 0) + (k === "cdmais" ? 1 : -1)); o[q] = String(n);
       var inp = document.querySelector('[data-cdq="' + v + '"][data-k="' + q + '"]'); if (inp) inp.value = o[q]; cdAtualTot(v); return true; }
     if (k === "cdenviar") { cdEnviar(v); return true; }
+    if (k === "cdsomar") { cdEnviar(v, true); return true; }
     if (k === "cdlinha") { CD.linha = v; CD.lim = 40; cnDesenhar(); cdBuscar(); return true; }
     if (k === "cdmaisres") { CD.lim += 40; cdRedesenharRes(); return true; }
     if (k === "cdrelfil") { CD.relFil = v || ""; cnDesenhar(); return true; }
@@ -4458,7 +4463,7 @@ window.PedidoPDF = (function () {
       Object.keys(CD_ST).map(function (k) { var s = CD_ST[k]; return '<button type="button" data-cn="cdrelfil" data-v="' + k + '" class="' + (CD.relFil === k ? "on" : "") + '" style="' + (CD.relFil === k ? "" : "border-color:" + s[1] + ";color:" + s[1]) + '">' + s[0] + " (" + (cont[k] || 0) + ")</button>"; }).join("") + "</div>";
     if (!l.length) return h + '<div class="cn-vazio">Nenhuma contagem' + (CD.relFil ? " nesse filtro" : " ainda") + ".</div>";
     return h + '<div class="cn-tabwrap"><table><tr><th>Produto</th>' + (CN.mgr ? "<th>Loja</th>" : "") + '<th class="n">Contado</th>' + (CN.mgr ? '<th class="n">Sistema</th><th class="n">Dif.</th><th class="n">R$</th>' : "") + "<th>Quem / quando</th><th>Situação</th></tr>" +
-      l.slice(0, 600).map(function (x) { var s = CD_ST[x.st] || [x.st || "—", "#5d6b7c", "#eef1f5"], det = x.cx ? num(x.un) + " UN + " + num(x.cx) + " " + esc(x.t || "CX") : "";
+      l.slice(0, 600).map(function (x) { var s = CD_ST[x.st] || [x.st || "—", "#5d6b7c", "#eef1f5"], det = (x.cx ? num(x.un) + " UN + " + num(x.cx) + " " + esc(x.t || "CX") : "") + (x.soma ? (x.cx ? " · " : "") + "somado: " + num(x.soma.base) + " + " + num(x.soma.add) : "");
         return "<tr><td><b>" + esc(x.d || x.p) + "</b><br><small>PLU " + esc(x.p) + (x.venc ? " · val. " + esc(x.venc.split("-").reverse().join("/")) : "") + "</small></td>" + (CN.mgr ? "<td>" + esc(x.loja + " " + cnNome(x.loja)) + "</td>" : "") +
           '<td class="n"><b>' + num(x.q) + " UN</b>" + (det ? "<br><small>" + det + "</small>" : "") + "</td>" +
           (CN.mgr ? '<td class="n">' + (x.sis == null ? "—" : num(x.sis)) + '</td><td class="n ' + (x.dif < 0 ? "neg" : x.dif > 0 ? "pos" : "") + '">' + (x.dif == null ? "—" : (x.dif > 0 ? "+" : "") + num(x.dif)) + '</td><td class="n ' + (x.vdif < 0 ? "neg" : x.vdif > 0 ? "pos" : "") + '">' + (x.vdif == null ? "—" : reais(x.vdif)) + "</td>" : "") +
@@ -6777,7 +6782,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-25.5";
+  var VERSAO_APP = "2026-11-25.6";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
