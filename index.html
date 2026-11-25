@@ -4277,6 +4277,9 @@ window.PedidoPDF = (function () {
         "#telaCont .cd-val{display:flex;align-items:center;gap:6px;margin:0}#telaCont .cd-val input{width:auto;padding:7px 8px;font-size:14px}" +
         "#telaCont .cd-env{width:100%;margin-top:6px;background:linear-gradient(180deg,#1f9d4c,#178a40) !important;border-color:transparent !important;color:#fff !important;font-size:15px !important;min-height:48px !important}" +
         "#telaCont .cd-ok .cd-env{background:#fff !important;color:#178a40 !important;border:1.5px solid #9fd5b0 !important}" +
+        "#telaCont .ac-dep,#telaCont .ac-marca{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;border:1px solid #c3d2e5;border-radius:10px;padding:12px 14px;margin:0 0 6px;background:#fff;font-size:15px;font-weight:800;color:var(--marrom);cursor:pointer}" +
+        "#telaCont .ac-dep{background:#eef3f9}#telaCont .ac-dep.on{background:var(--azul);color:#fff;border-color:var(--azul)}#telaCont .ac-dep b,#telaCont .ac-marca b{background:#fff;color:var(--azul);border-radius:999px;padding:2px 10px;font-size:13px;border:1px solid #c3d2e5}" +
+        "#telaCont .ac-marcas{margin:0 0 10px 14px}#telaCont .ac-marca{font-size:14px;font-weight:700;padding:10px 12px}#telaCont .ac-marca.on{border-color:var(--azul);background:#e8f1fb}#telaCont .ac-itens{margin:0 0 10px 6px}" +
         "#telaCont .cd-somar{background:linear-gradient(180deg,#1d5fa8,#174c88) !important}#telaCont .cd-aviso{margin:6px 0 0;font-size:12.5px;font-weight:700;color:#8a5a00;background:#fff6dc;border:1px solid #f0d58a;border-radius:8px;padding:6px 8px}" +
         "#telaCont .cd-card.cd-erro{border-left-color:#c62828;background:#fdf2f2}#telaCont .cd-st.erro{color:#c62828;margin:6px 0 4px}" +
         "#telaCont .cd-st{margin:6px 0 0;font-size:13px;font-weight:700;color:#1d7a35}#telaCont .cd-filtros{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}" +
@@ -4338,7 +4341,7 @@ window.PedidoPDF = (function () {
   // UN [▲ 0 ▼] + CX [▲ 0 ▼] -> total em UN; validade opcional; "ENVIAR CONTAGEM" = fila do robô de ajuste + Relatório (card verde).
   var CD = { termo: "", forn: "", linha: "linha", lim: 40, vals: {}, env: {}, lojaSel: "", rel: null, relFil: "", relLoja: "", tb: 0, res: null, mais: false, forns: null, seq: 0, buscando: false };
   function cdLoja() { return CN.mgr ? (CN.aba === "acontar" && typeof AC !== "undefined" && AC.lojaSel ? AC.lojaSel : CD.lojaSel) : CN.loja; }
-  function cdItem(p) { return ((CD.res || []).concat((AC.l && AC.l.itens) || []).filter(function (x) { return x.p === p; })[0]) || (typeof porPlu !== "undefined" && porPlu[p]) || null; }
+  function cdItem(p) { return ((CD.res || []).concat((AC.l && AC.l.itens) || [], (AC.itens && AC.itens.itens) || []).filter(function (x) { return x.p === p; })[0]) || (typeof porPlu !== "undefined" && porPlu[p]) || null; }
   /* 25/11 (2): a busca é no CADASTRO INTEIRO, no servidor (produto com estoque positivo, zero ou negativo). */
   function cdBuscar() {
     var termo = String(CD.termo || "").trim(), sq = ++CD.seq;
@@ -4408,24 +4411,50 @@ window.PedidoPDF = (function () {
   }
   /* 25/11 (Marcelo): RELATÓRIO "A CONTAR": a loja escolhe o período; o que NÃO foi contado nele vira a lista, em 2 partes
      (COM venda nos últimos 30 dias / SEM venda). Os cards são os mesmos da contagem; contou = sai da lista. */
-  var AC = { grupo: "com", l: null, ini: 0, termo: "", carr: false, tb: 0, de: "", ate: "", lojaSel: "" };
+  var AC = { grupo: "com", l: null, ini: 0, termo: "", carr: false, tb: 0, de: "", ate: "", lojaSel: "", arv: null, dep: "", marca: "", itens: null };
   function acLoja() { return CN.mgr ? (AC.lojaSel || CD.lojaSel) : CN.loja; }
   function acHoje(d) { var x = d || new Date(); return x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2) + "-" + ("0" + x.getDate()).slice(-2); }
   function acCarregar(mais) {
     var lj = acLoja(); if (!lj) { AC.l = { vazio: true, semLoja: true }; cnDesenhar(); return; }
-    AC.carr = true; if (!mais) { AC.ini = 0; }
-    cnChamar("contAContarLista", [{ loja: lj, grupo: AC.grupo, ini: AC.ini, n: 60, termo: AC.termo }], function (r) {
-      AC.carr = false;
-      if (mais && AC.l && AC.l.itens && !r.vazio) { r.itens = AC.l.itens.concat(r.itens); }
-      AC.l = r; if (CN.aba === "acontar") { var b = document.getElementById("acLista"); if (b && mais) b.innerHTML = acHtmlLista(); else cnDesenhar(); }
+    if (AC.termo) {   // buscando: lista corrida
+      AC.carr = true; if (!mais) { AC.ini = 0; }
+      cnChamar("contAContarLista", [{ loja: lj, grupo: AC.grupo, ini: AC.ini, n: 60, termo: AC.termo }], function (r) {
+        AC.carr = false;
+        if (mais && AC.l && AC.l.itens && !r.vazio) { r.itens = AC.l.itens.concat(r.itens); }
+        AC.l = r; acRedesenhar();
+      }, function (e) { AC.carr = false; toast(String(e && e.message || e)); });
+      return;
+    }
+    AC.carr = true; AC.dep = AC.dep || ""; AC.itens = null;
+    cnChamar("contAContarLista", [{ loja: lj, grupo: AC.grupo, arvore: 1 }], function (r) {   // 25/11: barras Departamento > Marca
+      AC.carr = false; AC.l = r; AC.arv = r.arvore || []; if (AC.marca) acAbrirMarca(AC.dep, AC.marca, false); acRedesenhar();
     }, function (e) { AC.carr = false; toast(String(e && e.message || e)); });
   }
+  function acRedesenhar() { if (CN.aba !== "acontar") return; var b = document.getElementById("acLista"); if (b && AC.l && !AC.l.vazio) b.innerHTML = acHtmlLista(); else cnDesenhar(); }
+  function acAbrirMarca(dep, marca, mais) {
+    AC.dep = dep; AC.marca = marca; var ini = mais && AC.itens ? AC.itens.itens.length : 0; if (!mais) AC.itens = { carr: true, itens: [] };
+    cnChamar("contAContarLista", [{ loja: acLoja(), grupo: AC.grupo, dep: dep, marca: marca, ini: ini, n: 60 }], function (r) {
+      if (AC.dep !== dep || AC.marca !== marca) return;
+      AC.itens = { total: r.total, itens: (mais && AC.itens ? AC.itens.itens : []).concat(r.itens || []) }; acRedesenhar();
+    }, function (e) { toast(String(e && e.message || e)); });
+  }
+  function acCards(its) { return its.map(function (it) { var h = cdCard(it); return it.v != null ? h.replace("</small>", " · <b>vendeu " + num(it.v) + " un em 30 dias</b></small>") : h; }).join(""); }
   function acHtmlLista() {
     var l = AC.l; if (!l || l.vazio) return "";
+    if (!AC.termo) {   // 25/11 (Marcelo): tudo FECHADO em barras de departamento; abrindo, as marcas; a marca abre os produtos
+      var arv = AC.arv || [];
+      if (!arv.length) return '<div class="cn-vazio">Nada para contar nesta parte. &#10004;</div>';
+      return arv.map(function (a) { var aberto = AC.dep === a.dep;
+        return '<button type="button" class="ac-dep' + (aberto ? " on" : "") + '" data-cn="acdep" data-v="' + esc(a.dep) + '"><span>' + (aberto ? "&#9662; " : "&#9656; ") + esc(a.dep) + "</span><b>" + a.n + "</b></button>" +
+          (aberto ? '<div class="ac-marcas">' + a.marcas.map(function (m) { var mab = AC.marca === m.m;
+            return '<button type="button" class="ac-marca' + (mab ? " on" : "") + '" data-cn="acmarca" data-v="' + esc(m.m) + '"><span>' + (mab ? "&#9662; " : "&#9656; ") + esc(m.m) + "</span><b>" + m.n + "</b></button>" +
+              (mab ? '<div class="ac-itens">' + (!AC.itens || AC.itens.carr ? '<div class="carregando"><div class="giro"></div>Carregando…</div>' : acCards(AC.itens.itens) +
+                (AC.itens.itens.length < AC.itens.total ? '<button class="cn-bt" data-cn="acmaismarca" style="width:100%">Mostrar mais (' + (AC.itens.total - AC.itens.itens.length) + ")</button>" : "")) + "</div>" : ""); }).join("") + "</div>" : ""); }).join("");
+    }
     var its = l.itens || [];
     if (!its.length) return '<div class="cn-vazio">' + (AC.termo ? "Nada com essa busca nesta parte." : "Nada para contar nesta parte. &#10004;") + "</div>";
     return '<div style="font-weight:700;color:var(--sub);margin:4px 2px 8px">' + its.length + " de " + l.total + "</div>" +
-      its.map(function (it) { var h = cdCard(it); return it.v != null ? h.replace("</small>", " · <b>vendeu " + num(it.v) + " un em 30 dias</b></small>") : h; }).join("") +
+      acCards(its) +
       (its.length < l.total ? '<button class="cn-bt" data-cn="acmais" style="width:100%">Mostrar mais (' + (l.total - its.length) + ")</button>" : "");
   }
   function acHtml() {
@@ -4502,15 +4531,17 @@ window.PedidoPDF = (function () {
     if (k === "cdrelfil") { CD.relFil = v || ""; cnDesenhar(); return true; }
     if (k === "acgerar") { acGerar(); return true; }
     if (k === "acexcel") { acExcel(); return true; }
-    if (k === "acgrupo") { AC.grupo = v; AC.l = Object.assign({}, AC.l, { itens: null }); acCarregar(false); var bl = document.getElementById("acLista"); if (bl) bl.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando…</div>'; return true; }
+    if (k === "acgrupo") { AC.grupo = v; AC.dep = ""; AC.marca = ""; AC.itens = null; AC.arv = null; var bl = document.getElementById("acLista"); if (bl) bl.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando…</div>'; cnDesenhar(); acCarregar(false); return true; }
+    if (k === "acdep") { AC.dep = AC.dep === v ? "" : v; AC.marca = ""; AC.itens = null; acRedesenhar(); return true; }
+    if (k === "acmarca") { if (AC.marca === v) { AC.marca = ""; AC.itens = null; acRedesenhar(); return true; } acAbrirMarca(AC.dep, v, false); acRedesenhar(); return true; }
+    if (k === "acmaismarca") { acAbrirMarca(AC.dep, AC.marca, true); return true; }
     if (k === "acmais") { AC.ini = (AC.l && AC.l.itens ? AC.l.itens.length : 0); acCarregar(true); return true; }
     return false;
   }
   function cdDigita(e) {
     var t = e.target;
     if (t.getAttribute && t.getAttribute("data-cdq") != null) { var p = t.getAttribute("data-cdq"), o = CD.vals[p] = CD.vals[p] || {}; o[t.getAttribute("data-k")] = t.value; cdAtualTot(p); return true; }
-    if (t.id === "acFiltro") { AC.termo = t.value; clearTimeout(AC.tb); AC.tb = setTimeout(function () { AC.ini = 0;
-        cnChamar("contAContarLista", [{ loja: acLoja(), grupo: AC.grupo, ini: 0, n: 60, termo: AC.termo }], function (r) { AC.l = r; var b = document.getElementById("acLista"); if (b) b.innerHTML = acHtmlLista(); }); }, 450); return true; }
+    if (t.id === "acFiltro") { AC.termo = t.value.trim() ? t.value : ""; clearTimeout(AC.tb); AC.tb = setTimeout(function () { AC.ini = 0; acCarregar(false); }, 450); return true; }
     if (t.id === "cdBusca") { CD.termo = t.value; CD.lim = 40; clearTimeout(CD.tb); CD.tb = setTimeout(cdBuscar, 450); return true; }
     return false;
   }
@@ -6859,7 +6890,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-25.8";
+  var VERSAO_APP = "2026-11-25.9";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
