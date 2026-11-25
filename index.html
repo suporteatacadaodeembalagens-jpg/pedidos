@@ -4187,7 +4187,7 @@ window.PedidoPDF = (function () {
   // A loja só conta depois que a lista for FECHADA e liberada (tela Contagem de estoque > Listas).
   var pedCont = { plu: "", montando: [] };
   function contagemClique(plu) {   // 25/11: abre a Contagem (contagem direta) já procurando o produto
-    if (typeof CD !== "undefined") { CD.termo = String(plu || ""); CD.forn = ""; CD.linha = "todos"; CN.aba = "contar"; abrirContNova("app"); return; }
+    if (typeof CD !== "undefined") { CD.termo = String(plu || ""); CD.forn = ""; CD.linha = "todos"; CD.res = null; CN.aba = "contar"; abrirContNova("app"); return; }
     if (!ehMgrLogin() || comoLoja) { toast("Só Administração e Diretoria pedem contagem"); return; }
     pedCont.plu = plu; var it = itemQualquer(plu);
     modal("Pedir contagem de estoque", '<div class="carregando"><div class="giro"></div>Buscando as listas em montagem…</div>');
@@ -4227,7 +4227,7 @@ window.PedidoPDF = (function () {
              abertaId: "", lojaCont: "", val: null, vBusca: [], tb: 0, digitado: {} };
   function cnChamar(fn, args, ok, falha) {
     var f = falha || function (e) { toast(String(e && e.message || e)); };
-    if (CN.modo === "exp") expChamar(fn, (args || []).concat(fn === "contListas" || fn === "contListaContar" || fn === "contListaFinalizar" || /^validade/.test(fn) || /^contDireta/.test(fn) ? [EXP.ct || ""] : []), ok, f);
+    if (CN.modo === "exp") expChamar(fn, (args || []).concat(fn === "contListas" || fn === "contListaContar" || fn === "contListaFinalizar" || /^validade/.test(fn) || /^contDireta|^contBuscar/.test(fn) ? [EXP.ct || ""] : []), ok, f);
     else chamar(fn, args || [], ok, f);
   }
   function cnNome(c) { return (CN.nomes && CN.nomes[c]) || (RES && RES.nomes && RES.nomes[c]) || c; }
@@ -4333,19 +4333,25 @@ window.PedidoPDF = (function () {
   // ---------- 25/11 (Marcelo): CONTAGEM DIRETA ----------
   // Busca igual à da Consulta (nome, PLU/EAN exato, marca, fornecedor, Linha/Fora de linha, % = todos) e um CARD por produto:
   // UN [▲ 0 ▼] + CX [▲ 0 ▼] -> total em UN; validade opcional; "ENVIAR CONTAGEM" = fila do robô de ajuste + Relatório (card verde).
-  var CD = { termo: "", forn: "", linha: "linha", lim: 40, vals: {}, env: {}, lojaSel: "", rel: null, relFil: "", relLoja: "", tb: 0 };
+  var CD = { termo: "", forn: "", linha: "linha", lim: 40, vals: {}, env: {}, lojaSel: "", rel: null, relFil: "", relLoja: "", tb: 0, res: null, mais: false, forns: null, seq: 0, buscando: false };
   function cdLoja() { return CN.mgr ? CD.lojaSel : CN.loja; }
-  function cdItem(p) { return (typeof porPlu !== "undefined" && porPlu[p]) || null; }
-  function cdResultados() {
-    if (!dados || !dados.departamentos) return null;
-    var termo = semAcento(String(CD.termo || "").trim()), num = numBusca(termo), l = [];
-    if (!termo && !CD.forn) return [];
-    dados.departamentos.forEach(function (d) { (d.itens || []).forEach(function (it) {
-      if (CD.linha !== "todos" && (CD.linha === "fora") !== !!it.fl) return;
-      if (CD.forn && it.f !== CD.forn) return;
-      if (termo && termo !== "%" && !casaBusca(it, termo, num, true)) return;
-      l.push(it); }); });
-    return l.sort(ordemAlfa);
+  function cdItem(p) { return ((CD.res || []).filter(function (x) { return x.p === p; })[0]) || (typeof porPlu !== "undefined" && porPlu[p]) || null; }
+  /* 25/11 (2): a busca é no CADASTRO INTEIRO, no servidor (produto com estoque positivo, zero ou negativo). */
+  function cdBuscar() {
+    var termo = String(CD.termo || "").trim(), sq = ++CD.seq;
+    if (termo.length < 2 && termo !== "%" && !CD.forn && CD.forns) { CD.res = []; CD.mais = false; CD.buscando = false; cdRedesenharRes(); return; }
+    CD.buscando = true; cdRedesenharRes();
+    cnChamar("contBuscar", [termo, CD.forn, CD.linha, CD.forns ? 0 : 1], function (r) {
+      if (sq !== CD.seq) return;
+      CD.buscando = false; CD.res = (r && r.itens) || []; CD.mais = !!(r && r.mais);
+      if (r && r.forns) { CD.forns = r.forns; var s = document.getElementById("cdForn"); if (s) s.outerHTML = cdHtmlForn(); }
+      cdRedesenharRes();
+    }, function (e) { if (sq !== CD.seq) return; CD.buscando = false; CD.res = []; cdRedesenharRes(); toast(String(e && e.message || e)); });
+  }
+  function cdResultados() { return CD.res || []; }
+  function cdHtmlForn() {
+    return '<select id="cdForn" style="margin-top:8px"><option value="">' + (CD.forns ? "Todos os fornecedores" : "Carregando fornecedores…") + "</option>" +
+      (CD.forns || []).map(function (f) { return '<option value="' + esc(f.nome) + '"' + (f.nome === CD.forn ? " selected" : "") + ">" + esc(f.nome) + " (" + f.n + ")</option>"; }).join("") + "</select>";
   }
   function cdTotal(p, it) { var v = CD.vals[p] || {}, emb = Number(it && it.q) || 0; return (Number(String(v.un || "").replace(",", ".")) || 0) + (emb > 1 ? (Number(String(v.cx || "").replace(",", ".")) || 0) * emb : 0); }
   function cdCont(p, k, rot, val) {
@@ -4364,24 +4370,24 @@ window.PedidoPDF = (function () {
       '<button class="cn-bt cd-env" data-cn="cdenviar" data-v="' + esc(p) + '">' + (e ? "Enviar de novo" : "ENVIAR CONTAGEM") + "</button></div>";
   }
   function cdHtmlRes() {
-    var l = cdResultados(), dg0 = String(CD.termo || "").replace(/\D/g, "");
-    if (l === null) return dg0.length >= 3 && dg0.length <= 6 ? cdCard({ p: ("000000" + dg0).slice(-6), d: "PLU " + ("000000" + dg0).slice(-6) })
-      : '<div class="cn-vazio">A lista de produtos não está neste aparelho: digite o PLU do produto.</div>';
+    if (CD.buscando) return '<div class="carregando"><div class="giro"></div>Procurando no cadastro…</div>';
+    var l = cdResultados();
     if (!String(CD.termo || "").trim() && !CD.forn) return '<div class="cn-vazio">Procure o produto pelo nome, PLU, código de barras, marca ou fornecedor (ou % para todos).</div>';
     if (!l.length) { var dg = String(CD.termo || "").replace(/\D/g, "");
       return '<div class="cn-vazio">Nenhum produto com essa busca' + (CD.linha === "linha" ? ' em <b>Linha</b> (tente "Todos")' : "") + ".</div>" +
         (dg.length >= 3 && dg.length <= 6 ? cdCard({ p: ("000000" + dg).slice(-6), d: "PLU " + ("000000" + dg).slice(-6) }) : ""); }
     return '<div style="font-weight:700;color:var(--sub);margin:4px 2px 8px">' + l.length + (l.length === 1 ? " produto" : " produtos") + "</div>" +
       l.slice(0, CD.lim).map(cdCard).join("") +
-      (l.length > CD.lim ? '<button class="cn-bt" data-cn="cdmaisres" style="width:100%">Mostrar mais (' + (l.length - CD.lim) + ")</button>" : "");
+      (l.length > CD.lim ? '<button class="cn-bt" data-cn="cdmaisres" style="width:100%">Mostrar mais (' + (l.length - CD.lim) + ")</button>" : "") +
+      (CD.mais ? '<div class="cn-vazio">Mostrando os primeiros ' + l.length + " produtos: refine a busca (nome, fornecedor ou Linha).</div>" : "");
   }
   function cdHtmlContar() {
     var h = "";
     if (CN.mgr) h += '<div class="cn-card" style="border-left-color:var(--ouro)"><label style="margin-top:0">Loja da contagem</label><select id="cdLoja"><option value="">Escolha a loja…</option>' +
       cnLojasTodas().map(function (c) { return '<option value="' + c + '"' + (c === CD.lojaSel ? " selected" : "") + ">" + esc(c + " " + cnNome(c)) + "</option>"; }).join("") + "</select></div>";
-    var forns = typeof nomesForn === "function" ? nomesForn().slice().sort(function (a, b) { return String(a.nome).localeCompare(String(b.nome), "pt-BR"); }) : [];
+    if (CD.res === null && !CD.buscando) setTimeout(cdBuscar, 0);   // 1ª vez: carrega os fornecedores (e o produto vindo da Consulta)
     h += '<div class="cn-card" style="border-left-color:var(--azul)"><input id="cdBusca" type="search" autocomplete="off" placeholder="Procure: nome, PLU, código de barras, marca ou fornecedor (% = todos)" value="' + esc(CD.termo) + '">' +
-      '<select id="cdForn" style="margin-top:8px"><option value="">Todos os fornecedores</option>' + forns.map(function (f) { return '<option value="' + esc(f.nome) + '"' + (f.nome === CD.forn ? " selected" : "") + ">" + esc(f.nome) + "</option>"; }).join("") + "</select>" +
+      cdHtmlForn() +
       '<div class="cd-filtros">' + [["linha", "Linha"], ["fora", "Fora de linha"], ["todos", "Todos"]].map(function (o) { return '<button type="button" data-cn="cdlinha" data-v="' + o[0] + '" class="' + (CD.linha === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div></div>";
     return h + '<div id="cdRes">' + cdHtmlRes() + "</div>";
   }
@@ -4408,7 +4414,7 @@ window.PedidoPDF = (function () {
       var n = Math.max(0, (Number(String(o[q] || "").replace(",", ".")) || 0) + (k === "cdmais" ? 1 : -1)); o[q] = String(n);
       var inp = document.querySelector('[data-cdq="' + v + '"][data-k="' + q + '"]'); if (inp) inp.value = o[q]; cdAtualTot(v); return true; }
     if (k === "cdenviar") { cdEnviar(v); return true; }
-    if (k === "cdlinha") { CD.linha = v; CD.lim = 40; cnDesenhar(); return true; }
+    if (k === "cdlinha") { CD.linha = v; CD.lim = 40; cnDesenhar(); cdBuscar(); return true; }
     if (k === "cdmaisres") { CD.lim += 40; cdRedesenharRes(); return true; }
     if (k === "cdrelfil") { CD.relFil = v || ""; cnDesenhar(); return true; }
     return false;
@@ -4416,13 +4422,13 @@ window.PedidoPDF = (function () {
   function cdDigita(e) {
     var t = e.target;
     if (t.getAttribute && t.getAttribute("data-cdq") != null) { var p = t.getAttribute("data-cdq"), o = CD.vals[p] = CD.vals[p] || {}; o[t.getAttribute("data-k")] = t.value; cdAtualTot(p); return true; }
-    if (t.id === "cdBusca") { CD.termo = t.value; CD.lim = 40; clearTimeout(CD.tb); CD.tb = setTimeout(cdRedesenharRes, 300); return true; }
+    if (t.id === "cdBusca") { CD.termo = t.value; CD.lim = 40; clearTimeout(CD.tb); CD.tb = setTimeout(cdBuscar, 450); return true; }
     return false;
   }
   function cdMuda(e) {
     var t = e.target; if (!t) return;
     if (t.getAttribute && t.getAttribute("data-cdv") != null) { var p = t.getAttribute("data-cdv"); (CD.vals[p] = CD.vals[p] || {}).venc = t.value; return; }
-    if (t.id === "cdForn") { CD.forn = t.value; CD.lim = 40; cdRedesenharRes(); return; }
+    if (t.id === "cdForn") { CD.forn = t.value; CD.lim = 40; cdBuscar(); return; }
     if (t.id === "cdLoja") { CD.lojaSel = t.value; cdRedesenharRes(); return; }
     if (t.id === "cdRelLoja") { CD.relLoja = t.value; cnDesenhar(); return; }
   }
@@ -6757,7 +6763,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-25.1";
+  var VERSAO_APP = "2026-11-25.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
