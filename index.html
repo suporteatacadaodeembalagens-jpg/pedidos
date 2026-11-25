@@ -4355,9 +4355,9 @@ window.PedidoPDF = (function () {
   }
   function cdTotal(p, it) { var v = CD.vals[p] || {}, emb = Number(it && it.q) || 0; return (Number(String(v.un || "").replace(",", ".")) || 0) + (emb > 1 ? (Number(String(v.cx || "").replace(",", ".")) || 0) * emb : 0); }
   function cdCont(p, k, rot, val) {
-    return '<div class="cd-cont"><small>' + esc(rot) + '</small><div class="cd-bx"><button type="button" data-cn="cdmais" data-v="' + esc(p) + '" data-k="' + k + '" aria-label="mais 1">&#9650;</button>' +
+    return '<div class="cd-cont"><small>' + esc(rot) + '</small><div class="cd-bx"><button type="button" data-cn="cdmenos" data-v="' + esc(p) + '" data-k="' + k + '" aria-label="menos 1">&#9660;</button>' +
       '<input inputmode="decimal" autocomplete="off" data-cdq="' + esc(p) + '" data-k="' + k + '" value="' + esc(val == null ? "" : String(val)) + '" placeholder="0">' +
-      '<button type="button" data-cn="cdmenos" data-v="' + esc(p) + '" data-k="' + k + '" aria-label="menos 1">&#9660;</button></div></div>';
+      '<button type="button" data-cn="cdmais" data-v="' + esc(p) + '" data-k="' + k + '" aria-label="mais 1">&#9650;</button></div></div>';   // 25/11: ▼ à esquerda, ▲ à direita
   }
   function cdCard(it) {
     var p = it.p, v = CD.vals[p] || {}, emb = Number(it.q) || 0, temCx = emb > 1, tipo = it.t && it.t !== "UN" ? it.t : "CX", e = CD.env[cdLoja() + "|" + p];
@@ -6763,7 +6763,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-25.2";
+  var VERSAO_APP = "2026-11-25.3";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
