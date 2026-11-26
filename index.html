@@ -4279,7 +4279,7 @@ window.PedidoPDF = (function () {
         "#telaCont .cd-ok .cd-env{background:#fff !important;color:#178a40 !important;border:1.5px solid #9fd5b0 !important}" +
         "#telaCont .ac-dep,#telaCont .ac-marca{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;border:1px solid #c3d2e5;border-radius:10px;padding:12px 14px;margin:0 0 6px;background:#fff;font-size:15px;font-weight:800;color:var(--marrom);cursor:pointer}" +
         "#telaCont .ac-dep{background:#eef3f9}#telaCont .ac-dep.on{background:var(--azul);color:#fff;border-color:var(--azul)}#telaCont .ac-dep b,#telaCont .ac-marca b{background:#fff;color:var(--azul);border-radius:999px;padding:2px 10px;font-size:13px;border:1px solid #c3d2e5}" +
-        "#telaCont .ac-marcas{margin:0 0 10px 14px}#telaCont .ac-marca{font-size:14px;font-weight:700;padding:10px 12px}#telaCont .ac-marca.on{border-color:var(--azul);background:#e8f1fb}#telaCont .ac-itens{margin:0 0 10px 6px}" +
+        "#telaCont .ac-marcas{margin:0 0 10px 14px}#telaCont .ac-marca{font-size:14px;font-weight:700;padding:10px 12px}#telaCont .ac-marca.on{border-color:var(--azul);background:#e8f1fb}#telaCont .ac-itens{margin:0 0 10px 6px}#telaCont .ac-zerar{display:block;width:100%;margin:0 0 8px;padding:11px 12px;border:2px solid #c62828;border-radius:10px;background:#fff5f5;color:#b71c1c;font-size:14px;font-weight:800;cursor:pointer;text-align:center}" +
         "#telaCont .cd-somar{background:linear-gradient(180deg,#1d5fa8,#174c88) !important}#telaCont .cd-aviso{margin:6px 0 0;font-size:12.5px;font-weight:700;color:#8a5a00;background:#fff6dc;border:1px solid #f0d58a;border-radius:8px;padding:6px 8px}" +
         "#telaCont .cd-card.cd-erro{border-left-color:#c62828;background:#fdf2f2}#telaCont .cd-st.erro{color:#c62828;margin:6px 0 4px}" +
         "#telaCont .cd-st{margin:6px 0 0;font-size:13px;font-weight:700;color:#1d7a35}#telaCont .cd-filtros{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}" +
@@ -4444,11 +4444,11 @@ window.PedidoPDF = (function () {
     if (!AC.termo) {   // 25/11 (Marcelo): tudo FECHADO em barras de departamento; abrindo, as marcas; a marca abre os produtos
       var arv = AC.arv || [];
       if (!arv.length) return '<div class="cn-vazio">Nada para contar nesta parte. &#10004;</div>';
-      return arv.map(function (a) { var aberto = AC.dep === a.dep;
+      return acZBotao("", "", "Zerar itens sem venda (lista toda)") + arv.map(function (a) { var aberto = AC.dep === a.dep;
         return '<button type="button" class="ac-dep' + (aberto ? " on" : "") + '" data-cn="acdep" data-v="' + esc(a.dep) + '"><span>' + (aberto ? "&#9662; " : "&#9656; ") + esc(a.dep) + "</span><b>" + a.n + "</b></button>" +
-          (aberto ? '<div class="ac-marcas">' + a.marcas.map(function (m) { var mab = AC.marca === m.m;
+          (aberto ? '<div class="ac-marcas">' + acZBotao(a.dep, "", "Zerar o departamento " + a.dep) + a.marcas.map(function (m) { var mab = AC.marca === m.m;
             return '<button type="button" class="ac-marca' + (mab ? " on" : "") + '" data-cn="acmarca" data-v="' + esc(m.m) + '"><span>' + (mab ? "&#9662; " : "&#9656; ") + esc(m.m) + "</span><b>" + m.n + "</b></button>" +
-              (mab ? '<div class="ac-itens">' + (!AC.itens || AC.itens.carr ? '<div class="carregando"><div class="giro"></div>Carregando…</div>' : acCards(AC.itens.itens) +
+              (mab ? '<div class="ac-itens">' + acZBotao(a.dep, m.m, "Zerar a marca " + m.m) + (!AC.itens || AC.itens.carr ? '<div class="carregando"><div class="giro"></div>Carregando…</div>' : acCards(AC.itens.itens) +
                 (AC.itens.itens.length < AC.itens.total ? '<button class="cn-bt" data-cn="acmaismarca" style="width:100%">Mostrar mais (' + (AC.itens.total - AC.itens.itens.length) + ")</button>" : "")) + "</div>" : ""); }).join("") + "</div>" : ""); }).join("");
     }
     var its = l.itens || [];
@@ -4474,6 +4474,43 @@ window.PedidoPDF = (function () {
         return '<button type="button" data-cn="acgrupo" data-v="' + o[0] + '" class="' + (AC.grupo === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>" +
       '<input id="acFiltro" type="search" autocomplete="off" placeholder="Procurar nesta lista (nome, PLU, código de barras, marca, fornecedor)" value="' + esc(AC.termo) + '" style="margin:0 0 10px">';
     return h + '<div id="acLista">' + (AC.carr ? '<div class="carregando"><div class="giro"></div>Carregando…</div>' : acHtmlLista()) + "</div>";
+  }
+  /* 26/11 (Marcelo): ZERAR itens SEM VENDA. 1º toque = o app conta quantos (só estoque ≠ 0 no sistema);
+     2º = tela grande "TEM CERTEZA?". Só Gerência, Administração e Diretoria. */
+  function acPodeZerar() { return AC.grupo === "sem" && CN.modo !== "exp" && (CN.mgr || nivelNum() >= 2); }
+  function acZBotao(dep, marca, txt) {
+    if (!acPodeZerar()) return "";
+    return '<button type="button" class="ac-zerar" data-cn="aczerar" data-v="' + esc(dep) + '" data-m="' + esc(marca) + '">&#9888; ' + esc(txt) + "</button>";
+  }
+  function acZFechar() { var m = document.getElementById("acZModal"); if (m) m.remove(); }
+  function acZerar(dep, marca) {
+    var lj = acLoja(); if (!lj) { toast("Escolha a loja"); return; }
+    toast("Contando os itens sem venda com estoque…");
+    cnChamar("contAContarZerar", [{ loja: lj, dep: dep, marca: marca }], function (r) {
+      acZFechar();
+      var onde = marca ? "da marca <b>" + esc(marca) + "</b>" + (dep ? " (" + esc(dep) + ")" : "") : dep ? "do departamento <b>" + esc(dep) + "</b>" : "de <b>toda a lista</b>";
+      var fora = (r.nZero || r.nSemEst) ? '<p style="font-size:14px;color:#555;margin:8px 0 0">Não vão: ' + (r.nZero || 0) + " já estão com estoque 0" + (r.nSemEst ? " e " + r.nSemEst + " sem estoque no sistema" : "") + ".</p>" : "";
+      var m = document.createElement("div"); m.id = "acZModal";
+      m.setAttribute("style", "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px");
+      m.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:520px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center;font-family:inherit">' +
+        (r.n ? '<div style="font-size:44px;line-height:1">&#9888;</div><h2 style="margin:6px 0 10px;color:#b71c1c;font-size:24px">TEM CERTEZA?</h2>' +
+          '<p style="font-size:17px;margin:0">Isso vai <b style="color:#b71c1c">ZERAR O ESTOQUE de ' + r.n + " itens sem venda</b> " + onde + " na loja <b>" + esc(r.nomeLoja || lj) + "</b>.</p>" +
+          '<p style="font-size:15px;margin:8px 0 0">' + (r.pos || 0) + " com estoque positivo e " + (r.neg || 0) + " negativo. O robô vai ajustar todos para 0 no ERP.</p>" + fora +
+          '<button type="button" id="acZSim" style="display:block;width:100%;margin:18px 0 10px;padding:20px 12px;font-size:20px;font-weight:900;color:#fff;background:#c62828;border:0;border-radius:14px;cursor:pointer">SIM, ZERAR ' + r.n + " ITENS</button>"
+        : '<h2 style="margin:0 0 10px;font-size:20px">Nada para zerar</h2><p style="font-size:16px;margin:0">Nenhum item sem venda ' + onde + " tem estoque diferente de 0.</p>" + fora + '<div style="height:14px"></div>') +
+        '<button type="button" id="acZNao" style="display:block;width:100%;padding:14px;font-size:17px;font-weight:700;background:#eef3f9;border:1px solid #c3d2e5;border-radius:12px;cursor:pointer">' + (r.n ? "Cancelar" : "Fechar") + "</button></div>";
+      document.body.appendChild(m);
+      document.getElementById("acZNao").addEventListener("click", acZFechar);
+      m.addEventListener("click", function (e) { if (e.target === m) acZFechar(); });
+      var sim = document.getElementById("acZSim");
+      if (sim) sim.addEventListener("click", function () {
+        sim.disabled = true; sim.textContent = "Mandando para o robô…";
+        cnChamar("contAContarZerar", [{ loja: lj, dep: dep, marca: marca, confirmar: 1 }], function (z) {
+          acZFechar(); toast(z.n + " itens mandados para o robô zerar (" + (z.nomeLoja || lj) + ")");
+          AC.l = null; AC.itens = null; AC.marca = ""; cnDesenhar();
+        }, function (e) { acZFechar(); toast(String(e && e.message || e)); });
+      });
+    });
   }
   function acGerar() {
     var lj = acLoja(); if (!lj) { toast("Escolha a loja"); return; }
@@ -4534,6 +4571,7 @@ window.PedidoPDF = (function () {
     if (k === "acgrupo") { AC.grupo = v; AC.dep = ""; AC.marca = ""; AC.itens = null; AC.arv = null; var bl = document.getElementById("acLista"); if (bl) bl.innerHTML = '<div class="carregando"><div class="giro"></div>Carregando…</div>'; cnDesenhar(); acCarregar(false); return true; }
     if (k === "acdep") { AC.dep = AC.dep === v ? "" : v; AC.marca = ""; AC.itens = null; acRedesenhar(); return true; }
     if (k === "acmarca") { if (AC.marca === v) { AC.marca = ""; AC.itens = null; acRedesenhar(); return true; } acAbrirMarca(AC.dep, v, false); acRedesenhar(); return true; }
+    if (k === "aczerar") { acZerar(v || "", b.getAttribute("data-m") || ""); return true; }
     if (k === "acmaismarca") { acAbrirMarca(AC.dep, AC.marca, true); return true; }
     if (k === "acmais") { AC.ini = (AC.l && AC.l.itens ? AC.l.itens.length : 0); acCarregar(true); return true; }
     return false;
@@ -6890,7 +6928,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-25.9";
+  var VERSAO_APP = "2026-11-26.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
