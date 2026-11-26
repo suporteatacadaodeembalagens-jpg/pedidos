@@ -942,7 +942,7 @@ window.PedidoPDF = (function () {
   var CONDICOES = [
     "1 - HORÁRIO DE ENTREGA: SEGUNDA A QUINTA DAS 08:00 Às 17:00 e SEXTA DAS 08:00 ÀS 16:00.",
     "2 - INCLUIR O PRAZO DE PEGAMENTO JUNTO AO XML.",
-    "3 - E-MAIL PARA ENVIO DE NF E XML: WILLIANN@ATACADAODEEMBALAGENS.COM",
+    "3 - E-MAIL PARA ENVIO DE NF E XML: xml@atacadaodeembalagens.com.br",
     "4 - PRAZO DE PAGAMENTO ACORDADO: TOLERÂNCIA DE 5 DIAS CORRIDOS PARA ENTREGA, ULTRAPASSANDO ESSE LIMITE O BOLETO\nDEVERÁ SER ATUALIZADO RESPEITANDO O PRAZO ACORDADO NA ORDEM DE COMPRA.",
     "5 - SE AS CONDIÇÕES E/OU MERCADORIAS DA NOTA FISCAS NÃO CONDIZEREM COM AS DO PEDIDO O ATACADAO DE EMBALAGENS\n RESERVA-SE NO DIREITO DE RECEBER AS MERCADORIAS E PEDIR O RESSARCIMENTO DA DIFERENÇA",
     "6 - SERÁ DADO PRIORIDADE PARA A DESCARGA DE PERECÍVEIS",
@@ -6089,7 +6089,10 @@ window.PedidoPDF = (function () {
       return '<button class="modo' + (cmp.aba === a[0] ? " ativo" : "") + '" data-cab="' + a[0] + '">' + a[1] + "</button>"; }).join("") + "</div>";
     if (cmp.aba !== "novo") { $("lista").innerHTML = '<div class="titulo-tela">Pedido de compra</div>' + abas + '<div id="cmpRecentes"></div>'; desenharRecentes(); return; }
     carregarEntregas();
+    // 26/11 (Marcelo): CANCELAR PEDIDO ATUAL = apaga tudo (fornecedor, entrega, prazos, itens) para começar outro do zero
+    var temAlgo = !!(compra.id || compra.fornecedor || compra.obs || compra.dataEntrega || Object.keys(compra.itens || {}).length);
     $("lista").innerHTML = '<div class="titulo-tela">Pedido de compra</div>' + abas +
+      (temAlgo ? '<button class="btn largo" id="cmpCancelar" type="button" style="background:#fff5f5;color:#b71c1c;border:2px solid #c62828;font-weight:800;margin:0 0 12px">&#10005; Cancelar pedido atual</button>' : "") +
       '<div class="campo forn-wrap"><label for="cmpForn">Fornecedor</label><input id="cmpForn" autocomplete="off" placeholder="Toque para ver todos os fornecedores" value="' + esc(compra.fornecedor) + '">' +
       '<div class="forn-lista" id="cmpFornLista" hidden></div></div>' +
       '<div id="cmpFornDados"></div>' +
@@ -6107,7 +6110,20 @@ window.PedidoPDF = (function () {
       '<div class="campo"><label for="cmpObs">Observações do pedido (opcional)</label><input id="cmpObs" maxlength="300" value="' + esc(compra.obs) + '"></div>' +
       '<div id="cmpRes"></div><div id="cmpItens"></div>';
     if (compra.fornecedor) carregarFornDados(compra.fornecedor);
+    var bc = $("cmpCancelar"); if (bc) bc.addEventListener("click", function () { cancelarCompraAtual(bc); });
     atualizarCmp();
+  }
+  /** 26/11: 1º toque pede confirmação; 2º toque (em até 4 s) apaga o pedido em edição. O que já foi SALVO continua na aba Salvos. */
+  function cancelarCompraAtual(b) {
+    if (!b._conf) { b._conf = true; b.textContent = "Toque de novo para APAGAR TUDO e começar do zero";
+      b.style.background = "#c62828"; b.style.color = "#fff";
+      setTimeout(function () { if (!b.isConnected) return; b._conf = false; b.innerHTML = "&#10005; Cancelar pedido atual"; b.style.background = "#fff5f5"; b.style.color = "#b71c1c"; }, 4000);
+      return; }
+    var eraSalvo = !!compra.id;
+    compra = compraVazia(); salvarCompra();
+    cmp.forn = null; cmp.fornNome = ""; cmp.busca = null; cmp.termo = ""; cmp.limite = 150; cmp.confSemCnpj = false;
+    desenharCompra(); window.scrollTo(0, 0);
+    toast(eraSalvo ? "Pedido cancelado. A cópia salva continua na aba Salvos." : "Pedido cancelado. Pode começar outro do zero.");
   }
   /** Lista de fornecedores embaixo do campo (abre ao tocar, filtra ao digitar). */
   function mostrarForn() {
@@ -6928,7 +6944,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-26.1";
+  var VERSAO_APP = "2026-11-26.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
