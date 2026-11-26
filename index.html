@@ -213,6 +213,7 @@
   #logCargo{width:100%;padding:12px;border:1px solid #d3dde9;border-radius:10px;font-size:16px;background:#fff}
   .btn.bloq{background:#9a9a9a !important}
   .tile.destaque{background:var(--marrom);border-left-color:var(--ouro)}
+  .tile.val-alerta{background:#fff5f5;border-left-color:#c62828}.tile.val-alerta span{color:#b71c1c;font-weight:800}.tile.val-alerta svg{color:#c62828}
   .tile.destaque b{color:#fff} .tile.destaque span{color:#d6e6f8} .tile.destaque svg{color:var(--ouro)}
   .titulo-tela{font-size:18px;font-weight:800;color:var(--marrom);margin:6px 2px 12px}
   .ficha{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:8px 0 0;font-size:13.5px}
@@ -3217,9 +3218,62 @@ window.PedidoPDF = (function () {
     chamar("precosLoja", [], function (p) { buscarPrecosLoja.indo = false; cons.precosLoja = p || {}; if (tela === "consulta") resultadosConsulta(); },
       function () { buscarPrecosLoja.indo = false; cons.precosLoja = {}; if (tela === "consulta") resultadosConsulta(); });
   }
+  /* 26/11 (Marcelo): AVISO DE VALIDADE. Cada lote avisa 1 vez em cada marco: faltando 15, 10 e 5 dias, no dia de vencer e
+     depois de vencido (quem não abriu o app no dia exato recebe o aviso quando abrir). "Visto" fica neste aparelho.
+     Lote com quantidade real 0 não avisa. Selo vermelho no botão Contagem enquanto tiver lote vencendo em até 15 dias. */
+  var VALAV = { n: 0, venc: 0, ts: 0, indo: false };
+  function valDias(venc) { var p = String(venc || "").split("-"); if (p.length !== 3) return null;
+    var h = new Date(); h = new Date(h.getFullYear(), h.getMonth(), h.getDate()); var v = new Date(+p[0], +p[1] - 1, +p[2]);
+    return Math.round((v - h) / 864e5); }
+  function valMarco(d) { return d == null || d > 15 ? "" : d < 0 ? "venceu" : d === 0 ? "hoje" : d <= 5 ? "5" : d <= 10 ? "10" : "15"; }
+  function valAvisoChecar(forcar) {
+    if (!sessao || !EM_APPS_SCRIPT || VALAV.indo) return;
+    if (!forcar && Date.now() - VALAV.ts < 30 * 60000) return;   // no máximo a cada 30 min
+    VALAV.indo = true;
+    chamar("validadeLista", [], function (r) {
+      VALAV.indo = false; VALAV.ts = Date.now();
+      var nomes = (r && r.nomes) || {}, its = ((r && r.itens) || []).filter(function (x) { return !(x.atual != null && Number(x.atual) <= 0); });
+      var lst = its.map(function (x) { var d = valDias(x.venc); return { x: x, d: d, m: valMarco(d) }; }).filter(function (o) { return o.m; });
+      VALAV.n = lst.length; VALAV.venc = lst.filter(function (o) { return o.d < 0; }).length;
+      var vis = LS.get("valVistos", {}) || {}, ids = {}, novos = [];
+      its.forEach(function (x) { ids[x.id] = 1; });
+      Object.keys(vis).forEach(function (k) { if (!ids[k.split("|")[0]]) delete vis[k]; });   // lote que saiu: esquece
+      lst.forEach(function (o) { if (!vis[o.x.id + "|" + o.m]) novos.push(o); });
+      LS.set("valVistos", vis);
+      if (typeof tela !== "undefined" && tela === "inicio") desenharInicio();
+      if (novos.length) valAvisoMostrar(novos, nomes, vis);
+    }, function () { VALAV.indo = false; });
+  }
+  function valAvisoMostrar(novos, nomes, vis) {
+    if (document.getElementById("valAvModal")) return;
+    novos.sort(function (a, b) { return a.d - b.d; });
+    var rot = { venceu: "VENCIDO", hoje: "VENCE HOJE", "5": "Vence em até 5 dias", "10": "Vence em até 10 dias", "15": "Vence em até 15 dias" };
+    var cor = { venceu: "#b71c1c", hoje: "#c62828", "5": "#e65100", "10": "#ef6c00", "15": "#8d6e00" };
+    var linhas = novos.slice(0, 40).map(function (o) { var x = o.x, dt = String(x.venc).split("-").reverse().join("/");
+      var q = x.atual != null ? x.atual : x.q;
+      return '<div style="text-align:left;border-left:5px solid ' + cor[o.m] + ';background:#fafafa;border-radius:8px;padding:8px 10px;margin:0 0 6px">' +
+        '<div style="font-size:12px;font-weight:900;color:' + cor[o.m] + '">' + rot[o.m] + (o.d < 0 ? " há " + (-o.d) + " dia(s)" : o.d > 0 ? " · faltam " + o.d + " dia(s)" : "") + "</div>" +
+        '<div style="font-weight:800;font-size:14px">' + esc(x.d || ("PLU " + x.p)) + "</div>" +
+        '<div style="font-size:12px;color:#555">PLU ' + esc(x.p) + " · " + esc(nomes[x.loja] || x.loja) + " · vence " + esc(dt) + " · " + esc(String(q)) + " un</div></div>"; }).join("") +
+      (novos.length > 40 ? '<div style="font-size:13px;color:#555;margin:4px 0">+ ' + (novos.length - 40) + " lotes (veja na Validade)</div>" : "");
+    var m = document.createElement("div"); m.id = "valAvModal";
+    m.setAttribute("style", "position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px");
+    m.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:86vh;display:flex;flex-direction:column;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);font-family:inherit">' +
+      '<div style="text-align:center"><div style="font-size:38px;line-height:1">&#9888;</div><h2 style="margin:4px 0 2px;color:#b71c1c;font-size:21px">Aviso de validade</h2>' +
+      '<p style="margin:0 0 10px;font-size:14px;color:#444">' + novos.length + (novos.length === 1 ? " lote precisa" : " lotes precisam") + " de atenção</p></div>" +
+      '<div style="overflow:auto;flex:1;min-height:0">' + linhas + "</div>" +
+      '<button type="button" id="valAvVer" style="margin:12px 0 8px;padding:15px;font-size:17px;font-weight:900;color:#fff;background:#c62828;border:0;border-radius:12px;cursor:pointer">Ver na Validade</button>' +
+      '<button type="button" id="valAvOk" style="padding:12px;font-size:16px;font-weight:700;background:#eef3f9;border:1px solid #c3d2e5;border-radius:12px;cursor:pointer">OK, entendi</button></div>';
+    document.body.appendChild(m);
+    function visto() { novos.forEach(function (o) { vis[o.x.id + "|" + o.m] = Date.now(); }); LS.set("valVistos", vis); m.remove(); }
+    document.getElementById("valAvOk").addEventListener("click", visto);
+    document.getElementById("valAvVer").addEventListener("click", function () { visto(); CN.aba = "val"; CN.val = null; abrirContNova("app"); });
+  }
+  function valSub(txt) { return VALAV.n ? "⚠ " + VALAV.n + (VALAV.n === 1 ? " lote vencendo" : " lotes vencendo") + (VALAV.venc ? " (" + VALAV.venc + " vencido" + (VALAV.venc === 1 ? ")" : "s)") : "") + " · ver Validade" : txt; }
   function preCarregar() {
     if (!sessao || !EM_APPS_SCRIPT) return;
     carregarFotos();
+    setTimeout(function () { valAvisoChecar(false); }, 1500);   // 26/11: aviso de validade
     if (ehMgrLogin()) {
       if (!mgr.lista) buscarMgrLista();
       if (!salvosMgr) buscarSalvosMgr();
@@ -3974,7 +4028,7 @@ window.PedidoPDF = (function () {
       t.push(tile("consulta", "Consulta de produtos", "Estoque, preço, fornecedor e EAN", ICO.lupa));
       t.push(tile("compra", "Pedido de compra", nc ? nc + (nc === 1 ? " item em andamento" : " itens em andamento") : "Montar o PDF e mandar pelo WhatsApp", ICO.caminhao));
       t.push(tile("analise", "Análise de vendas", "Vendas mês a mês de cada produto, por loja", ICO.grafico));
-      t.push(tile("contagem", "Contagem e validade", "Listas para contar, relatório e validade", ICO.lista));
+      t.push(tile("contagem", "Contagem e validade", valSub("Contar, a contar, relatório e validade"), ICO.lista, VALAV.n ? "val-alerta" : ""));
       if (ehMestre()) t.push(tile("erros", "Relatório de erros", "Tudo que deu erro: ERP, login, pedidos, app", ICO.lista));
       t.push(tile("expedicao", "Expedição", "Conferência dos pedidos aprovados das lojas", ICO.caminhao));   // 19/11 (Marcelo): Administração e Diretoria (antes só o Marcelo)
     } else {
@@ -3987,7 +4041,7 @@ window.PedidoPDF = (function () {
       t.push(tile("consulta", "Consulta de produtos", "Estoque, fornecedor e EAN", ICO.lupa));
       if (nivelNum() >= 2) t.push(tile("analise", "Análise de vendas", "Vendas mês a mês da sua loja", ICO.grafico));
       else t.push(tile("bloq", "Análise de vendas", "Gerência, Administração e Diretoria", ICO.grafico, "bloq"));
-      t.push(tile("contagem", "Contagem de estoque", "Contar o estoque da sua loja", ICO.lista));
+      t.push(tile("contagem", "Contagem e validade", valSub("Contar o estoque da sua loja e validade"), ICO.lista, VALAV.n ? "val-alerta" : ""));
       // funções de Diretoria/Administração: aparecem com cadeado (não somem)
       t.push(tile("bloq", "Aguardando aprovação", "Diretoria e Administração", ICO.relogio, "bloq"));
       t.push(tile("bloq", "Pedido de compra", "Diretoria e Administração", ICO.caminhao, "bloq"));
@@ -6945,7 +6999,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-26.3";
+  var VERSAO_APP = "2026-11-26.4";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
