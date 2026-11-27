@@ -183,6 +183,11 @@
     .icone-btn svg{width:16px;height:16px}
   }
   .busca{padding:0 14px 10px}
+  /* 27/11 (Marcelo): X próprio para apagar a busca (o X do navegador não aparece em todo celular) */
+  .busca-wrap{position:relative}.busca-wrap #busca{padding-right:46px}
+  #busca::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+  .busca-x{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:0;border-radius:50%;background:transparent;color:#1d4a85;font-size:20px;font-weight:800;line-height:1;cursor:pointer;padding:0}
+  .busca-x:active{background:#e8f1fb}
   .busca input{width:100%;border:0;border-radius:10px;padding:11px 12px 11px 38px;font-size:15px;outline:none;
     background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%237a6a62' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center}
   .btn-ler{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;border:0;border-radius:10px;padding:9px 12px;
@@ -727,7 +732,7 @@
     <button class="modo ativo" data-mg="pendente">Aguardando aprovação</button>
     <button class="modo" data-mg="aprovado">Aprovados</button>
   </div>
-  <div class="busca"><input id="busca" type="search" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" autocomplete="off">
+  <div class="busca"><div class="busca-wrap"><input id="busca" type="search" placeholder="Buscar produto, PLU, marca, fornecedor ou EAN" autocomplete="off"><button type="button" id="buscaX" class="busca-x" aria-label="Apagar a busca" hidden>&#10005;</button></div>
     <button class="btn-ler" id="btnLer" type="button"><svg width="22" height="16" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><rect width="2" height="16"/><rect x="3" width="1" height="16"/><rect x="5" width="2" height="16"/><rect x="8" width="1" height="16"/><rect x="10" width="3" height="16"/><rect x="14" width="1" height="16"/><rect x="16" width="2" height="16"/><rect x="19" width="1" height="16"/><rect x="21" width="1" height="16"/></svg>Ler código de barras</button>
     <div class="campo forn-wrap campo-forn" data-bpw="lj" style="margin:8px 0 0"><input id="ljForn" data-bpforn="lj" autocomplete="off" placeholder="Fornecedor: toque para ver todos"><button class="limpar" type="button" data-bplimpar="lj" aria-label="Tirar o filtro de fornecedor" hidden>&times;</button><div class="forn-lista" id="ljFornLista" hidden></div></div></div>
   <nav class="abas" id="abas"></nav>
@@ -823,10 +828,10 @@
 
 <div class="tela" id="telaRevisao">
   <div class="painel">
+    <button class="fechar" id="btnFecharRev" aria-label="Fechar">&#10005;</button>   <!-- 27/11 (Marcelo) -->
     <h2>Revisar pedido</h2>
     <div class="corpo" id="revCorpo"></div>
     <div class="acoes">
-      <button class="btn btn-texto" id="btnLimpar">Limpar</button>
       <button class="btn btn-cinza" id="btnVoltar">Voltar</button>
       <button class="btn btn-verde" id="btnEnviar">Enviar pedido</button>
     </div>
@@ -6971,6 +6976,22 @@ window.PedidoPDF = (function () {
   $("btnMgrAprovar").addEventListener("click", aprovarMgr);
   var tBusca;
   $("busca").addEventListener("input", function () { clearTimeout(tBusca); tBusca = setTimeout(desenharLista, 200); });
+  // 27/11 (Marcelo): X para apagar a busca em qualquer celular + tocar na busca SELECIONA o texto (digitar já troca;
+  // antes o cursor ia para o começo da frase). Vale para todas as buscas do app (tocadas pelo dedo).
+  (function () {
+    var inp = $("busca"), bx = $("buscaX");
+    function sinc() { if (bx) bx.hidden = !inp.value; }
+    inp.addEventListener("input", sinc); setInterval(sinc, 600);
+    if (bx) bx.addEventListener("click", function () { inp.value = ""; sinc(); inp.dispatchEvent(new Event("input", { bubbles: true })); inp.focus(); });
+    document.addEventListener("pointerdown", function (e) {
+      var el = e.target; if (!el || el.tagName !== "INPUT" || el.type !== "search" || document.activeElement === el) return;
+      el._selPend = true;
+    }, true);
+    document.addEventListener("click", function (e) {
+      var el = e.target; if (!el || !el._selPend) return; el._selPend = false;
+      if (el.value) setTimeout(function () { try { el.setSelectionRange(0, el.value.length); } catch (x) { try { el.select(); } catch (y) {} } }, 0);
+    }, true);
+  })();
   $("modos").addEventListener("click", function (e) {
     var b = e.target.closest("[data-modo]"); if (!b || !dados) return;
     var md = b.getAttribute("data-modo");
@@ -6991,7 +7012,8 @@ window.PedidoPDF = (function () {
   $("lista").addEventListener("keydown", function (e) { if (e.target.id === "nomeNovo" && e.key === "Enter") novoPedido(); });
   $("btnVoltar").addEventListener("click", function () { $("telaRevisao").classList.remove("aberta"); });
   $("btnEnviar").addEventListener("click", enviar);
-  $("btnLimpar").addEventListener("click", function () {
+  $("btnFecharRev").addEventListener("click", function () { $("telaRevisao").classList.remove("aberta"); });   // 27/11: X fecha a revisão / o aviso de enviado
+  if ($("btnLimpar")) $("btnLimpar").addEventListener("click", function () {
     var b = $("btnLimpar");
     if (!b._confirmar) {   // 1º toque pede confirmação, 2º toque apaga
       b._confirmar = true; b.textContent = "Toque de novo p/ apagar";
@@ -7075,7 +7097,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-27.3";
+  var VERSAO_APP = "2026-11-27.4";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
