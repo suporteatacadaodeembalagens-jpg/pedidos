@@ -3218,62 +3218,82 @@ window.PedidoPDF = (function () {
     chamar("precosLoja", [], function (p) { buscarPrecosLoja.indo = false; cons.precosLoja = p || {}; if (tela === "consulta") resultadosConsulta(); },
       function () { buscarPrecosLoja.indo = false; cons.precosLoja = {}; if (tela === "consulta") resultadosConsulta(); });
   }
-  /* 26/11 (Marcelo): AVISO DE VALIDADE. Cada lote avisa 1 vez em cada marco: faltando 15, 10 e 5 dias, no dia de vencer e
-     depois de vencido (quem não abriu o app no dia exato recebe o aviso quando abrir). "Visto" fica neste aparelho.
-     Lote com quantidade real 0 não avisa. Selo vermelho no botão Contagem enquanto tiver lote vencendo em até 15 dias. */
-  var VALAV = { n: 0, venc: 0, ts: 0, indo: false };
+  /* 26/11 (Marcelo): AVISO DE VALIDADE (v2). Marcos: faltando 15, 10 e 5 dias, no dia de vencer e depois de vencido.
+     Para a LOJA do lote: a tela aparece TODA VEZ que abre o app até ela DAR BAIXA ou RESPONDER o que fez naquele marco
+     (a resposta fica no lote, no servidor). Administração/Diretoria: sem a tela, só o botão Contagem em vermelho.
+     Lote com quantidade real 0 não avisa. */
+  var VALAV = { n: 0, venc: 0, ts: 0, indo: false, pend: [], abrir: "" };
+  var VAL_ACOES = ["Coloquei em promoção", "Vai vender antes de vencer", "Troca/devolução com o fornecedor", "Transferi para outra loja", "Descartei (perda)", "Outro"];
+  var VAL_ROT = { venceu: "VENCIDO", hoje: "VENCE HOJE", "5": "Vence em até 5 dias", "10": "Vence em até 10 dias", "15": "Vence em até 15 dias" };
+  var VAL_COR = { venceu: "#b71c1c", hoje: "#c62828", "5": "#e65100", "10": "#ef6c00", "15": "#8d6e00" };
   function valDias(venc) { var p = String(venc || "").split("-"); if (p.length !== 3) return null;
     var h = new Date(); h = new Date(h.getFullYear(), h.getMonth(), h.getDate()); var v = new Date(+p[0], +p[1] - 1, +p[2]);
     return Math.round((v - h) / 864e5); }
   function valMarco(d) { return d == null || d > 15 ? "" : d < 0 ? "venceu" : d === 0 ? "hoje" : d <= 5 ? "5" : d <= 10 ? "10" : "15"; }
+  function valRespDe(x, m) { return (x.resp || []).filter(function (r) { return r.m === m; }).slice(-1)[0] || null; }
+  function valUltResp(x) { var r = (x.resp || []).slice(-1)[0]; if (!r) return "";
+    return '<small style="color:#1b5e20"><b>Resposta (' + esc(VAL_ROT[r.m] || r.m) + "):</b> " + esc(r.a) + (r.obs ? " — " + esc(r.obs) : "") + " · " + esc(r.por || "") + " " + esc(r.em || "") + "</small>"; }
   function valAvisoChecar(forcar) {
     if (!sessao || !EM_APPS_SCRIPT || VALAV.indo) return;
-    if (!forcar && Date.now() - VALAV.ts < 30 * 60000) return;   // no máximo a cada 30 min
+    if (!forcar && Date.now() - VALAV.ts < 30 * 60000) return;
     VALAV.indo = true;
     chamar("validadeLista", [], function (r) {
       VALAV.indo = false; VALAV.ts = Date.now();
-      var nomes = (r && r.nomes) || {}, its = ((r && r.itens) || []).filter(function (x) { return !(x.atual != null && Number(x.atual) <= 0); });
+      var its = ((r && r.itens) || []).filter(function (x) { return !(x.atual != null && Number(x.atual) <= 0); });
       var lst = its.map(function (x) { var d = valDias(x.venc); return { x: x, d: d, m: valMarco(d) }; }).filter(function (o) { return o.m; });
-      VALAV.n = lst.length; VALAV.venc = lst.filter(function (o) { return o.d < 0; }).length;
-      var vis = LS.get("valVistos", {}) || {}, ids = {}, novos = [];
-      its.forEach(function (x) { ids[x.id] = 1; });
-      Object.keys(vis).forEach(function (k) { if (!ids[k.split("|")[0]]) delete vis[k]; });   // lote que saiu: esquece
-      lst.forEach(function (o) { if (!vis[o.x.id + "|" + o.m]) novos.push(o); });
-      LS.set("valVistos", vis);
+      VALAV.n = lst.length; VALAV.venc = lst.filter(function (o) { return o.d < 0; }).length; VALAV.nomes = (r && r.nomes) || {};
+      VALAV.pend = r && r.mgr ? [] : lst.filter(function (o) { return !valRespDe(o.x, o.m); });   // só a LOJA do lote
       if (typeof tela !== "undefined" && tela === "inicio") desenharInicio();
-      if (novos.length) valAvisoMostrar(novos, nomes, vis);
+      valAvisoMostrar();
     }, function () { VALAV.indo = false; });
   }
-  function valAvisoMostrar(novos, nomes, vis) {
-    if (document.getElementById("valAvModal")) return;
-    novos.sort(function (a, b) { return a.d - b.d; });
-    var rot = { venceu: "VENCIDO", hoje: "VENCE HOJE", "5": "Vence em até 5 dias", "10": "Vence em até 10 dias", "15": "Vence em até 15 dias" };
-    var cor = { venceu: "#b71c1c", hoje: "#c62828", "5": "#e65100", "10": "#ef6c00", "15": "#8d6e00" };
-    var linhas = novos.slice(0, 40).map(function (o) { var x = o.x, dt = String(x.venc).split("-").reverse().join("/");
-      var q = x.atual != null ? x.atual : x.q;
-      return '<div style="text-align:left;border-left:5px solid ' + cor[o.m] + ';background:#fafafa;border-radius:8px;padding:8px 10px;margin:0 0 6px">' +
-        '<div style="font-size:12px;font-weight:900;color:' + cor[o.m] + '">' + rot[o.m] + (o.d < 0 ? " há " + (-o.d) + " dia(s)" : o.d > 0 ? " · faltam " + o.d + " dia(s)" : "") + "</div>" +
+  function valAvisoMostrar() {
+    var m = document.getElementById("valAvModal"), l = VALAV.pend.slice().sort(function (a, b) { return a.d - b.d; });
+    if (!l.length) { if (m) m.remove(); return; }
+    if (!m) { m = document.createElement("div"); m.id = "valAvModal"; document.body.appendChild(m); m.addEventListener("click", valAvClique);
+      m.setAttribute("style", "position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px"); }
+    var bt = "border-radius:10px;padding:10px;font-size:14px;font-weight:800;cursor:pointer;flex:1";
+    var cards = l.slice(0, 40).map(function (o) { var x = o.x, dt = String(x.venc).split("-").reverse().join("/"), q = x.atual != null ? x.atual : x.q, ab = VALAV.abrir === x.id;
+      return '<div style="text-align:left;border-left:5px solid ' + VAL_COR[o.m] + ';background:#fafafa;border-radius:8px;padding:8px 10px;margin:0 0 8px">' +
+        '<div style="font-size:12px;font-weight:900;color:' + VAL_COR[o.m] + '">' + VAL_ROT[o.m] + (o.d < 0 ? " há " + (-o.d) + " dia(s)" : o.d > 0 ? " · faltam " + o.d + " dia(s)" : "") + "</div>" +
         '<div style="font-weight:800;font-size:14px">' + esc(x.d || ("PLU " + x.p)) + "</div>" +
-        '<div style="font-size:12px;color:#555">PLU ' + esc(x.p) + " · " + esc(nomes[x.loja] || x.loja) + " · vence " + esc(dt) + " · " + esc(String(q)) + " un</div></div>"; }).join("") +
-      (novos.length > 40 ? '<div style="font-size:13px;color:#555;margin:4px 0">+ ' + (novos.length - 40) + " lotes (veja na Validade)</div>" : "");
-    var m = document.createElement("div"); m.id = "valAvModal";
-    m.setAttribute("style", "position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px");
-    m.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:86vh;display:flex;flex-direction:column;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);font-family:inherit">' +
-      '<div style="text-align:center"><div style="font-size:38px;line-height:1">&#9888;</div><h2 style="margin:4px 0 2px;color:#b71c1c;font-size:21px">Aviso de validade</h2>' +
-      '<p style="margin:0 0 10px;font-size:14px;color:#444">' + novos.length + (novos.length === 1 ? " lote precisa" : " lotes precisam") + " de atenção</p></div>" +
-      '<div style="overflow:auto;flex:1;min-height:0">' + linhas + "</div>" +
-      '<button type="button" id="valAvVer" style="margin:12px 0 8px;padding:15px;font-size:17px;font-weight:900;color:#fff;background:#c62828;border:0;border-radius:12px;cursor:pointer">Ver na Validade</button>' +
-      '<button type="button" id="valAvOk" style="padding:12px;font-size:16px;font-weight:700;background:#eef3f9;border:1px solid #c3d2e5;border-radius:12px;cursor:pointer">OK, entendi</button></div>';
-    document.body.appendChild(m);
-    function visto() { novos.forEach(function (o) { vis[o.x.id + "|" + o.m] = Date.now(); }); LS.set("valVistos", vis); m.remove(); }
-    document.getElementById("valAvOk").addEventListener("click", visto);
-    document.getElementById("valAvVer").addEventListener("click", function () { visto(); CN.aba = "val"; CN.val = null; abrirContNova("app"); });
+        '<div style="font-size:12px;color:#555">PLU ' + esc(x.p) + " · " + esc(VALAV.nomes[x.loja] || x.loja) + " · vence " + esc(dt) + " · " + esc(String(q)) + " un</div>" +
+        '<div style="display:flex;gap:6px;margin-top:8px"><button type="button" data-va="resp" data-v="' + esc(x.id) + '" style="' + bt + ';border:0;color:#fff;background:#1565c0">' + (ab ? "Fechar resposta" : "O que foi feito?") + "</button>" +
+        '<button type="button" data-va="baixa" data-v="' + esc(x.id) + '" style="' + bt + ';border:1px solid #c3d2e5;background:#fff;color:#14365f">Dar baixa</button></div>' +
+        (ab ? '<div style="margin-top:8px"><select id="valAcao" style="width:100%;padding:10px;border-radius:8px;border:1px solid #c3d2e5;font-size:15px"><option value="">O que foi feito com o produto?</option>' +
+          VAL_ACOES.map(function (a) { return '<option value="' + esc(a) + '">' + esc(a) + "</option>"; }).join("") + "</select>" +
+          '<input id="valObs" maxlength="200" placeholder="Observação (obrigatória em Outro)" style="width:100%;box-sizing:border-box;margin-top:6px;padding:10px;border-radius:8px;border:1px solid #c3d2e5;font-size:15px">' +
+          '<button type="button" data-va="enviar" data-v="' + esc(x.id) + '" style="width:100%;margin-top:6px;padding:12px;border:0;border-radius:10px;background:#2e7d32;color:#fff;font-size:15px;font-weight:900;cursor:pointer">Enviar resposta</button></div>' : "") +
+        "</div>"; }).join("") + (l.length > 40 ? '<div style="font-size:13px;color:#555;margin:4px 0">+ ' + (l.length - 40) + " lotes (veja na Validade)</div>" : "");
+    m.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:540px;width:100%;max-height:88vh;display:flex;flex-direction:column;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.4);font-family:inherit">' +
+      '<div style="text-align:center"><div style="font-size:34px;line-height:1">&#9888;</div><h2 style="margin:4px 0 2px;color:#b71c1c;font-size:21px">Aviso de validade</h2>' +
+      '<p style="margin:0 0 10px;font-size:14px;color:#444">' + l.length + (l.length === 1 ? " lote precisa" : " lotes precisam") + " de resposta. Este aviso volta toda vez que abrir o app até dar baixa ou responder.</p></div>" +
+      '<div style="overflow:auto;flex:1;min-height:0">' + cards + "</div>" +
+      '<div style="display:flex;gap:8px;margin-top:10px"><button type="button" data-va="ver" style="flex:1;padding:12px;font-size:15px;font-weight:800;border:1px solid #c3d2e5;background:#eef3f9;border-radius:12px;cursor:pointer">Ver na Validade</button>' +
+      '<button type="button" data-va="fechar" style="flex:1;padding:12px;font-size:15px;font-weight:700;border:1px solid #c3d2e5;background:#fff;border-radius:12px;cursor:pointer">Responder depois</button></div></div>';
+  }
+  function valAvClique(e) {
+    var b = e.target.closest("[data-va]"); if (!b) return;
+    var k = b.getAttribute("data-va"), id = b.getAttribute("data-v"), md = document.getElementById("valAvModal");
+    if (k === "fechar") { if (md) md.remove(); toast("O aviso volta quando abrir o app de novo"); return; }
+    if (k === "ver") { if (md) md.remove(); CN.aba = "val"; CN.val = null; abrirContNova("app"); return; }
+    var o = VALAV.pend.filter(function (y) { return y.x.id === id; })[0]; if (!o) return;
+    if (k === "resp") { VALAV.abrir = VALAV.abrir === id ? "" : id; valAvisoMostrar(); return; }
+    function tira() { VALAV.pend = VALAV.pend.filter(function (y) { return y.x.id !== id; }); VALAV.abrir = ""; valAvisoMostrar(); }
+    if (k === "baixa") { if (!confirm("Dar baixa neste lote (acabou ou foi retirado)?")) return; b.disabled = true;
+      chamar("validadeBaixa", [id], function () { VALAV.n = Math.max(0, VALAV.n - 1); if (o.d < 0) VALAV.venc = Math.max(0, VALAV.venc - 1); toast("Baixa feita"); tira();
+        if (typeof tela !== "undefined" && tela === "inicio") desenharInicio(); }, function (x) { b.disabled = false; toast(String(x && x.message || x)); }); return; }
+    if (k === "enviar") { var a = (document.getElementById("valAcao") || {}).value || "", obs = String((document.getElementById("valObs") || {}).value || "").trim();
+      if (!a) { toast("Escolha o que foi feito"); return; } if (a === "Outro" && !obs) { toast("Escreva o que foi feito"); return; }
+      b.disabled = true; b.textContent = "Enviando…";
+      chamar("validadeResponder", [id, { m: o.m, a: a, obs: obs }], function (r) { o.x.resp = (r && r.resp) || o.x.resp; toast("Resposta registrada"); tira(); },
+        function (x) { b.disabled = false; b.textContent = "Enviar resposta"; toast(String(x && x.message || x)); }); }
   }
   function valSub(txt) { return VALAV.n ? "⚠ " + VALAV.n + (VALAV.n === 1 ? " lote vencendo" : " lotes vencendo") + (VALAV.venc ? " (" + VALAV.venc + " vencido" + (VALAV.venc === 1 ? ")" : "s)") : "") + " · ver Validade" : txt; }
   function preCarregar() {
     if (!sessao || !EM_APPS_SCRIPT) return;
     carregarFotos();
-    setTimeout(function () { valAvisoChecar(false); }, 1500);   // 26/11: aviso de validade
+    setTimeout(function () { valAvisoChecar(true); }, 1500);   // 26/11: aviso de validade (toda vez que abre o app)
     if (ehMgrLogin()) {
       if (!mgr.lista) buscarMgrLista();
       if (!salvosMgr) buscarSalvosMgr();
@@ -4364,7 +4384,7 @@ window.PedidoPDF = (function () {
     }, function (e) { var c = document.getElementById("cnCorpo"); if (c) c.innerHTML = '<div class="aviso erro">' + esc(e && e.message || e) + "</div>"; });
   }
   function cnAbas() {
-    var a = [["contar", "Contar"], ["acontar", "A contar"], ["rel", "Relatório"], ["val", "Validade"]];   // 25/11: A contar   // 25/11: as Listas saíram
+    var a = [["contar", "Contar"], ["acontar", "A contar"], ["inativos", "Inativos"], ["rel", "Relatório"], ["val", "Validade"]];   // 25/11: A contar   // 25/11: as Listas saíram
     return '<div class="cn-abas">' + a.map(function (x) { return '<button data-cn="aba" data-v="' + x[0] + '" class="' + (CN.aba === x[0] ? "on" : "") + '">' + x[1] + "</button>"; }).join("") + "</div>";
   }
   // 13/11 (Marcelo): situação da lista com cor (também é o filtro do Relatório). [texto, cor, fundo, chave]
@@ -4384,9 +4404,10 @@ window.PedidoPDF = (function () {
   }
   function cnDesenhar() {
     var c = document.getElementById("cnCorpo"); if (!c) return;
+    if (CN.aba === "inativos") AC = AC_I; else if (CN.aba === "acontar") AC = AC_A;   // 27/11
     var h = cnAbas(), rod = "";
     if (CN.aba === "contar") h += cdHtmlContar();   // 25/11: contagem DIRETA
-    else if (CN.aba === "acontar") h += acHtml();
+    else if (CN.aba === "acontar" || CN.aba === "inativos") h += acHtml();
     else if (CN.aba === "rel") h += cdHtmlRel();
     else if (CN.aba === "val") h += cnHtmlVal();
     c.innerHTML = h + (rod ? '<div class="cn-rodape">' + rod + "</div>" : "");
@@ -4395,7 +4416,7 @@ window.PedidoPDF = (function () {
   // Busca igual à da Consulta (nome, PLU/EAN exato, marca, fornecedor, Linha/Fora de linha, % = todos) e um CARD por produto:
   // UN [▲ 0 ▼] + CX [▲ 0 ▼] -> total em UN; validade opcional; "ENVIAR CONTAGEM" = fila do robô de ajuste + Relatório (card verde).
   var CD = { termo: "", forn: "", linha: "linha", lim: 40, vals: {}, env: {}, lojaSel: "", rel: null, relFil: "", relLoja: "", tb: 0, res: null, mais: false, forns: null, seq: 0, buscando: false };
-  function cdLoja() { return CN.mgr ? (CN.aba === "acontar" && typeof AC !== "undefined" && AC.lojaSel ? AC.lojaSel : CD.lojaSel) : CN.loja; }
+  function cdLoja() { return CN.mgr ? ((CN.aba === "acontar" || CN.aba === "inativos") && typeof AC !== "undefined" && AC.lojaSel ? AC.lojaSel : CD.lojaSel) : CN.loja; }
   function cdItem(p) { return ((CD.res || []).concat((AC.l && AC.l.itens) || [], (AC.itens && AC.itens.itens) || []).filter(function (x) { return x.p === p; })[0]) || (typeof porPlu !== "undefined" && porPlu[p]) || null; }
   /* 25/11 (2): a busca é no CADASTRO INTEIRO, no servidor (produto com estoque positivo, zero ou negativo). */
   function cdBuscar() {
@@ -4467,6 +4488,8 @@ window.PedidoPDF = (function () {
   /* 25/11 (Marcelo): RELATÓRIO "A CONTAR": a loja escolhe o período; o que NÃO foi contado nele vira a lista, em 2 partes
      (COM venda nos últimos 30 dias / SEM venda). Os cards são os mesmos da contagem; contou = sai da lista. */
   var AC = { grupo: "com", l: null, ini: 0, termo: "", carr: false, tb: 0, de: "", ate: "", lojaSel: "", arv: null, dep: "", marca: "", itens: null };
+  // 27/11: aba Inativos usa as mesmas funções do A contar com outro estado (grupo "neg" = estoque < 0, ao vivo)
+  var AC_A = AC, AC_I = { grupo: "neg", l: null, ini: 0, termo: "", carr: false, tb: 0, de: "", ate: "", lojaSel: "", arv: null, dep: "", marca: "", itens: null };
   function acLoja() { return CN.mgr ? (AC.lojaSel || CD.lojaSel) : CN.loja; }
   function acHoje(d) { var x = d || new Date(); return x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2) + "-" + ("0" + x.getDate()).slice(-2); }
   function acCarregar(mais) {
@@ -4485,7 +4508,7 @@ window.PedidoPDF = (function () {
       AC.carr = false; AC.l = r; AC.arv = r.arvore || []; if (AC.marca) acAbrirMarca(AC.dep, AC.marca, false); acRedesenhar();
     }, function (e) { AC.carr = false; toast(String(e && e.message || e)); });
   }
-  function acRedesenhar() { if (CN.aba !== "acontar") return; var b = document.getElementById("acLista"); if (b && AC.l && !AC.l.vazio) b.innerHTML = acHtmlLista(); else cnDesenhar(); }
+  function acRedesenhar() { if (CN.aba !== "acontar" && CN.aba !== "inativos") return; var b = document.getElementById("acLista"); if (b && AC.l && !AC.l.vazio) b.innerHTML = acHtmlLista(); else cnDesenhar(); }
   function acAbrirMarca(dep, marca, mais) {
     AC.dep = dep; AC.marca = marca; var ini = mais && AC.itens ? AC.itens.itens.length : 0; if (!mais) AC.itens = { carr: true, itens: [] };
     cnChamar("contAContarLista", [{ loja: acLoja(), grupo: AC.grupo, dep: dep, marca: marca, ini: ini, n: 60 }], function (r) {
@@ -4493,7 +4516,16 @@ window.PedidoPDF = (function () {
       AC.itens = { total: r.total, itens: (mais && AC.itens ? AC.itens.itens : []).concat(r.itens || []) }; acRedesenhar();
     }, function (e) { toast(String(e && e.message || e)); });
   }
-  function acCards(its) { return its.map(function (it) { var h = cdCard(it); return it.v != null ? h.replace("</small>", " · <b>vendeu " + num(it.v) + " un em 30 dias</b></small>") : h; }).join(""); }
+  function acHtmlNeg() {   // 27/11 (Marcelo): Inativos = estoque menor que 0 nesta loja
+    var h = '<div class="cn-card" style="border-left-color:#c62828"><h4>Inativos · estoque negativo</h4><small>Produtos com estoque <b>menor que 0</b> nesta loja (atualiza com os dados do robô). Conte e envie: o robô ajusta no ERP.</small>' +
+      '<div class="cn-acoes"><button data-cn="acexcel">Baixar Excel</button></div></div>';
+    if (!AC.l) { if (!AC.carr) setTimeout(function () { acCarregar(false); }, 0); return h + '<div class="carregando"><div class="giro"></div>Carregando…</div>'; }
+    if (AC.l.semLoja) return h + '<div class="cn-vazio">Escolha a loja.</div>';
+    h += '<div style="color:var(--sub);font-size:13px;margin:0 2px 8px">' + esc(AC.l.nomeLoja || "") + (AC.termo ? "" : " · <b>" + (AC.l.total || 0) + "</b> produtos com estoque negativo") + "</div>" +
+      '<input id="acFiltro" type="search" autocomplete="off" placeholder="Procurar nesta lista (nome, PLU, código de barras, marca, fornecedor)" value="' + esc(AC.termo) + '" style="margin:0 0 10px">';
+    return h + '<div id="acLista">' + (AC.carr ? '<div class="carregando"><div class="giro"></div>Carregando…</div>' : acHtmlLista()) + "</div>";
+  }
+  function acCards(its) { return its.map(function (it) { var h = cdCard(it); if (it.e != null) h = h.replace("</small>", ' · <b style="color:#c62828">estoque no sistema: ' + num(it.e) + "</b></small>"); return it.v != null ? h.replace("</small>", " · <b>vendeu " + num(it.v) + " un em 30 dias</b></small>") : h; }).join(""); }
   function acHtmlLista() {
     var l = AC.l; if (!l || l.vazio) return "";
     if (!AC.termo) {   // 25/11 (Marcelo): tudo FECHADO em barras de departamento; abrindo, as marcas; a marca abre os produtos
@@ -4517,6 +4549,7 @@ window.PedidoPDF = (function () {
     var h = "";
     if (CN.mgr) h += '<div class="cn-card" style="border-left-color:var(--ouro)"><label style="margin-top:0">Loja</label><select id="acLojaSel"><option value="">Escolha a loja…</option>' +
       cnLojasTodas().map(function (c) { return '<option value="' + c + '"' + (c === acLoja() ? " selected" : "") + ">" + esc(c + " " + cnNome(c)) + "</option>"; }).join("") + "</select></div>";
+    if (AC.grupo === "neg") return h + acHtmlNeg();   // 27/11: aba Inativos
     h += '<div class="cn-card" style="border-left-color:var(--azul)"><h4>Gerar relatório "a contar"</h4><small>O que NÃO foi contado no período vira a lista abaixo (substitui a lista anterior desta loja).</small>' +
       '<div style="display:flex;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>De</label><input type="date" id="acDe" value="' + esc(AC.de) + '"></div><div style="flex:1;min-width:140px"><label>Até</label><input type="date" id="acAte" value="' + esc(AC.ate) + '"></div></div>' +
       '<div class="cn-acoes"><button class="pri" data-cn="acgerar">Gerar lista</button>' + (AC.l && !AC.l.vazio ? '<button data-cn="acexcel">Baixar Excel</button>' : "") + "</div></div>";
@@ -4580,13 +4613,14 @@ window.PedidoPDF = (function () {
   }
   function acExcel() {
     var lj = acLoja(); toast("Montando o Excel…");
-    var linhas = [["Grupo", "PLU", "Descrição", "Marca", "Fornecedor", "Código de barras", "Embalagem", "Venda 30 dias (un)"]], falta = 2;
+    var linhas = [["Grupo", "PLU", "Descrição", "Marca", "Fornecedor", "Código de barras", "Embalagem", "Venda 30 dias (un)"]], falta = 2, neg = AC.grupo === "neg";
+    if (neg) linhas[0][7] = "Estoque no sistema";
     function fim() { if (--falta) return;
       var csv = "\ufeff" + linhas.map(function (l) { return l.map(function (c) { c = String(c == null ? "" : c); return /[;"\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(";"); }).join("\r\n");
-      var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = "a_contar_" + lj + "_" + acHoje() + ".csv"; document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 500); }
-    ["com", "sem"].forEach(function (g) {
+      var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = (neg ? "inativos_" : "a_contar_") + lj + "_" + acHoje() + ".csv"; document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 500); }
+    (neg ? ["neg"] : ["com", "sem"]).forEach(function (g, i, gs) { falta = gs.length;
       cnChamar("contAContarLista", [{ loja: lj, grupo: g, todos: 1 }], function (r) {
-        (r.itens || []).forEach(function (x) { linhas.push([g === "com" ? "Com venda" : "Sem venda", x.p, x.d, x.m, x.f, x.b, (x.t || "") + (x.q > 1 ? " c/ " + x.q : ""), x.v != null ? String(x.v).replace(".", ",") : "0"]); });
+        (r.itens || []).forEach(function (x) { linhas.push([g === "com" ? "Com venda" : g === "neg" ? "Estoque negativo" : "Sem venda", x.p, x.d, x.m, x.f, x.b, (x.t || "") + (x.q > 1 ? " c/ " + x.q : ""), g === "neg" ? (x.e != null ? String(x.e).replace(".", ",") : "") : x.v != null ? String(x.v).replace(".", ",") : "0"]); });
         fim(); }, function (e) { toast(String(e && e.message || e)); });
     });
   }
@@ -4860,7 +4894,7 @@ window.PedidoPDF = (function () {
     var grupos = [["Vencidos", "v-venc", function (d) { return d < 0; }], ["Vencem em até 30 dias", "v-30", function (d) { return d >= 0 && d <= 30; }], ["Vencem em 31 a 60 dias", "v-60", function (d) { return d > 30 && d <= 60; }], ["Mais de 60 dias", "v-ok", function (d) { return d > 60; }]];
     h += it.length ? grupos.map(function (g) { var l = it.filter(function (x) { return g[2](cnDiasPara(x.venc)); }); if (!l.length) return "";
       return '<div style="font-weight:800;color:var(--marrom);margin:14px 2px 6px">' + g[0] + " (" + l.length + ")</div>" + l.map(function (x) { var d = cnDiasPara(x.venc), dt = x.venc.split("-").reverse().join("/");
-        return '<div class="cn-card ' + g[1] + '"><div class="cn-it" style="border:0;padding:0"><div><b>' + esc(x.d || x.p) + "</b><small>PLU " + esc(x.p) + " · " + esc(cnNome(x.loja)) + "</small><small>Quantidade inicial: <b>" + num(x.q) + " un</b>" + (x.atual != null ? " · Quantidade real: <b>" + num(x.atual) + " un</b> (ajustada " + esc(x.ajEm || "") + (x.ajPor ? " por " + esc(x.ajPor) : "") + ")" : "") + "</small><small>Vence " + dt + " (" + (d < 0 ? "venceu há " + (-d) + " dia(s)" : d === 0 ? "hoje" : "em " + d + " dia(s)") + ") · registrado por " + esc(x.por || "") + "</small></div>" +
+        return '<div class="cn-card ' + g[1] + '"><div class="cn-it" style="border:0;padding:0"><div><b>' + esc(x.d || x.p) + "</b><small>PLU " + esc(x.p) + " · " + esc(cnNome(x.loja)) + "</small><small>Quantidade inicial: <b>" + num(x.q) + " un</b>" + (x.atual != null ? " · Quantidade real: <b>" + num(x.atual) + " un</b> (ajustada " + esc(x.ajEm || "") + (x.ajPor ? " por " + esc(x.ajPor) : "") + ")" : "") + "</small><small>Vence " + dt + " (" + (d < 0 ? "venceu há " + (-d) + " dia(s)" : d === 0 ? "hoje" : "em " + d + " dia(s)") + ") · registrado por " + esc(x.por || "") + "</small>" + valUltResp(x) + "</div>" +
           '<div style="display:flex;flex-direction:column;gap:6px"><button class="cn-bt azul" data-cn="vajustar" data-v="' + esc(x.id) + '">Ajustar quantidade</button><button class="cn-bt" data-cn="vbaixa" data-v="' + esc(x.id) + '">Dar baixa</button></div></div></div>'; }).join(""); }).join("") : '<div class="cn-vazio">Nenhum lote registrado.</div>';
     return h;
   }
@@ -6999,7 +7033,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-26.4";
+  var VERSAO_APP = "2026-11-27.1";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
