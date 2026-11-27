@@ -3483,7 +3483,7 @@ window.PedidoPDF = (function () {
     $("lista").innerHTML = '<div class="carregando"><div class="giro"></div>Abrindo o pedido…</div>';
     chamar("pedidoManager", [id], function (x) {
       mgr.aberto = x; mgr.itens = (x.itens || []).map(function (i) { return { p: i.p, d: i.d, m: i.m, dep: i.dep, t: i.t, qtd: i.qtd }; });
-      mgr.sujo = false; mgr.busca = ""; mgr.abertos = {};   // setores começam FECHADOS; abre ao tocar
+      mgr.sujo = false; mgr.busca = ""; mgr.filtroIt = ""; mgr.abertos = {};   // setores começam FECHADOS; abre ao tocar
       desenharManager(); window.scrollTo(0, 0);
       buscarSalvosPorPlu();   // 04/11: pedidos salvos das lojas por produto (só mostra)
     }, function (e) { toast(String(e && e.message || e)); mgr.aberto = null; desenharManager(); });
@@ -3522,6 +3522,24 @@ window.PedidoPDF = (function () {
       '<small style="color:#b71c1c;display:block;margin-top:2px"><b>&#10005; Tirado do pedido por completo pelo manager</b>' + (x.editadoPor || x.aprovadoPor ? " (" + esc(x.editadoPor || x.aprovadoPor) + ")" : "") +
       " · a loja pediu " + num(i.qtd) + " " + esc(i.t || "un") + " · PLU " + esc(i.p) + "</small></div>";
   }
+  /* 27/11 (Marcelo): PROCURAR PRODUTO DENTRO DO PEDIDO aberto (nome, PLU, código de barras, marca ou fornecedor).
+     Mostra só os itens que casam (inclusive os tirados pelo manager), com os setores abertos. */
+  function mfAtivo() { return String(mgr.filtroIt || "").trim().length >= 2; }
+  function mfCasa(i) {
+    if (!mfAtivo()) return true;
+    var t = semAcento(String(mgr.filtroIt).trim()), pp = (typeof porPlu !== "undefined" && porPlu[i.p]) || {};
+    if (/^[\d\s.-]+$/.test(t)) { var dg = t.replace(/\D/g, ""); return (dg.length <= 6 && String(i.p) === ("000000" + dg).slice(-6)) || (dg.length >= 6 && String(i.b || pp.b || "").replace(/\D/g, "").replace(/^0+/, "") === dg.replace(/^0+/, "")) || String(i.p).indexOf(dg) >= 0; }
+    var h = semAcento([i.d, i.m, i.p, pp.f, pp.m, i.b || pp.b].join(" "));
+    return t.split(/\s+/).every(function (w) { return h.indexOf(w) >= 0; });
+  }
+  document.addEventListener("input", function (e) {
+    if (!e.target || e.target.id !== "mgrFiltroIt") return;
+    mgr.filtroIt = e.target.value; clearTimeout(mfAtivo.tb);
+    mfAtivo.tb = setTimeout(function () {
+      if (!mgr.aberto) return; var y = window.scrollY; desenharPedidoMgr(); window.scrollTo(0, y);
+      var i = document.getElementById("mgrFiltroIt"); if (i) { i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch (x) {} }
+    }, 300);
+  });
   function desenharPedidoMgr() {
     var x = mgr.aberto, pode = podeEditarMgr(), origem = {};
     (x.itensLoja || []).forEach(function (i) { origem[i.p] = i.qtd; });
@@ -3544,10 +3562,13 @@ window.PedidoPDF = (function () {
     }
     var ativos = mgr.itens.filter(function (i) { return i.qtd > 0; }).length;
     html += '<div class="aviso aviso-total"><b>' + ativos + (ativos === 1 ? " produto" : " produtos") + "</b> no pedido</div>";
+    var mfN = mgr.itens.concat(remov).filter(function (i) { return mfCasa(i) && (i.qtd > 0 || i.rem); }).length;   // 27/11: procurar no pedido
+    html += '<input id="mgrFiltroIt" type="search" autocomplete="off" placeholder="Procurar produto neste pedido (nome, PLU, código, marca, fornecedor)" value="' + esc(mgr.filtroIt || "") + '" style="width:100%;box-sizing:border-box;margin:0 0 8px;padding:12px;border-radius:10px;border:1px solid var(--linha);font-size:15px">' +
+      (mfAtivo() ? '<div class="aviso" style="margin:0 0 10px">' + (mfN ? "<b>" + mfN + "</b>" + (mfN === 1 ? " item" : " itens") + " com “" + esc(String(mgr.filtroIt).trim()) + "” neste pedido" : "<b>Nenhum item</b> com “" + esc(String(mgr.filtroIt).trim()) + "” neste pedido") + "</div>" : "");
     // conferência separada por SETOR (mesma ordem das abas da lista) e, dentro do setor, por marca
     var ordem = dados ? dados.departamentos.map(function (d) { return d.nome; }) : [];
     var porDep = {};
-    mgr.itens.concat(remov).forEach(function (i) {   // 27/11: + os tirados pelo manager
+    mgr.itens.concat(remov).filter(mfCasa).forEach(function (i) {   // 27/11: + os tirados pelo manager; só os que casam com a procura
       var dep = i.dep || (porPlu[i.p] && porPlu[i.p].dep) || "OUTROS";
       if (ordem.indexOf(dep) < 0) ordem.push(dep);
       (porDep[dep] = porDep[dep] || []).push(i);
@@ -3556,7 +3577,7 @@ window.PedidoPDF = (function () {
       var l = porDep[dep]; if (!l) return;
       l.sort(function (a, b) { return (a.m || "") === (b.m || "") ? (a.d < b.d ? -1 : 1) : ((a.m || "") < (b.m || "") ? -1 : 1); });
       var nAt = l.filter(function (i) { return i.qtd > 0 && !i.rem; }).length;
-      var fechado = !(mgr.abertos && mgr.abertos[dep]);   // começa fechado; tocar no setor mostra/esconde os itens
+      var fechado = !mfAtivo() && !(mgr.abertos && mgr.abertos[dep]);   // procurando: setores abertos   // começa fechado; tocar no setor mostra/esconde os itens
       html += '<div class="setor-mgr' + (fechado ? " fechado" : "") + '" data-setor="' + esc(dep) + '"><b><i>' + (fechado ? "▸" : "▾") + "</i>" + esc(nomeAba(dep)) +
         "</b><span>" + nAt + (nAt === 1 ? " item" : " itens") + "</span></div>" +
         '<div class="setor-corpo"' + (fechado ? " hidden" : "") + ">";
@@ -7097,7 +7118,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-27.4";
+  var VERSAO_APP = "2026-11-27.5";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
