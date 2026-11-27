@@ -4517,7 +4517,7 @@ window.PedidoPDF = (function () {
     }, function (e) { toast(String(e && e.message || e)); });
   }
   function acHtmlNeg() {   // 27/11 (Marcelo): Inativos = estoque menor que 0 nesta loja
-    var h = '<div class="cn-card" style="border-left-color:#c62828"><h4>Inativos · estoque negativo</h4><small>Produtos com estoque <b>menor que 0</b> nesta loja (atualiza com os dados do robô). Conte e envie: o robô ajusta no ERP.</small>' +
+    var h = '<div class="cn-card" style="border-left-color:#c62828"><h4>Inativos · estoque negativo</h4><small>Produtos com estoque <b>menor que 0</b> nesta loja (atualiza com os dados do robô). Conte e envie: o robô ajusta no ERP. O que não for contado dá para <b>zerar</b> (Gerência para cima).</small>' +
       '<div class="cn-acoes"><button data-cn="acexcel">Baixar Excel</button></div></div>';
     if (!AC.l) { if (!AC.carr) setTimeout(function () { acCarregar(false); }, 0); return h + '<div class="carregando"><div class="giro"></div>Carregando…</div>'; }
     if (AC.l.semLoja) return h + '<div class="cn-vazio">Escolha a loja.</div>';
@@ -4531,7 +4531,7 @@ window.PedidoPDF = (function () {
     if (!AC.termo) {   // 25/11 (Marcelo): tudo FECHADO em barras de departamento; abrindo, as marcas; a marca abre os produtos
       var arv = AC.arv || [];
       if (!arv.length) return '<div class="cn-vazio">Nada para contar nesta parte. &#10004;</div>';
-      return acZBotao("", "", "Zerar itens sem venda (lista toda)") + arv.map(function (a) { var aberto = AC.dep === a.dep;
+      return acZBotao("", "", AC.grupo === "neg" ? "Zerar inativos não contados (lista toda)" : "Zerar itens sem venda (lista toda)") + arv.map(function (a) { var aberto = AC.dep === a.dep;
         return '<button type="button" class="ac-dep' + (aberto ? " on" : "") + '" data-cn="acdep" data-v="' + esc(a.dep) + '"><span>' + (aberto ? "&#9662; " : "&#9656; ") + esc(a.dep) + "</span><b>" + a.n + "</b></button>" +
           (aberto ? '<div class="ac-marcas">' + acZBotao(a.dep, "", "Zerar o departamento " + a.dep) + a.marcas.map(function (m) { var mab = AC.marca === m.m;
             return '<button type="button" class="ac-marca' + (mab ? " on" : "") + '" data-cn="acmarca" data-v="' + esc(m.m) + '"><span>' + (mab ? "&#9662; " : "&#9656; ") + esc(m.m) + "</span><b>" + m.n + "</b></button>" +
@@ -4565,7 +4565,8 @@ window.PedidoPDF = (function () {
   }
   /* 26/11 (Marcelo): ZERAR itens SEM VENDA. 1º toque = o app conta quantos (só estoque ≠ 0 no sistema);
      2º = tela grande "TEM CERTEZA?". Só Gerência, Administração e Diretoria. */
-  function acPodeZerar() { return AC.grupo === "sem" && CN.modo !== "exp" && (CN.mgr || nivelNum() >= 2); }
+  function acPodeZerar() { return (AC.grupo === "sem" || AC.grupo === "neg") &&   // 27/11: Inativos também zera
+    CN.modo !== "exp" && (CN.mgr || nivelNum() >= 2); }
   function acZBotao(dep, marca, txt) {
     if (!acPodeZerar()) return "";
     return '<button type="button" class="ac-zerar" data-cn="aczerar" data-v="' + esc(dep) + '" data-m="' + esc(marca) + '">&#9888; ' + esc(txt) + "</button>";
@@ -4574,7 +4575,7 @@ window.PedidoPDF = (function () {
   function acZerar(dep, marca) {
     var lj = acLoja(); if (!lj) { toast("Escolha a loja"); return; }
     toast("Contando os itens sem venda com estoque…");
-    cnChamar("contAContarZerar", [{ loja: lj, dep: dep, marca: marca }], function (r) {
+    cnChamar("contAContarZerar", [{ loja: lj, dep: dep, marca: marca, grupo: AC.grupo }], function (r) {
       acZFechar();
       var onde = marca ? "da marca <b>" + esc(marca) + "</b>" + (dep ? " (" + esc(dep) + ")" : "") : dep ? "do departamento <b>" + esc(dep) + "</b>" : "de <b>toda a lista</b>";
       var fora = (r.nZero || r.nSemEst) ? '<p style="font-size:14px;color:#555;margin:8px 0 0">Não vão: ' + (r.nZero || 0) + " já estão com estoque 0" + (r.nSemEst ? " e " + r.nSemEst + " sem estoque no sistema" : "") + ".</p>" : "";
@@ -4582,10 +4583,10 @@ window.PedidoPDF = (function () {
       m.setAttribute("style", "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px");
       m.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:520px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center;font-family:inherit">' +
         (r.n ? '<div style="font-size:44px;line-height:1">&#9888;</div><h2 style="margin:6px 0 10px;color:#b71c1c;font-size:24px">TEM CERTEZA?</h2>' +
-          '<p style="font-size:17px;margin:0">Isso vai <b style="color:#b71c1c">ZERAR O ESTOQUE de ' + r.n + " itens sem venda</b> " + onde + " na loja <b>" + esc(r.nomeLoja || lj) + "</b>.</p>" +
+          '<p style="font-size:17px;margin:0">Isso vai <b style="color:#b71c1c">ZERAR O ESTOQUE de ' + r.n + (AC.grupo === "neg" ? " itens inativos (estoque negativo) não contados</b> " : " itens sem venda</b> ") + onde + " na loja <b>" + esc(r.nomeLoja || lj) + "</b>.</p>" +
           '<p style="font-size:15px;margin:8px 0 0">' + (r.pos || 0) + " com estoque positivo e " + (r.neg || 0) + " negativo. O robô vai ajustar todos para 0 no ERP.</p>" + fora +
           '<button type="button" id="acZSim" style="display:block;width:100%;margin:18px 0 10px;padding:20px 12px;font-size:20px;font-weight:900;color:#fff;background:#c62828;border:0;border-radius:14px;cursor:pointer">SIM, ZERAR ' + r.n + " ITENS</button>"
-        : '<h2 style="margin:0 0 10px;font-size:20px">Nada para zerar</h2><p style="font-size:16px;margin:0">Nenhum item sem venda ' + onde + " tem estoque diferente de 0.</p>" + fora + '<div style="height:14px"></div>') +
+        : '<h2 style="margin:0 0 10px;font-size:20px">Nada para zerar</h2><p style="font-size:16px;margin:0">Nenhum item ' + (AC.grupo === "neg" ? "inativo não contado " : "sem venda ") + onde + " tem estoque diferente de 0.</p>" + fora + '<div style="height:14px"></div>') +
         '<button type="button" id="acZNao" style="display:block;width:100%;padding:14px;font-size:17px;font-weight:700;background:#eef3f9;border:1px solid #c3d2e5;border-radius:12px;cursor:pointer">' + (r.n ? "Cancelar" : "Fechar") + "</button></div>";
       document.body.appendChild(m);
       document.getElementById("acZNao").addEventListener("click", acZFechar);
@@ -4593,7 +4594,7 @@ window.PedidoPDF = (function () {
       var sim = document.getElementById("acZSim");
       if (sim) sim.addEventListener("click", function () {
         sim.disabled = true; sim.textContent = "Mandando para o robô…";
-        cnChamar("contAContarZerar", [{ loja: lj, dep: dep, marca: marca, confirmar: 1 }], function (z) {
+        cnChamar("contAContarZerar", [{ loja: lj, dep: dep, marca: marca, grupo: AC.grupo, confirmar: 1 }], function (z) {
           acZFechar(); toast(z.n + " itens mandados para o robô zerar (" + (z.nomeLoja || lj) + ")");
           AC.l = null; AC.itens = null; AC.marca = ""; cnDesenhar();
         }, function (e) { acZFechar(); toast(String(e && e.message || e)); });
@@ -7033,7 +7034,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-27.1";
+  var VERSAO_APP = "2026-11-27.2";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
