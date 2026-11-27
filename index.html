@@ -3361,6 +3361,7 @@ window.PedidoPDF = (function () {
       html += legendaEtapas(lista);
       if (mgr.cor) lista = lista.filter(function (x) { var e = etapaPed(x); return (e ? e.k : "sem") === mgr.cor; });
     }
+    if (mgr.filtro === "aprovado") { PB.onde = "mgr"; lista = pbFiltra(lista); html += pbHtml(lista.length); }   // 27/11: busca nos pedidos
     if (mgr.filtro === "aprovado") html += '<div class="aviso" style="margin-top:8px"><small>Os pedidos aprovados ficam aqui por ' + mgr.lista.dias + " dias e depois são apagados.</small></div>";
     var oque = mgr.filtro === "pendente" ? "aguardando aprovação" : fatAba ? "faturado nos últimos " + mgr.lista.dias + " dias" : "aprovado a faturar";
     if (!lista.length) html += '<div class="vazio">' + (mgr.loja ? "<b>" + esc(mgr.loja) + "</b><br>Sem pedido " + oque + "."
@@ -3370,7 +3371,7 @@ window.PedidoPDF = (function () {
         "<br>" + x.n + (x.n === 1 ? " produto" : " produtos") + " · " + (x.direto ? "feito direto no ERP" : x.feitoPor ? "feito pelo manager " + esc(x.feitoPor) : esc(x.email)) + "<br>" + chipStatus(x) +
         (typeof x.valor === "number" ? '<br><b style="color:var(--texto);font-size:14px">Valor total: ' + reais(x.valor) + "</b> <small>(" + (x.direto && !x.n ? "valor no ERP" : "custo CD") + (x.semCusto ? " · " + x.semCusto + " sem custo" : "") + ")</small>" : "") +   // 03/11
         (x.fat && x.fat.valor ? '<br><small>Valor da NF: <b>' + reais(x.fat.valor) + "</b></small>" : "") +
-        htmlConfResumo(x) +   // 09/11: relatório da conferência (não atendidos / parciais)
+        pbChip(x) + htmlConfResumo(x) +   // 09/11: relatório da conferência (não atendidos / parciais)
         "</span></div>" +
         // 09/11 (Marcelo): pedido aguardando aprovação -> botão Excluir ao lado do Abrir (Administração e Diretoria, com senha)
         (x.status === "pendente" && ehMgrLogin() ? '<div style="display:flex;flex-direction:column;gap:8px"><button class="ver" data-abrir="' + esc(x.id) + '">Abrir</button>' +
@@ -3483,15 +3484,52 @@ window.PedidoPDF = (function () {
     }, function (e) { toast(String(e && e.message || e)); mgr.aberto = null; desenharManager(); });
   }
   function podeEditarMgr() { return !!(mgr.aberto && mgr.aberto.status === "pendente" && sessao && sessao.aprova); }
+  /* 27/11 (Marcelo): BUSCA de produto ou fornecedor DENTRO dos pedidos (aprovados e faturados) */
+  var PB = { termo: "", ids: null, carr: false, seq: 0, tb: 0, onde: "" };
+  function pbAtivo() { return PB.termo.trim().length >= 2; }
+  function pbHtml(n) {
+    return '<input id="pedBusca" type="search" autocomplete="off" placeholder="Procurar produto ou fornecedor dentro dos pedidos" value="' + esc(PB.termo) + '" style="width:100%;box-sizing:border-box;margin:8px 0;padding:12px;border-radius:10px;border:1px solid var(--linha);font-size:15px">' +
+      (pbAtivo() ? '<div class="aviso" style="margin:0 0 8px"><small>' + (PB.carr || !PB.ids ? "Procurando nos pedidos…" : "<b>" + n + "</b>" + (n === 1 ? " pedido tem" : " pedidos têm") + " “" + esc(PB.termo.trim()) + "”") + "</small></div>" : "");
+  }
+  function pbFiltra(lista) { if (!pbAtivo()) return lista; if (!PB.ids) return []; return lista.filter(function (x) { return PB.ids[x.id]; }); }
+  function pbChip(x) { var h = pbAtivo() && PB.ids && PB.ids[x.id]; if (!h) return "";
+    return '<br><b style="color:#1565c0">&#128269; ' + h.n + (h.n === 1 ? " item" : " itens") + " com “" + esc(PB.termo.trim()) + "”</b>" +
+      (h.rem ? ' <b style="color:#c62828">(' + h.rem + (h.rem === 1 ? " tirado" : " tirados") + " pelo manager)</b>" : ""); }
+  function pbRedesenhar() {
+    var foco = document.activeElement && document.activeElement.id === "pedBusca";
+    if (PB.onde === "mgr") desenharManager(); else if (PB.onde === "hist") desenharHistorico(); else return;
+    if (foco) { var i = document.getElementById("pedBusca"); if (i) { i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch (e) {} } }
+  }
+  document.addEventListener("input", function (e) {
+    if (!e.target || e.target.id !== "pedBusca") return;
+    PB.termo = e.target.value; clearTimeout(PB.tb); var tt = PB.termo.trim();
+    if (tt.length < 2) { PB.seq++; PB.ids = null; PB.carr = false; PB.tb = setTimeout(pbRedesenhar, 300); return; }
+    PB.tb = setTimeout(function () {
+      var sq = ++PB.seq; PB.carr = true; pbRedesenhar();
+      chamar("buscarNosPedidos", [tt], function (r) { if (sq !== PB.seq) return; PB.carr = false; PB.ids = (r && r.ids) || {}; pbRedesenhar(); },
+        function (er) { if (sq !== PB.seq) return; PB.carr = false; PB.ids = {}; toast(String(er && er.message || er)); pbRedesenhar(); });
+    }, 450);
+  });
+  /** 27/11: item que a loja pediu e o manager TIROU por completo do pedido (vermelho). */
+  function htmlRemovidoMgr(i, x) {
+    return '<div style="background:#fdecec;border:1px solid #f0b4b4;border-left:5px solid #c62828;border-radius:10px;padding:10px 12px;margin:0 0 8px">' +
+      '<div style="font-weight:800;color:#b71c1c;text-decoration:line-through">' + esc(i.d) + "</div>" +
+      '<small style="color:#b71c1c;display:block;margin-top:2px"><b>&#10005; Tirado do pedido por completo pelo manager</b>' + (x.editadoPor || x.aprovadoPor ? " (" + esc(x.editadoPor || x.aprovadoPor) + ")" : "") +
+      " · a loja pediu " + num(i.qtd) + " " + esc(i.t || "un") + " · PLU " + esc(i.p) + "</small></div>";
+  }
   function desenharPedidoMgr() {
     var x = mgr.aberto, pode = podeEditarMgr(), origem = {};
     (x.itensLoja || []).forEach(function (i) { origem[i.p] = i.qtd; });
+    // 27/11: o que a loja pediu e não está mais no pedido = tirado pelo manager (só mostra; editando o pedido não aparece)
+    var noPed = {}; mgr.itens.forEach(function (i) { noPed[i.p] = 1; });
+    var remov = pode || x.direto ? [] : (x.itensLoja || []).filter(function (i) { return !noPed[i.p]; }).map(function (i) { return Object.assign({}, i, { rem: 1 }); });
     var html = '<button class="voltar" id="mgrVoltar">← Voltar para a lista</button>' +
       '<div class="aviso">Loja: <b>' + esc(x.loja) + "</b><br>Pedido: <b>" + esc(x.nome) + "</b><br>" +
       (x.direto ? "Feito <b>direto no ERP</b> em " + esc(x.quando) + " (o robô achou na revisão)" + (x.valorErp ? "<br>Valor no ERP: <b>" + reais(x.valorErp) + "</b>" : "")
         : "Feito por " + (x.feitoPor ? "manager " + esc(x.feitoPor) : esc(x.email)) + " em " + esc(x.quando) + "<br>Lista de estoque de " + esc(x.dataLista)) +
       "<br>" + chipStatus({ status: x.status, aprovadoEm: x.aprovadoEm, editado: !!x.editadoPor, direto: x.direto }) +
-      (x.aprovadoPor ? "<br><small>Aprovado por " + esc(x.aprovadoPor) + "</small>" : "") + "</div>" + blocoErp(x);
+      (x.aprovadoPor ? "<br><small>Aprovado por " + esc(x.aprovadoPor) + "</small>" : "") +
+      (remov.length ? '<br><b style="color:#c62828">' + remov.length + (remov.length === 1 ? " produto tirado" : " produtos tirados") + " do pedido pelo manager (em vermelho, no setor de cada um)</b>" : "") + "</div>" + blocoErp(x);
     // 09/11 (Marcelo): excluir pedido AGUARDANDO APROVAÇÃO - Administração e Diretoria, com a própria senha
     if (x.status === "pendente" && ehMgrLogin()) html += '<button class="btn btn-cinza" style="margin:0 0 12px;color:#c62828;border:1px solid #e7a9a9" id="btnExcluirPend" type="button">&#128465; Excluir pedido</button>';
     if (pode) {
@@ -3504,7 +3542,7 @@ window.PedidoPDF = (function () {
     // conferência separada por SETOR (mesma ordem das abas da lista) e, dentro do setor, por marca
     var ordem = dados ? dados.departamentos.map(function (d) { return d.nome; }) : [];
     var porDep = {};
-    mgr.itens.forEach(function (i) {
+    mgr.itens.concat(remov).forEach(function (i) {   // 27/11: + os tirados pelo manager
       var dep = i.dep || (porPlu[i.p] && porPlu[i.p].dep) || "OUTROS";
       if (ordem.indexOf(dep) < 0) ordem.push(dep);
       (porDep[dep] = porDep[dep] || []).push(i);
@@ -3512,7 +3550,7 @@ window.PedidoPDF = (function () {
     ordem.forEach(function (dep) {
       var l = porDep[dep]; if (!l) return;
       l.sort(function (a, b) { return (a.m || "") === (b.m || "") ? (a.d < b.d ? -1 : 1) : ((a.m || "") < (b.m || "") ? -1 : 1); });
-      var nAt = l.filter(function (i) { return i.qtd > 0; }).length;
+      var nAt = l.filter(function (i) { return i.qtd > 0 && !i.rem; }).length;
       var fechado = !(mgr.abertos && mgr.abertos[dep]);   // começa fechado; tocar no setor mostra/esconde os itens
       html += '<div class="setor-mgr' + (fechado ? " fechado" : "") + '" data-setor="' + esc(dep) + '"><b><i>' + (fechado ? "▸" : "▾") + "</i>" + esc(nomeAba(dep)) +
         "</b><span>" + nAt + (nAt === 1 ? " item" : " itens") + "</span></div>" +
@@ -3520,7 +3558,7 @@ window.PedidoPDF = (function () {
       var marca = null;
       l.forEach(function (i) {
         if ((i.m || "") !== marca) { marca = i.m || ""; html += '<div class="grupo marca">' + esc(marca || "Sem marca") + "</div>"; }
-        html += htmlItemMgr(i, pode, origem[i.p]);
+        html += i.rem ? htmlRemovidoMgr(i, x) : htmlItemMgr(i, pode, origem[i.p]);
       });
       html += "</div>";
     });
@@ -3748,6 +3786,7 @@ window.PedidoPDF = (function () {
       html += '<select class="filtro-loja" id="filtroLoja"><option value="">Todas as lojas (' + hist.pedidos.length + ')</option>' +
         lojas.map(function (l) { return '<option' + (l === filtroLoja ? ' selected' : '') + ' value="' + esc(l) + '">' + esc(l) + '</option>'; }).join('') + '</select>';
     }
+    if (!pend) { PB.onde = "hist"; lista = pbFiltra(lista); html += pbHtml(lista.length); }   // 27/11: busca nos pedidos
     if (!lista.length) html += '<div class="vazio">' + (pend ? "Nenhum pedido aguardando aprovação." : "Nenhum pedido aprovado nos últimos " + hist.dias + " dias.") + "</div>";
     lista.forEach(function (x) {
       // 04/11 (Marcelo): o MESMO cartão do painel da gerência (loja, nome e hora, produtos e quem fez, situação);
@@ -3755,7 +3794,7 @@ window.PedidoPDF = (function () {
       html += '<div class="ped" data-id="' + esc(x.id) + '"><div class="topo-ped"><div class="q1"><b>' + esc(x.loja) + '</b>' +
         '<span>' + esc(x.nome || "Pedido") + ' · ' + esc(x.quando) +
         '<br>' + x.n + (x.n === 1 ? ' produto' : ' produtos') + ' · ' + (x.direto ? 'feito direto no ERP' : x.feitoPor ? 'feito pelo manager ' + esc(x.feitoPor) : esc(x.email)) +
-        '<br>' + chipStatus(x) +
+        '<br>' + chipStatus(x) + pbChip(x) +
         (typeof x.valor === "number" ? '<br><b style="color:var(--texto);font-size:14px">Valor total: ' + reais(x.valor) + '</b> <small>(custo CD' + (x.semCusto ? ' · ' + x.semCusto + ' sem custo' : '') + ')</small>' : '') +
         '</span></div>' +
         '<button class="ver" data-ver="' + esc(x.id) + '">Ver itens</button></div><div class="itens-ped" hidden></div></div>';
@@ -3771,6 +3810,8 @@ window.PedidoPDF = (function () {
     var mostra = function (itens) {
       box._ok = true;
       box.innerHTML = itens.map(function (i) {
+        if (i.rem) return '<div class="rev" style="background:#fdecec;border-left:4px solid #c62828"><div class="d" style="color:#b71c1c"><s>' + esc(i.d) + '</s><small style="color:#b71c1c"><b>Tirado do pedido por completo pelo manager</b>' + (i.remPor ? ' (' + esc(i.remPor) + ')' : '') + ' · PLU ' + esc(i.p) + '</small></div>' +
+          '<div class="q" style="color:#b71c1c"><s>' + i.qtd + ' ' + esc(i.t || 'un') + '</s></div></div>';   // 27/11
         return '<div class="rev"><div class="d">' + esc(i.d) + '<small>PLU ' + esc(i.p) + (i.dep ? ' · ' + esc(nomeAba(i.dep)) : '') + '</small></div>' +
           '<div class="q">' + i.qtd + ' ' + esc(i.t || 'un') + '</div></div>';
       }).join('');
@@ -7034,7 +7075,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-27.2";
+  var VERSAO_APP = "2026-11-27.3";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
