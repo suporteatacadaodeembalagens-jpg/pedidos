@@ -6581,12 +6581,17 @@ window.PedidoPDF = (function () {
   // ---------------- busca por EAN + leitor de código de barras ----------------
   function soDigitos(s) { return String(s || "").replace(/\D/g, "").replace(/^0+/, ""); }
   function numBusca(termo) { return /^[\d\s.-]+$/.test(termo) ? soDigitos(termo) : ""; }   // busca só com números = pode ser EAN
+  /* 27/11 (Marcelo): código de barras em forma única. Tira zeros da frente e converte o código da CAIXA (GTIN-14 /
+     DUN-14: dígito 1-8 + 12 dígitos + verificador) no EAN-13 da unidade: caixa 17898603985691 acha o 7898603985694. */
+  function eanChave(s) { var d = String(s || "").replace(/\D/g, "");
+    if (d.length === 14 && /^[1-8]/.test(d)) { var b = d.slice(1, 13), t = 0; for (var i = 0; i < 12; i++) t += Number(b[i]) * (i % 2 ? 3 : 1); d = b + String((10 - t % 10) % 10); }
+    return d.replace(/^0+/, ""); }
   var TXT_BUSCA = new WeakMap();
   function casaBusca(it, termo, termoNum, comForn) {
     var t = TXT_BUSCA.get(it);   // texto sem acento calculado 1 vez por produto (não vai para o armazenamento do celular)
     if (t == null) { t = semAcento((it.d || "") + " " + (it.p || "") + " " + (it.m || "")); TXT_BUSCA.set(it, t); }
     // 10/11 (Marcelo): busca só com NÚMEROS de 4 dígitos ou mais = resultado EXATO (PLU ou EAN igual, sem pedaços)
-    if (/^\d{4,}$/.test(termo.replace(/\s/g, ""))) return soDigitos(it.p) === termoNum || (!!it.b && soDigitos(it.b) === termoNum);
+    if (/^\d{4,}$/.test(termo.replace(/\s/g, ""))) return soDigitos(it.p) === termoNum || (!!it.b && (soDigitos(it.b) === termoNum || (termoNum.length >= 8 && eanChave(it.b) === eanChave(termoNum))));   // 27/11: caixa (DUN-14)
     if (comForn && it.f) t = t + " " + semAcento(it.f);   // comForn: também procura no FORNECEDOR (Consulta e busca da loja)
     if (t.indexOf(termo) >= 0) return true;
     if (termoNum.length >= 6 && !!it.b && it.b.indexOf(termoNum) >= 0) return true;
@@ -7118,7 +7123,7 @@ window.PedidoPDF = (function () {
   // O app confere sozinho se tem versão nova no GitHub: ao abrir, ao voltar para o app e a cada 10 min.
   // Tem versão nova: atualiza na hora (ou mostra o aviso "Atualizar agora" se a pessoa está digitando/editando).
   // >>> A CADA PUBLICAÇÃO, TROCAR O VERSAO_APP (o app compara este texto com o do arquivo novo). <<<
-  var VERSAO_APP = "2026-11-27.5";
+  var VERSAO_APP = "2026-11-27.6";
   try { if (/[?&]v=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
   (function () {   // abriu depois de atualizar: confirma que está na última versão
     var tv = LS.get("trocaVersao", null);
